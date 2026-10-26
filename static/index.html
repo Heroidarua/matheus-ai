@@ -3,30 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111827">
+  <meta name="theme-color" content="#000000">
   <meta name="description" content="Matheus AI — assistente pessoal para programação, Linux, Termux, arquivos e imagens.">
   <title>Matheus AI</title>
   <style>
-    :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2c; --panel2:#1b263b; --text:#f4f7fb; --muted:#9aa9bd; --accent:#70e1c1; --border:#29364b; }
+    :root { color-scheme: dark; --bg:#000000; --panel:#0b0b0b; --panel2:#141414; --text:#f5f5f5; --muted:#a3a3a3; --accent:#70e1c1; --border:#292929; }
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:radial-gradient(ellipse at top,#182846 0%,var(--bg) 55%); color:var(--text); font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; justify-content:center; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; justify-content:center; }
     .app { width:min(900px,100%); min-height:100vh; display:flex; flex-direction:column; padding:22px 18px 16px; }
     header { display:flex; align-items:center; gap:12px; padding:8px 4px 20px; border-bottom:1px solid var(--border); }
     .logo { width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--accent);color:#081b1a;font-weight:900;font-size:20px; }
     h1 { margin:0;font-size:21px;letter-spacing:-.5px; } .subtitle { color:var(--muted);font-size:13px; }
     .status { margin-left:auto;color:var(--accent);font-size:12px;white-space:nowrap; }
     #messages { flex:1; display:flex;flex-direction:column;gap:14px;padding:22px 0; }
-    .welcome { padding:25px 20px;border:1px solid var(--border);border-radius:18px;background:rgba(18,26,44,.78); }
+    .welcome { padding:25px 20px;border:1px solid var(--border);border-radius:18px;background:#0b0b0b; }
     .welcome h2 { margin:0 0 8px;font-size:22px; } .welcome p { margin:0;color:var(--muted); }
     .bubble { max-width:88%;white-space:pre-wrap;overflow-wrap:anywhere;padding:13px 16px;border-radius:16px;border:1px solid var(--border); }
-    .user { align-self:flex-end;background:#20354a;border-bottom-right-radius:5px; }
+    .user { align-self:flex-end;background:#191919;border-bottom-right-radius:5px; }
     .assistant { align-self:flex-start;background:var(--panel);border-bottom-left-radius:5px; }
     .error { color:#ffb5b5;border-color:#7e343b; }
     .attachments { display:flex;flex-wrap:wrap;gap:8px;margin-top:10px; }
-    .attachment-chip { font-size:12px;color:var(--muted);background:#111827;border:1px solid var(--border);border-radius:9px;padding:6px 9px;max-width:220px;overflow-wrap:anywhere; }
+    .attachment-chip { font-size:12px;color:var(--muted);background:#080808;border:1px solid var(--border);border-radius:9px;padding:6px 9px;max-width:220px;overflow-wrap:anywhere; }
     .bubble-image { display:block;max-width:min(260px,100%);max-height:220px;object-fit:contain;border-radius:10px;margin-top:10px;border:1px solid var(--border); }
-    form { position:sticky;bottom:0;background:rgba(11,16,32,.96);padding:12px 0 6px; }
-    .input-wrap { display:flex;align-items:flex-end;gap:10px;padding:10px;border:1px solid #3a4a62;border-radius:18px;background:var(--panel); }
+    form { position:sticky;bottom:0;background:rgba(0,0,0,.98);padding:12px 0 6px; }
+    .input-wrap { display:flex;align-items:flex-end;gap:10px;padding:10px;border:1px solid #303030;border-radius:18px;background:var(--panel); }
     textarea { flex:1;resize:vertical;min-height:48px;max-height:180px;border:0;outline:0;background:transparent;color:var(--text);font:inherit;padding:10px; }
     button { border:0;border-radius:12px;background:var(--accent);color:#071b18;font-weight:750;padding:13px 17px;cursor:pointer; }
     button:disabled { opacity:.55;cursor:wait; }
