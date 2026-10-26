@@ -159,7 +159,7 @@
     }
 
     function addMemory(value) {
-      const normalized = value.replace(/\\s+/g, ' ').trim().slice(0, 300);
+      const normalized = value.replace(/\s+/g, ' ').trim().slice(0, 300);
       if (!normalized) return;
       memories = memories.filter(item => item.toLocaleLowerCase() !== normalized.toLocaleLowerCase());
       memories.unshift(normalized);
