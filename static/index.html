@@ -273,8 +273,15 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : "normal" })
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Não foi possível obter uma resposta.');
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          const detail = responseText.trim().replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 240);
+          throw new Error(detail || `O servidor respondeu com HTTP ${response.status}, mas não retornou JSON válido.`);
+        }
+        if (!response.ok) throw new Error(data.detail || `Falha na solicitação (HTTP ${response.status}).`);
         pending.firstChild.textContent = data.reply;
         history.push({ role: 'assistant', content: data.reply });
         while (history.length > 12) history.shift();
