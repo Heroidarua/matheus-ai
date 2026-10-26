@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 from dotenv import load_dotenv
@@ -30,7 +29,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
-SECURITY_ALLOWED_HOSTS = {host.strip().lower().rstrip(".") for host in os.getenv("SECURITY_ALLOWED_HOSTS", "").split(",") if host.strip()}
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
@@ -65,23 +63,6 @@ class ImageEditResponse(BaseModel):
     model: str
 
 
-class SecurityAuditRequest(BaseModel):
-    url: str = Field(min_length=8, max_length=2048)
-
-
-class SecurityAuditCheck(BaseModel):
-    name: str
-    status: str
-    detail: str
-
-
-class SecurityAuditResponse(BaseModel):
-    url: str
-    http_status: int
-    checks: list[SecurityAuditCheck]
-    note: str = "Auditoria passiva de cabeçalhos; não executa exploits nem comprova ausência de vulnerabilidades."
-
-
 def require_app_key(x_app_key: str | None = Header(default=None)) -> None:
     if APP_API_KEY and x_app_key != APP_API_KEY:
         raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
@@ -95,162 +76,6 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "Matheus AI"}
-
-
-@app.post("/api/security/audit-headers", response_model=SecurityAuditResponse, dependencies=[Depends(require_app_key)])
-async def audit_security_headers(request: SecurityAuditRequest) -> SecurityAuditResponse:
-    if not SECURITY_ALLOWED_HOSTS:
-        raise HTTPException(
-            status_code=503,
-            detail="Auditoria desativada. Configure SECURITY_ALLOWED_HOSTS no Render com os domínios que você tem autorização para testar.",
-        )
-
-    parsed = urlparse(request.url.strip())
-    host = (parsed.hostname or "").lower().rstrip(".")
-    if parsed.scheme != "https" or not host or parsed.username or parsed.password:
-        raise HTTPException(status_code=400, detail="Informe uma URL HTTPS válida, sem credenciais.")
-    if parsed.port not in (None, 443):
-        raise HTTPException(status_code=400, detail="Somente HTTPS na porta 443 é permitido.")
-    if host not in SECURITY_ALLOWED_HOSTS:
-        raise HTTPException(status_code=403, detail="Este domínio não está na lista autorizada SECURITY_ALLOWED_HOSTS.")
-    if parsed.fragment:
-        raise HTTPException(status_code=400, detail="Remova o fragmento (#) da URL.")
-
-    try:
-        # Não segue redirecionamentos: um alvo autorizado não pode redirecionar o auditor
-        # para outro host. A lista de permissões deve conter apenas domínios controlados
-        # pelo operador da aplicação.
-        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), follow_redirects=False) as client:
-            async with client.stream("GET", request.url.strip(), headers={"User-Agent": "MatheusAI-Security-Audit/1.0"}) as response:
-                headers = response.headers
-                status_code = response.status_code
-                checks = []
-                def add_check(name: str, passed: bool, detail: str) -> None:
-                    checks.append(SecurityAuditCheck(name=name, status="present" if passed else "missing", detail=detail))
-                add_check("Strict-Transport-Security", "strict-transport-security" in headers, headers.get("strict-transport-security", "Cabeçalho ausente"))
-                add_check("Content-Security-Policy", "content-security-policy" in headers, headers.get("content-security-policy", "Cabeçalho ausente"))
-                add_check("X-Content-Type-Options", headers.get("x-content-type-options", "").lower() == "nosniff", headers.get("x-content-type-options", "Ausente ou diferente de nosniff"))
-                frame_protection = "x-frame-options" in headers or "frame-ancestors" in headers.get("content-security-policy", "").lower()
-                add_check("Proteção contra clickjacking", frame_protection, "X-Frame-Options ou CSP frame-ancestors presente" if frame_protection else "X-Frame-Options e CSP frame-ancestors não encontrados")
-                add_check("Referrer-Policy", "referrer-policy" in headers, headers.get("referrer-policy", "Cabeçalho ausente"))
-                add_check("Permissions-Policy", "permissions-policy" in headers, headers.get("permissions-policy", "Cabeçalho ausente"))
-                return SecurityAuditResponse(url=request.url.strip(), http_status=status_code, checks=checks)
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="O site demorou demais para responder.")
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Não foi possível conectar ao site autorizado por HTTPS.")
-
-
-NUCLEI_BIN = os.getenv("NUCLEI_BIN", "/usr/local/bin/nuclei").strip()
-ZAP_API_URL = os.getenv("ZAP_API_URL", "").strip().rstrip("/")
-ZAP_API_KEY = os.getenv("ZAP_API_KEY", "").strip()
-SECURITY_SCAN_TIMEOUT = min(max(int(os.getenv("SECURITY_SCAN_TIMEOUT", "90")), 15), 180)
-
-
-class SecurityScanRequest(BaseModel):
-    url: str = Field(min_length=8, max_length=2048)
-
-
-def validate_security_target(raw_url: str) -> str:
-    parsed = urlparse(raw_url.strip())
-    host = (parsed.hostname or "").lower().rstrip(".")
-    if parsed.scheme != "https" or not host or parsed.username or parsed.password:
-        raise HTTPException(status_code=400, detail="Informe uma URL HTTPS válida, sem credenciais.")
-    if parsed.port not in (None, 443):
-        raise HTTPException(status_code=400, detail="Somente HTTPS na porta 443 é permitido.")
-    if parsed.fragment:
-        raise HTTPException(status_code=400, detail="Remova o fragmento (#) da URL.")
-    if not SECURITY_ALLOWED_HOSTS:
-        raise HTTPException(status_code=503, detail="Configure SECURITY_ALLOWED_HOSTS no Render.")
-    if host not in SECURITY_ALLOWED_HOSTS:
-        raise HTTPException(status_code=403, detail="Domínio não autorizado em SECURITY_ALLOWED_HOSTS.")
-    return raw_url.strip()
-
-
-@app.post("/api/security/nuclei", dependencies=[Depends(require_app_key)])
-async def run_nuclei_scan(request: SecurityScanRequest) -> dict[str, Any]:
-    target = validate_security_target(request.url)
-    if not NUCLEI_BIN or not Path(NUCLEI_BIN).is_file():
-        raise HTTPException(status_code=503, detail="Nuclei não está instalado neste container.")
-    args = [
-        NUCLEI_BIN, "-u", target, "-jsonl", "-silent", "-no-interactsh",
-        "-tags", "misconfig,exposure,ssl", "-severity", "info,low,medium,high,critical",
-        "-rl", "5", "-c", "5", "-timeout", "5", "-retries", "0", "-duc",
-    ]
-    try:
-        proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=SECURITY_SCAN_TIMEOUT)
-    except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
-        raise HTTPException(status_code=504, detail="Nuclei excedeu o limite de tempo.")
-    except OSError:
-        raise HTTPException(status_code=503, detail="Não foi possível iniciar o binário Nuclei.")
-    findings: list[dict[str, Any]] = []
-    for line in stdout[:2_000_000].decode("utf-8", errors="replace").splitlines():
-        try:
-            item = __import__("json").loads(line)
-            info = item.get("info") if isinstance(item.get("info"), dict) else {}
-            findings.append({
-                "template_id": str(item.get("template-id", "unknown"))[:160],
-                "name": str(info.get("name", item.get("template-id", "Achado")))[:240],
-                "severity": str(info.get("severity", "unknown"))[:30],
-                "matched_at": str(item.get("matched-at", item.get("host", "")))[:500],
-            })
-        except (ValueError, TypeError):
-            continue
-        if len(findings) >= 200:
-            break
-    if proc.returncode not in (0, 1):
-        detail = stderr.decode("utf-8", errors="replace")[:300]
-        raise HTTPException(status_code=502, detail="Nuclei falhou ao executar. " + detail)
-    return {"tool": "Nuclei", "target": target, "finding_count": len(findings), "findings": findings,
-            "note": "Templates limitados a misconfig, exposure e ssl; revise manualmente os achados."}
-
-
-@app.post("/api/security/zap-scan", dependencies=[Depends(require_app_key)])
-async def run_zap_scan(request: SecurityScanRequest) -> dict[str, Any]:
-    target = validate_security_target(request.url)
-    if not ZAP_API_URL or not ZAP_API_KEY:
-        raise HTTPException(status_code=503, detail="Configure ZAP_API_URL e ZAP_API_KEY para conectar uma instância ZAP isolada.")
-    zap_base = urlparse(ZAP_API_URL)
-    if zap_base.scheme != "https" or not zap_base.hostname or zap_base.username or zap_base.password:
-        raise HTTPException(status_code=503, detail="ZAP_API_URL deve ser HTTPS e não pode conter credenciais na URL.")
-    params = {"apikey": ZAP_API_KEY}
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0), follow_redirects=False) as client:
-            response = await client.get(f"{ZAP_API_URL}/JSON/spider/action/scan/", params={**params, "url": target, "maxChildren": "10"})
-            response.raise_for_status()
-            scan_id = str(response.json().get("scan", ""))
-            if not scan_id.isdigit():
-                raise HTTPException(status_code=502, detail="A API ZAP não retornou um ID de spider válido.")
-            deadline = asyncio.get_running_loop().time() + SECURITY_SCAN_TIMEOUT
-            while asyncio.get_running_loop().time() < deadline:
-                status_response = await client.get(f"{ZAP_API_URL}/JSON/spider/view/status/", params={**params, "scanId": scan_id})
-                status_response.raise_for_status()
-                if int(status_response.json().get("status", "0")) >= 100:
-                    break
-                await asyncio.sleep(2)
-            else:
-                raise HTTPException(status_code=504, detail="O spider do ZAP excedeu o limite de tempo.")
-            alerts_response = await client.get(f"{ZAP_API_URL}/JSON/alert/view/alerts/", params={**params, "baseurl": target, "start": "0", "count": "100"})
-            alerts_response.raise_for_status()
-            alerts = alerts_response.json().get("alerts", [])
-            safe_alerts = [{
-                "name": str(a.get("name", "Alerta"))[:240], "risk": str(a.get("risk", "Informational"))[:40],
-                "confidence": str(a.get("confidence", ""))[:40], "url": str(a.get("url", ""))[:500],
-                "description": str(a.get("description", ""))[:1000], "solution": str(a.get("solution", ""))[:1000],
-                "cweid": str(a.get("cweid", ""))[:30],
-            } for a in alerts[:100]]
-            return {"tool": "OWASP ZAP (spider + alertas passivos)", "target": target,
-                    "alert_count": len(safe_alerts), "alerts": safe_alerts,
-                    "note": "Spider e alertas passivos; nenhum active scan foi iniciado."}
-    except HTTPException:
-        raise
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="A instância ZAP demorou demais para responder.")
-    except (httpx.HTTPError, ValueError, TypeError):
-        raise HTTPException(status_code=502, detail="Falha ao comunicar com a API ZAP. Verifique URL, chave e disponibilidade.")
 
 
 @app.post("/api/edit-image", response_model=ImageEditResponse, dependencies=[Depends(require_app_key)])
