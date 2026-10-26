@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import base64
 import binascii
 import operator
@@ -26,6 +27,8 @@ MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:11434/v1").rstrip
 MODEL_NAME = os.getenv("MODEL_NAME", "qwen2.5:3b")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
+HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
+IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
@@ -47,6 +50,18 @@ class ChatResponse(BaseModel):
     model: str
 
 
+class ImageEditRequest(BaseModel):
+    image_data: str = Field(min_length=1)
+    mime_type: str = Field(pattern="^(image/jpeg|image/png|image/webp)$")
+    prompt: str = Field(min_length=3, max_length=2000)
+
+
+class ImageEditResponse(BaseModel):
+    image_data: str
+    mime_type: str = "image/png"
+    model: str
+
+
 def require_app_key(x_app_key: str | None = Header(default=None)) -> None:
     if APP_API_KEY and x_app_key != APP_API_KEY:
         raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
@@ -60,6 +75,39 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "Matheus AI"}
+
+
+@app.post("/api/edit-image", response_model=ImageEditResponse, dependencies=[Depends(require_app_key)])
+async def edit_image(request: ImageEditRequest) -> ImageEditResponse:
+    if not HF_TOKEN:
+        raise HTTPException(status_code=503, detail="A edição de imagens ainda não está configurada. Adicione HF_TOKEN nas variáveis do Render.")
+
+    try:
+        raw = base64.b64decode(request.image_data, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status_code=400, detail="A imagem enviada é inválida.")
+    if not raw or len(raw) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(status_code=413, detail="A imagem deve ter até 5 MB.")
+
+    try:
+        from huggingface_hub import InferenceClient
+
+        def run_edit() -> bytes:
+            client = InferenceClient(provider="fal-ai", api_key=HF_TOKEN, timeout=180)
+            edited = client.image_to_image(raw, prompt=request.prompt.strip(), model=IMAGE_EDIT_MODEL)
+            output = BytesIO()
+            edited.save(output, format="PNG")
+            return output.getvalue()
+
+        output_bytes = await asyncio.to_thread(run_edit)
+        return ImageEditResponse(
+            image_data=base64.b64encode(output_bytes).decode("ascii"),
+            mime_type="image/png",
+            model=IMAGE_EDIT_MODEL,
+        )
+    except Exception as exc:
+        print(f"Image editing provider error ({type(exc).__name__}): {str(exc)[:300]}")
+        raise HTTPException(status_code=502, detail="O serviço de edição de imagens falhou. Confira HF_TOKEN, o acesso ao provedor e os créditos disponíveis.")
 
 
 _ALLOWED_BINOPS = {
