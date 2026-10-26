@@ -37,6 +37,24 @@ Configure no `.env`:
 ## Deploy no Render
 O blueprint `render.yaml` cria somente o serviço web. **Ele não hospeda automaticamente os pesos do modelo.** Configure um endpoint de modelo acessível pela internet em `MODEL_BASE_URL`, o nome em `MODEL_NAME` e os segredos nas variáveis de ambiente do Render. Não coloque chaves no código nem no repositório.
 
+## Laboratório de cibersegurança
+
+A interface inclui uma auditoria passiva de cabeçalhos HTTP em domínios explicitamente autorizados.
+
+### Ativar a auditoria no Render
+1. Abra o serviço Matheus AI no Render e acesse **Environment**.
+2. Crie `SECURITY_ALLOWED_HOSTS` com uma lista separada por vírgulas de hosts exatos que você controla ou tem autorização formal para testar. Exemplo: `sos01.com.br,www.sos01.com.br`.
+3. Salve e aguarde o redeploy. Use URLs HTTPS na porta 443 e sem redirecionamentos para outros hosts.
+
+A auditoria verifica HSTS, Content-Security-Policy, X-Content-Type-Options, proteção contra clickjacking, Referrer-Policy e Permissions-Policy. Ela não explora falhas nem substitui um pentest.
+
+### Ferramentas de código aberto para integração futura
+- [OWASP ZAP](https://github.com/zaproxy/zaproxy): proxy e scanner de aplicações web, com API de automação.
+- [Nuclei](https://github.com/projectdiscovery/nuclei): scanner de vulnerabilidades baseado em templates.
+- [OWASP Penetration Testing Kit](https://owasp.github.io/www-project-penetration-testing-kit/): análise e testes de segurança web.
+
+Esses projetos **não são executados pelo Matheus AI só por aparecerem na interface**. Para execução real, cada um precisa ser instalado e configurado em um runner isolado, com limites de rede, autenticação, fila de tarefas e autorização de alvo. O serviço web do Render não instala essas ferramentas automaticamente.
+
 ## Segurança e limitações
 - Não executa comandos de shell enviados pelo chat.
 - Não acessa arquivos pessoais nem automatiza o sistema operacional.
