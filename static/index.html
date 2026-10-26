@@ -60,6 +60,20 @@
         </div>
       </div>
     </section>
+    <section class="welcome" id="security-panel" aria-labelledby="security-title">
+      <h2 id="security-title">🛡️ Laboratório de segurança</h2>
+      <p>Audite cabeçalhos HTTP de um domínio previamente autorizado. Para habilitar, configure <code>SECURITY_ALLOWED_HOSTS</code> no Render.</p>
+      <div class="input-wrap" style="margin-top:12px">
+        <input id="security-url" type="url" placeholder="https://seu-dominio.com.br" aria-label="URL autorizada para auditoria" style="flex:1;min-width:0;background:transparent;color:var(--text);border:0;outline:0;padding:10px;font:inherit">
+        <button id="security-audit-button" type="button">Auditar</button>
+      </div>
+      <div id="security-results" aria-live="polite" style="margin-top:12px"></div>
+      <div class="quick">
+        <a href="https://www.zaproxy.org/docs/api/" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">OWASP ZAP API ↗</a>
+        <a href="https://github.com/projectdiscovery/nuclei" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Nuclei ↗</a>
+        <a href="https://owasp.github.io/www-project-penetration-testing-kit/" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">OWASP PTK ↗</a>
+      </div>
+    </section>
     <form id="chat-form">
       <div class="input-wrap">
         <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
@@ -89,6 +103,41 @@
     const history = [];
     const MAX_FILE_BYTES = 5 * 1024 * 1024;
     const MAX_FILES = 3;
+
+    const securityUrlInput = document.getElementById('security-url');
+    const securityAuditButton = document.getElementById('security-audit-button');
+    const securityResults = document.getElementById('security-results');
+    securityAuditButton.addEventListener('click', auditSecurityHeaders);
+
+    async function auditSecurityHeaders() {
+      const url = securityUrlInput.value.trim();
+      if (!url) { securityResults.textContent = 'Informe uma URL HTTPS que você tem autorização para testar.'; return; }
+      securityAuditButton.disabled = true;
+      securityResults.textContent = 'Verificando cabeçalhos…';
+      try {
+        const response = await fetch('/api/security/audit-headers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'A auditoria falhou.');
+        securityResults.replaceChildren();
+        const summary = document.createElement('p');
+        summary.textContent = 'Status HTTP: ' + data.http_status + '. ' + data.note;
+        securityResults.appendChild(summary);
+        data.checks.forEach(check => {
+          const item = document.createElement('div');
+          item.style.cssText = 'padding:8px 10px;margin-top:6px;border:1px solid var(--border);border-radius:9px;background:var(--panel2);overflow-wrap:anywhere';
+          item.textContent = (check.status === 'present' ? '✓ ' : '⚠ ') + check.name + ': ' + check.detail;
+          securityResults.appendChild(item);
+        });
+      } catch (error) {
+        securityResults.textContent = 'Auditoria não concluída: ' + (error.message || 'erro de conexão');
+      } finally {
+        securityAuditButton.disabled = false;
+      }
+    }
 
     document.querySelectorAll('[data-prompt]').forEach(button => {
       button.addEventListener('click', () => { promptEl.value = button.dataset.prompt; promptEl.focus(); });
