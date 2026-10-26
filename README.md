@@ -39,21 +39,21 @@ O blueprint `render.yaml` cria somente o serviço web. **Ele não hospeda automa
 
 ## Laboratório de cibersegurança
 
-A interface inclui uma auditoria passiva de cabeçalhos HTTP em domínios explicitamente autorizados.
+O Dockerfile instala Nuclei (release oficial fixada em v3.11.1) e o backend oferece execução real com opções limitadas. Todos os scans exigem hosts exatos em SECURITY_ALLOWED_HOSTS; use somente alvos seus ou com autorização formal.
 
-### Ativar a auditoria no Render
-1. Abra o serviço Matheus AI no Render e acesse **Environment**.
-2. Crie `SECURITY_ALLOWED_HOSTS` com uma lista separada por vírgulas de hosts exatos que você controla ou tem autorização formal para testar. Exemplo: `sos01.com.br,www.sos01.com.br`.
-3. Salve e aguarde o redeploy. Use URLs HTTPS na porta 443 e sem redirecionamentos para outros hosts.
+### Configurar no Render
+1. Em Environment, configure SECURITY_ALLOWED_HOSTS com hosts permitidos separados por vírgulas, por exemplo sos01.com.br,www.sos01.com.br.
+2. Para ZAP, configure ZAP_API_URL com a URL HTTPS da instância ZAP isolada e ZAP_API_KEY com a chave da API. O Matheus AI não hospeda ZAP; não exponha a API publicamente.
+3. Opcional: SECURITY_SCAN_TIMEOUT define o limite em segundos (15–180; padrão 90). NUCLEI_BIN só deve mudar se o binário estiver em outro caminho.
+4. Faça deploy e teste primeiro em staging.
 
-A auditoria verifica HSTS, Content-Security-Policy, X-Content-Type-Options, proteção contra clickjacking, Referrer-Policy e Permissions-Policy. Ela não explora falhas nem substitui um pentest.
+### Integrações
+- POST /api/security/audit-headers: auditoria passiva de cabeçalhos.
+- POST /api/security/nuclei: executa Nuclei com categorias fixas misconfig, exposure e ssl, taxa de 5 requisições/s, concorrência 5, sem Interactsh e com timeout. Não aceita flags ou templates enviados pelo usuário.
+- POST /api/security/zap-scan: inicia spider do ZAP e lê alertas passivos; não inicia active scan. Requer ZAP_API_URL e ZAP_API_KEY.
+- OWASP PTK: ferramenta independente no navegador, não um scanner backend.
 
-### Ferramentas de código aberto para integração futura
-- [Nuclei — repositório Git](https://github.com/projectdiscovery/nuclei.git): scanner de vulnerabilidades baseado em templates. O link está na interface, mas o binário ainda não está instalado nem é executado pelo backend.
-- [OWASP ZAP — API, chamadas básicas](https://www.zaproxy.org/docs/api/#basics-on-the-api-request): proxy e scanner de aplicações web. Para executar scans pelo Matheus AI, configure uma instância ZAP isolada e a autenticação da API; não exponha a API do ZAP publicamente sem proteção.
-- [OWASP Penetration Testing Kit](https://owasp.github.io/www-project-penetration-testing-kit/): kit para testes web no navegador; é uma ferramenta separada, não um scanner executado pelo backend.
-
-Esses projetos **não são executados pelo Matheus AI só por aparecerem na interface**. Para execução real, cada um precisa ser instalado e configurado em um runner isolado, com limites de rede, autenticação, fila de tarefas e autorização de alvo. O serviço web do Render não instala essas ferramentas automaticamente.
+A chave global opcional APP_API_KEY é aplicada às APIs via X-App-Key. Se ativada, o frontend atual precisará ser atualizado para enviar esse cabeçalho. Não exponha a API publicamente sem autenticação e limites de uso. Achados precisam de revisão manual.
 
 ## Segurança e limitações
 - Não executa comandos de shell enviados pelo chat.
