@@ -13,6 +13,12 @@
     body.light-theme form { background:rgba(245,247,248,.98); }
     body.light-theme .assistant-content pre { background:#f0f2f3; }
     body.light-theme .assistant-content :not(pre) > code { background:#e8ecee; }
+    .web-search-toggle { margin:0; }
+    .web-sources { margin-top:14px;padding-top:10px;border-top:1px solid var(--border);font-size:13px; }
+    .web-sources ol { padding-left:22px;margin:7px 0 0; }
+    .web-sources li { margin:8px 0; }
+    .web-sources a { color:var(--accent);overflow-wrap:anywhere; }
+    .web-sources p { margin:3px 0 0;color:var(--muted);font-size:12px; }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; justify-content:center; }
     .app { width:min(900px,100%); min-height:100vh; display:flex; flex-direction:column; padding:22px 18px 16px; }
@@ -105,6 +111,7 @@
           <option value="normal" selected>Normal</option>
           <option value="detalhada">Detalhada</option>
         </select>
+        <label class="mode-toggle web-search-toggle"><input id="web-search-toggle" type="checkbox"> <span>🌐 Pesquisar na internet e citar fontes</span></label>
         <button class="tool-btn" type="button" id="theme-button">Tema claro</button>
         <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
         <button class="tool-btn" type="button" id="export-button">Exportar</button>
@@ -153,6 +160,7 @@
     const modeBadge = document.getElementById('mode-badge');
     const responseMode = document.getElementById('response-mode');
     const responseLength = document.getElementById('response-length');
+    const webSearchToggle = document.getElementById('web-search-toggle');
     const stopButton = document.getElementById('stop-button');
     const voiceStatus = document.getElementById('voice-status');
     const savedChatsSelect = document.getElementById('saved-chats');
@@ -450,7 +458,7 @@
       parent.appendChild(document.createTextNode(text.slice(cursor)));
     }
 
-    function displayAssistantReply(bubble, text) {
+    function displayAssistantReply(bubble, text, sources = []) {
       bubble.replaceChildren(renderMarkdown(text));
       const actions = document.createElement('div');
       actions.className = 'chat-toolbar';
@@ -493,6 +501,34 @@
         promptEl.value = previousQuestion;
         form.requestSubmit();
       });
+      if (Array.isArray(sources) && sources.length) {
+        const sourcePanel = document.createElement('section');
+        sourcePanel.className = 'web-sources';
+        const heading = document.createElement('strong');
+        heading.textContent = 'Fontes da internet';
+        sourcePanel.appendChild(heading);
+        const list = document.createElement('ol');
+        sources.forEach(source => {
+          if (!source || typeof source.url !== 'string' || !/^https?:\/\//i.test(source.url)) return;
+          const item = document.createElement('li');
+          const link = document.createElement('a');
+          link.href = source.url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = source.title || source.url;
+          item.appendChild(link);
+          if (source.snippet) {
+            const snippet = document.createElement('p');
+            snippet.textContent = source.snippet;
+            item.appendChild(snippet);
+          }
+          list.appendChild(item);
+        });
+        if (list.childNodes.length) {
+          sourcePanel.appendChild(list);
+          bubble.appendChild(sourcePanel);
+        }
+      }
       actions.append(copy, edit, speak, regenerate);
       bubble.appendChild(actions);
     }
@@ -646,7 +682,7 @@
           method: 'POST',
           signal: activeController.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : responseMode.value, response_length: responseLength.value, memory: memories })
+          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : responseMode.value, response_length: responseLength.value, web_search: webSearchToggle.checked, memory: memories })
         });
         const responseText = await response.text();
         let data;
@@ -657,7 +693,7 @@
           throw new Error(detail || `O servidor respondeu com HTTP ${response.status}, mas não retornou JSON válido.`);
         }
         if (!response.ok) throw new Error(data.detail || `Falha na solicitação (HTTP ${response.status}).`);
-        displayAssistantReply(pending, data.reply);
+        displayAssistantReply(pending, data.reply, data.sources || []);
         history.push({ role: 'assistant', content: data.reply });
         while (history.length > 12) history.shift();
       } catch (error) {
