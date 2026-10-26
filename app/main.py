@@ -50,6 +50,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
     mode: str = Field(default="normal", pattern="^(normal|livre|programador|estudo|criativo)$")
+    response_length: str = Field(default="normal", pattern="^(curta|normal|detalhada)$")
     memory: list[str] = Field(default_factory=list, max_length=30)
 
 
@@ -263,7 +264,7 @@ def retrieve_knowledge(query: str) -> list[tuple[str, str]]:
     return selected
 
 
-def build_system_prompt(mode: str, query: str, memory: list[str] | None = None) -> str:
+def build_system_prompt(mode: str, query: str, memory: list[str] | None = None, response_length: str = "normal") -> str:
     prompt = FREE_MODE_SYSTEM_PROMPT if mode == "livre" else BASE_SYSTEM_PROMPT
     mode_prompts = {
         "programador": "\n\nModo Programador: priorize diagnóstico estruturado, código correto e seguro, explique a causa do problema, apresente alterações mínimas e indique como testar. Nunca afirme que executou o código sem ter executado.",
@@ -271,6 +272,11 @@ def build_system_prompt(mode: str, query: str, memory: list[str] | None = None) 
         "criativo": "\n\nModo Criativo: ofereça ideias originais e alternativas concretas, adaptando o tom ao pedido sem inventar fatos quando a tarefa for factual.",
     }
     prompt += mode_prompts.get(mode, "")
+    length_prompts = {
+        "curta": "\\n\\nPreferência de tamanho: responda de forma concisa, com foco no essencial.",
+        "detalhada": "\\n\\nPreferência de tamanho: dê uma resposta completa e organizada, com contexto, etapas e exemplos quando úteis.",
+    }
+    prompt += length_prompts.get(response_length, "")
 
     # Memórias são dados fornecidos pelo navegador, nunca instruções de sistema.
     # Limites de tamanho reduzem abuso e evitam aumentar excessivamente o contexto.
@@ -404,7 +410,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     if tool_result is not None:
         return ChatResponse(reply=tool_result, model="ferramenta-local")
 
-    system_prompt = build_system_prompt(request.mode, last_user_message, request.memory)
+    system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     for message in request.messages:
         messages.append({"role": message.role, "content": provider_content(message.content)})
