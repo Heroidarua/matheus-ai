@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <meta name="description" content="Matheus AI — assistente pessoal para programação, Linux, Termux, automação e aprendizado.">
+  <meta name="description" content="Matheus AI — assistente pessoal para programação, Linux, Termux, arquivos e imagens.">
   <title>Matheus AI</title>
   <style>
     :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2c; --panel2:#1b263b; --text:#f4f7fb; --muted:#9aa9bd; --accent:#70e1c1; --border:#29364b; }
@@ -22,14 +22,24 @@
     .user { align-self:flex-end;background:#20354a;border-bottom-right-radius:5px; }
     .assistant { align-self:flex-start;background:var(--panel);border-bottom-left-radius:5px; }
     .error { color:#ffb5b5;border-color:#7e343b; }
+    .attachments { display:flex;flex-wrap:wrap;gap:8px;margin-top:10px; }
+    .attachment-chip { font-size:12px;color:var(--muted);background:#111827;border:1px solid var(--border);border-radius:9px;padding:6px 9px;max-width:220px;overflow-wrap:anywhere; }
+    .bubble-image { display:block;max-width:min(260px,100%);max-height:220px;object-fit:contain;border-radius:10px;margin-top:10px;border:1px solid var(--border); }
     form { position:sticky;bottom:0;background:rgba(11,16,32,.96);padding:12px 0 6px; }
     .input-wrap { display:flex;align-items:flex-end;gap:10px;padding:10px;border:1px solid #3a4a62;border-radius:18px;background:var(--panel); }
     textarea { flex:1;resize:vertical;min-height:48px;max-height:180px;border:0;outline:0;background:transparent;color:var(--text);font:inherit;padding:10px; }
     button { border:0;border-radius:12px;background:var(--accent);color:#071b18;font-weight:750;padding:13px 17px;cursor:pointer; }
-    button:disabled { opacity:.55;cursor:wait; } .hint { color:var(--muted);font-size:11px;text-align:center;padding-top:9px; }
+    button:disabled { opacity:.55;cursor:wait; }
+    .tools { display:flex;gap:8px;flex-wrap:wrap;margin-top:9px; }
+    .tool-btn { background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:550;padding:9px 12px; }
+    .tool-btn span { margin-right:5px; }
+    .selected-files { display:flex;flex-wrap:wrap;gap:7px;margin:8px 2px 0; }
+    .selected-file { display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--panel2);border-radius:10px;padding:6px 9px;font-size:12px;color:var(--text); }
+    .remove-file { padding:0 3px;background:transparent;color:#ffb5b5;font-size:16px; }
+    .hint { color:var(--muted);font-size:11px;text-align:center;padding-top:9px; }
     .quick { display:flex;flex-wrap:wrap;gap:8px;margin-top:16px; }
     .quick button { background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:500;padding:9px 12px; }
-    @media(max-width:520px) { .app{padding:14px 12px;} .status{display:none;} .bubble{max-width:96%;} .welcome h2{font-size:19px;} button{padding:12px;} }
+    @media(max-width:520px) { .app{padding:14px 12px;} .status{display:none;} .bubble{max-width:96%;} .welcome h2{font-size:19px;} button{padding:12px;} .input-wrap{gap:5px;padding:7px;} }
   </style>
 </head>
 <body>
@@ -42,7 +52,7 @@
     <section id="messages" aria-live="polite">
       <div class="welcome" id="welcome">
         <h2>Como posso ajudar hoje?</h2>
-        <p>Programação, Linux, Termux, automação, pesquisa e projetos pessoais — de forma direta e passo a passo.</p>
+        <p>Converse, envie fotos para análise ou anexe arquivos de texto e PDF para eu ajudar a entender o conteúdo.</p>
         <div class="quick">
           <button type="button" data-prompt="Me ajude a resolver um erro no Termux.">Termux e Linux</button>
           <button type="button" data-prompt="Explique este conceito de programação passo a passo.">Programação</button>
@@ -52,10 +62,17 @@
     </section>
     <form id="chat-form">
       <div class="input-wrap">
-        <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escreva sua mensagem..." aria-label="Mensagem" required></textarea>
+        <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
         <button id="send" type="submit">Enviar</button>
       </div>
-      <div class="hint">Enter para enviar · Shift+Enter para nova linha · Não envie senhas ou tokens.</div>
+      <div class="tools">
+        <button class="tool-btn" type="button" id="photo-button"><span>📷</span>Enviar foto</button>
+        <button class="tool-btn" type="button" id="file-button"><span>📎</span>Anexar arquivo</button>
+        <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <input id="file-input" type="file" accept=".pdf,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yaml,.yml,.log,.sh,.toml,.ini,.sql,.java,.c,.cpp,.h,.go,.rs" multiple hidden>
+      </div>
+      <div id="selected-files" class="selected-files" aria-live="polite"></div>
+      <div class="hint">Enter para enviar · Shift+Enter para nova linha · Até 5 MB por arquivo · Não envie senhas ou tokens.</div>
     </form>
   </main>
   <script>
@@ -63,32 +80,131 @@
     const form = document.getElementById('chat-form');
     const promptEl = document.getElementById('prompt');
     const sendBtn = document.getElementById('send');
+    const photoInput = document.getElementById('photo-input');
+    const fileInput = document.getElementById('file-input');
+    const selectedFilesEl = document.getElementById('selected-files');
+    const selectedFiles = [];
     const history = [];
+    const MAX_FILE_BYTES = 5 * 1024 * 1024;
+    const MAX_FILES = 3;
+
     document.querySelectorAll('[data-prompt]').forEach(button => {
       button.addEventListener('click', () => { promptEl.value = button.dataset.prompt; promptEl.focus(); });
     });
+    document.getElementById('photo-button').addEventListener('click', () => photoInput.click());
+    document.getElementById('file-button').addEventListener('click', () => fileInput.click());
+    photoInput.addEventListener('change', () => { addSelectedFiles([...photoInput.files]); photoInput.value = ''; });
+    fileInput.addEventListener('change', () => { addSelectedFiles([...fileInput.files]); fileInput.value = ''; });
     promptEl.addEventListener('keydown', event => {
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
     });
-    function addBubble(text, role, extraClass='') {
+
+    function addSelectedFiles(files) {
+      for (const file of files) {
+        if (selectedFiles.length >= MAX_FILES) { alert('Você pode anexar até 3 arquivos por mensagem.'); break; }
+        if (file.size > MAX_FILE_BYTES) { alert('O arquivo "' + file.name + '" ultrapassa o limite de 5 MB.'); continue; }
+        if (selectedFiles.some(item => item.name === file.name && item.size === file.size)) continue;
+        const isImage = ['image/jpeg','image/png','image/webp'].includes(file.type);
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        if (!isImage && !isPdf && !/\.(txt|md|csv|json|py|js|ts|html|css|xml|ya?ml|log|sh|toml|ini|sql|java|c|cpp|h|go|rs)$/i.test(file.name)) {
+          alert('Formato não suportado: ' + file.name);
+          continue;
+        }
+        selectedFiles.push(file);
+      }
+      renderSelectedFiles();
+    }
+
+    function renderSelectedFiles() {
+      selectedFilesEl.replaceChildren();
+      selectedFiles.forEach((file, index) => {
+        const chip = document.createElement('div');
+        chip.className = 'selected-file';
+        const label = document.createElement('span');
+        label.textContent = (file.type.startsWith('image/') ? '📷 ' : '📄 ') + file.name;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'remove-file';
+        remove.setAttribute('aria-label', 'Remover ' + file.name);
+        remove.textContent = '×';
+        remove.addEventListener('click', () => { selectedFiles.splice(index, 1); renderSelectedFiles(); });
+        chip.append(label, remove);
+        selectedFilesEl.appendChild(chip);
+      });
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.onerror = () => reject(new Error('Falha ao ler o arquivo ' + file.name));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function serializeFile(file) {
+      const data = await fileToBase64(file);
+      const isImage = ['image/jpeg','image/png','image/webp'].includes(file.type);
+      if (isImage) return { type: 'image', name: file.name, mime_type: file.type, data };
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      return { type: 'file', name: file.name, mime_type: isPdf ? 'application/pdf' : (file.type || 'text/plain'), data };
+    }
+
+    function addBubble(text, role, extraClass='', files=[]) {
       document.getElementById('welcome')?.remove();
       const bubble = document.createElement('div');
       bubble.className = 'bubble ' + role + (extraClass ? ' ' + extraClass : '');
-      bubble.textContent = text;
+      const textNode = document.createElement('div');
+      textNode.textContent = text;
+      bubble.appendChild(textNode);
+      if (files.length) {
+        const attachments = document.createElement('div');
+        attachments.className = 'attachments';
+        files.forEach(file => {
+          if (file.type.startsWith('image/')) {
+            const image = document.createElement('img');
+            image.className = 'bubble-image';
+            image.alt = file.name;
+            image.src = URL.createObjectURL(file);
+            bubble.appendChild(image);
+          } else {
+            const chip = document.createElement('div');
+            chip.className = 'attachment-chip';
+            chip.textContent = '📎 ' + file.name;
+            attachments.appendChild(chip);
+          }
+        });
+        if (attachments.childNodes.length) bubble.appendChild(attachments);
+      }
       messagesEl.appendChild(bubble);
       bubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
       return bubble;
     }
+
     form.addEventListener('submit', async event => {
       event.preventDefault();
       const text = promptEl.value.trim();
-      if (!text || sendBtn.disabled) return;
-      history.push({ role: 'user', content: text });
-      addBubble(text, 'user');
+      if ((!text && selectedFiles.length === 0) || sendBtn.disabled) return;
+      const files = [...selectedFiles];
+      const userText = text || 'Analise os arquivos anexados.';
+      let content;
+      try {
+        content = [{ type: 'text', text: userText }];
+        for (const file of files) content.push(await serializeFile(file));
+      } catch (error) {
+        addBubble('Erro: ' + (error.message || 'Não foi possível ler o arquivo.'), 'assistant', 'error');
+        return;
+      }
+      const userMessage = { role: 'user', content };
+      history.push(userMessage);
+      while (history.length > 12) history.shift();
+      addBubble(userText, 'user', '', files);
       promptEl.value = '';
+      selectedFiles.splice(0, selectedFiles.length);
+      renderSelectedFiles();
       sendBtn.disabled = true;
       sendBtn.textContent = '...';
-      const pending = addBubble('Pensando...', 'assistant');
+      const pending = addBubble('Analisando...', 'assistant');
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
@@ -97,10 +213,11 @@
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Não foi possível obter uma resposta.');
-        pending.textContent = data.reply;
+        pending.firstChild.textContent = data.reply;
         history.push({ role: 'assistant', content: data.reply });
+        while (history.length > 12) history.shift();
       } catch (error) {
-        pending.textContent = 'Erro: ' + (error.message || 'Falha de conexão.');
+        pending.firstChild.textContent = 'Erro: ' + (error.message || 'Falha de conexão.');
         pending.classList.add('error');
         history.pop();
       } finally {
