@@ -186,6 +186,33 @@
       renderMemories();
     });
     renderMemories();
+    refreshSavedChats();
+    document.getElementById('stop-button').addEventListener('click', () => {
+      if (activeController) activeController.abort();
+    });
+    document.getElementById('new-chat-button').addEventListener('click', () => {
+      if (activeController) activeController.abort();
+      history.splice(0, history.length);
+      currentConversationId = null;
+      messagesEl.replaceChildren();
+      promptEl.value = '';
+      savedChatsSelect.value = '';
+      showWelcome();
+    });
+    document.getElementById('export-button').addEventListener('click', exportConversation);
+    document.getElementById('save-chat-button').addEventListener('click', saveConversation);
+    savedChatsSelect.addEventListener('change', () => {
+      if (savedChatsSelect.value) loadConversation(savedChatsSelect.value);
+    });
+    document.getElementById('voice-button').addEventListener('click', toggleVoiceInput);
+
+    function showWelcome() {
+      const welcome = document.createElement('div');
+      welcome.id = 'welcome'; welcome.className = 'welcome';
+      const title = document.createElement('h2'); title.textContent = 'Olá! Sou o Matheus AI.';
+      const description = document.createElement('p'); description.textContent = 'Como posso ajudar você hoje?';
+      welcome.append(title, description); messagesEl.appendChild(welcome);
+    }
 
     function loadMemories() {
       try {
@@ -569,12 +596,15 @@
       renderSelectedFiles();
       sendBtn.disabled = true;
       sendBtn.textContent = '...';
+      stopButton.hidden = false;
+      activeController = new AbortController();
       const pending = addBubble('Analisando...', 'assistant');
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
+          signal: activeController.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : "normal", memory: memories })
+          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : responseMode.value, memory: memories })
         });
         const responseText = await response.text();
         let data;
@@ -589,12 +619,20 @@
         history.push({ role: 'assistant', content: data.reply });
         while (history.length > 12) history.shift();
       } catch (error) {
-        pending.firstChild.textContent = 'Erro: ' + (error.message || 'Falha de conexão.');
-        pending.classList.add('error');
-        history.pop();
+        if (error.name === 'AbortError') {
+          pending.textContent = 'Geração interrompida.';
+          pending.classList.add('error');
+          history.pop();
+        } else {
+          pending.textContent = 'Erro: ' + (error.message || 'Falha de conexão.');
+          pending.classList.add('error');
+          history.pop();
+        }
       } finally {
         sendBtn.disabled = false;
         sendBtn.textContent = 'Enviar';
+        stopButton.hidden = true;
+        activeController = null;
         promptEl.focus();
       }
     });
