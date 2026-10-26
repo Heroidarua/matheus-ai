@@ -423,11 +423,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
             fallback_payload = dict(payload)
             fallback_payload["model"] = fallback_model
             fallback_payload.pop("reasoning_effort", None)
-            response = await client.post(
-                f"{MODEL_BASE_URL}/chat/completions",
-                headers=headers,
-                json=fallback_payload,
-            )
+            # A sessão principal já foi fechada; usar uma sessão própria para o fallback.
+            async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as fallback_client:
+                response = await fallback_client.post(
+                    f"{MODEL_BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=fallback_payload,
+                )
             if response.status_code >= 400:
                 print(f"Fallback model HTTP {response.status_code}: {response.text[:800]}")
 
