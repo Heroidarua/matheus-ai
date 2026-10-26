@@ -376,6 +376,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         "model": MODEL_NAME,
         "messages": messages,
         "temperature": 0.6,
+        "reasoning_effort": "low",
+        "max_tokens": 1024,
     }
 
     try:
