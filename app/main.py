@@ -49,7 +49,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
-    mode: str = Field(default="normal", pattern="^(normal|livre)$")
+    mode: str = Field(default="normal", pattern="^(normal|livre|programador|estudo|criativo)$")
     memory: list[str] = Field(default_factory=list, max_length=30)
 
 
@@ -265,6 +265,12 @@ def retrieve_knowledge(query: str) -> list[tuple[str, str]]:
 
 def build_system_prompt(mode: str, query: str, memory: list[str] | None = None) -> str:
     prompt = FREE_MODE_SYSTEM_PROMPT if mode == "livre" else BASE_SYSTEM_PROMPT
+    mode_prompts = {
+        "programador": "\n\nModo Programador: priorize diagnóstico estruturado, código correto e seguro, explique a causa do problema, apresente alterações mínimas e indique como testar. Nunca afirme que executou o código sem ter executado.",
+        "estudo": "\n\nModo Estudo: ensine passo a passo, explique os conceitos em linguagem acessível e use exemplos curtos. Não entregue apenas a resposta quando uma explicação ajudar a aprender.",
+        "criativo": "\n\nModo Criativo: ofereça ideias originais e alternativas concretas, adaptando o tom ao pedido sem inventar fatos quando a tarefa for factual.",
+    }
+    prompt += mode_prompts.get(mode, "")
 
     # Memórias são dados fornecidos pelo navegador, nunca instruções de sistema.
     # Limites de tamanho reduzem abuso e evitam aumentar excessivamente o contexto.
