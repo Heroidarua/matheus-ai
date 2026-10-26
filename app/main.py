@@ -7,6 +7,7 @@ import binascii
 import operator
 import os
 import re
+import time
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -261,6 +262,17 @@ def retrieve_knowledge(query: str) -> list[tuple[str, str]]:
 
 def build_system_prompt(mode: str, query: str) -> str:
     prompt = FREE_MODE_SYSTEM_PROMPT if mode == "livre" else BASE_SYSTEM_PROMPT
+
+    # Não varrer arquivos da base para saudações ou mensagens muito curtas.
+    # Isso reduz o tempo de processamento antes mesmo de chamar o modelo.
+    normalized_query = re.sub(r"[^a-zá-ú0-9 ]", " ", query.lower()).strip()
+    quick_messages = {
+        "oi", "olá", "ola", "opa", "e aí", "eai", "bom dia",
+        "boa tarde", "boa noite", "tudo bem", "obrigado", "obrigada",
+    }
+    if normalized_query in quick_messages or len(_knowledge_tokens(query)) < 3:
+        return prompt
+
     matches = retrieve_knowledge(query)
     if not matches:
         return prompt
@@ -377,11 +389,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
         "messages": messages,
         "temperature": 0.6,
         "reasoning_effort": "low",
-        "max_tokens": 1024,
+        "max_tokens": 512,
     }
 
+    started_at = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
             response = await client.post(
                 f"{MODEL_BASE_URL}/chat/completions",
                 headers=headers,
@@ -394,9 +407,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
             reply = "".join(str(item.get("text", "")) for item in reply if isinstance(item, dict))
         if not isinstance(reply, str) or not reply.strip():
             raise ValueError("Resposta vazia do modelo")
+        print(f"Model provider completed in {time.perf_counter() - started_at:.2f}s")
         return ChatResponse(reply=reply.strip(), model=str(data.get("model", MODEL_NAME)))
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="O modelo demorou demais para responder.")
+        elapsed = time.perf_counter() - started_at
+        print(f"Model provider timeout after {elapsed:.2f}s (model={MODEL_NAME})")
+        raise HTTPException(status_code=504, detail="O modelo demorou mais de 45 segundos para responder. Tente novamente.")
     except httpx.HTTPStatusError as exc:
         # Registra a resposta do provedor para diagnóstico, sem registrar cabeçalhos
         # nem a chave de API. A resposta costuma explicar 401, 402, 403, 404 ou 5xx.
