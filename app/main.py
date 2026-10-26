@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from dotenv import load_dotenv
@@ -29,6 +30,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
+SECURITY_ALLOWED_HOSTS = {host.strip().lower().rstrip(".") for host in os.getenv("SECURITY_ALLOWED_HOSTS", "").split(",") if host.strip()}
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
@@ -62,6 +64,23 @@ class ImageEditResponse(BaseModel):
     model: str
 
 
+class SecurityAuditRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+
+
+class SecurityAuditCheck(BaseModel):
+    name: str
+    status: str
+    detail: str
+
+
+class SecurityAuditResponse(BaseModel):
+    url: str
+    http_status: int
+    checks: list[SecurityAuditCheck]
+    note: str = "Auditoria passiva de cabeçalhos; não executa exploits nem comprova ausência de vulnerabilidades."
+
+
 def require_app_key(x_app_key: str | None = Header(default=None)) -> None:
     if APP_API_KEY and x_app_key != APP_API_KEY:
         raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
@@ -75,6 +94,50 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "Matheus AI"}
+
+
+@app.post("/api/security/audit-headers", response_model=SecurityAuditResponse, dependencies=[Depends(require_app_key)])
+async def audit_security_headers(request: SecurityAuditRequest) -> SecurityAuditResponse:
+    if not SECURITY_ALLOWED_HOSTS:
+        raise HTTPException(
+            status_code=503,
+            detail="Auditoria desativada. Configure SECURITY_ALLOWED_HOSTS no Render com os domínios que você tem autorização para testar.",
+        )
+
+    parsed = urlparse(request.url.strip())
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme != "https" or not host or parsed.username or parsed.password:
+        raise HTTPException(status_code=400, detail="Informe uma URL HTTPS válida, sem credenciais.")
+    if parsed.port not in (None, 443):
+        raise HTTPException(status_code=400, detail="Somente HTTPS na porta 443 é permitido.")
+    if host not in SECURITY_ALLOWED_HOSTS:
+        raise HTTPException(status_code=403, detail="Este domínio não está na lista autorizada SECURITY_ALLOWED_HOSTS.")
+    if parsed.fragment:
+        raise HTTPException(status_code=400, detail="Remova o fragmento (#) da URL.")
+
+    try:
+        # Não segue redirecionamentos: um alvo autorizado não pode redirecionar o auditor
+        # para outro host. A lista de permissões deve conter apenas domínios controlados
+        # pelo operador da aplicação.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), follow_redirects=False) as client:
+            async with client.stream("GET", request.url.strip(), headers={"User-Agent": "MatheusAI-Security-Audit/1.0"}) as response:
+                headers = response.headers
+                status_code = response.status_code
+                checks = []
+                def add_check(name: str, passed: bool, detail: str) -> None:
+                    checks.append(SecurityAuditCheck(name=name, status="present" if passed else "missing", detail=detail))
+                add_check("Strict-Transport-Security", "strict-transport-security" in headers, headers.get("strict-transport-security", "Cabeçalho ausente"))
+                add_check("Content-Security-Policy", "content-security-policy" in headers, headers.get("content-security-policy", "Cabeçalho ausente"))
+                add_check("X-Content-Type-Options", headers.get("x-content-type-options", "").lower() == "nosniff", headers.get("x-content-type-options", "Ausente ou diferente de nosniff"))
+                frame_protection = "x-frame-options" in headers or "frame-ancestors" in headers.get("content-security-policy", "").lower()
+                add_check("Proteção contra clickjacking", frame_protection, "X-Frame-Options ou CSP frame-ancestors presente" if frame_protection else "X-Frame-Options e CSP frame-ancestors não encontrados")
+                add_check("Referrer-Policy", "referrer-policy" in headers, headers.get("referrer-policy", "Cabeçalho ausente"))
+                add_check("Permissions-Policy", "permissions-policy" in headers, headers.get("permissions-policy", "Cabeçalho ausente"))
+                return SecurityAuditResponse(url=request.url.strip(), http_status=status_code, checks=checks)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="O site demorou demais para responder.")
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Não foi possível conectar ao site autorizado por HTTPS.")
 
 
 @app.post("/api/edit-image", response_model=ImageEditResponse, dependencies=[Depends(require_app_key)])
