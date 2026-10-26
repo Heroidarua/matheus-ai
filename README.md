@@ -4,6 +4,8 @@ Assistente pessoal independente para programação, Linux, Termux, automação, 
 
 ## Recursos
 - Interface de chat responsiva em português.
+- Upload de imagens JPG, PNG e WebP para análise visual (o modelo/provedor precisa oferecer visão).
+- Anexos de PDF com extração de texto e arquivos de texto/código comuns, até 5 MB por arquivo.
 - Backend FastAPI com endpoint `/api/chat`.
 - Compatibilidade com APIs de chat no formato OpenAI.
 - Configuração por variáveis de ambiente.
@@ -40,6 +42,7 @@ O blueprint `render.yaml` cria somente o serviço web. **Ele não hospeda automa
 - Não acessa arquivos pessoais nem automatiza o sistema operacional.
 - A ferramenta de cálculo aceita somente expressões aritméticas limitadas.
 - Não envie senhas, tokens ou dados sensíveis ao chat.
+- A análise de imagens depende de suporte multimodal no provedor/modelo. A edição que devolve uma nova imagem ainda exige integração separada com um serviço de geração/edição de imagens.
 - Este é um ponto de partida funcional, não uma aplicação auditada para uso público. Antes de abrir o acesso publicamente, configure autenticação, limites de uso, monitoramento e política de privacidade.
 
 ## Estrutura
