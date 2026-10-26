@@ -414,6 +414,23 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 print(f"Model provider HTTP {response.status_code}; retry {attempt + 1}/2 in {delay:.1f}s")
                 await asyncio.sleep(delay)
         assert response is not None
+
+        # Se o modelo principal continuar indisponível após as tentativas,
+        # tenta um modelo Flash-Lite como contingência para manter o chat utilizável.
+        fallback_model = os.getenv("MODEL_FALLBACK_NAME", "gemini-3.5-flash-lite").strip()
+        if response.status_code == 503 and fallback_model and fallback_model != MODEL_NAME:
+            print(f"Primary model {MODEL_NAME} returned HTTP 503; trying fallback {fallback_model}")
+            fallback_payload = dict(payload)
+            fallback_payload["model"] = fallback_model
+            fallback_payload.pop("reasoning_effort", None)
+            response = await client.post(
+                f"{MODEL_BASE_URL}/chat/completions",
+                headers=headers,
+                json=fallback_payload,
+            )
+            if response.status_code >= 400:
+                print(f"Fallback model HTTP {response.status_code}: {response.text[:800]}")
+
         response.raise_for_status()
         data = response.json()
         reply = data["choices"][0]["message"]["content"]
