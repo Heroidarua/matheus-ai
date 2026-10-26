@@ -389,7 +389,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         "messages": messages,
         "temperature": 0.6,
         "reasoning_effort": "low",
-        "max_tokens": 512,
+        "max_tokens": 1400,
     }
 
     started_at = time.perf_counter()
@@ -435,11 +435,50 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
         response.raise_for_status()
         data = response.json()
-        reply = data["choices"][0]["message"]["content"]
+        choices = data.get("choices") or []
+        if not choices:
+            raise ValueError("O modelo não retornou escolhas")
+        message = choices[0].get("message") or {}
+        reply = message.get("content", "")
         if isinstance(reply, list):
             reply = "".join(str(item.get("text", "")) for item in reply if isinstance(item, dict))
         if not isinstance(reply, str) or not reply.strip():
             raise ValueError("Resposta vazia do modelo")
+
+        # Se o provedor cortar a resposta por limite de tokens, peça continuação
+        # algumas vezes e concatene o texto, sem descartar o conteúdo já gerado.
+        finish_reason = choices[0].get("finish_reason")
+        continuations = 0
+        while finish_reason == "length" and continuations < 2:
+            continuations += 1
+            continuation_payload = dict(payload)
+            continuation_payload["max_tokens"] = 1400
+            continuation_payload["messages"] = messages + [
+                {"role": "assistant", "content": reply},
+                {"role": "user", "content": "Continue exatamente de onde parou. Não repita o que já escreveu e conclua a resposta."},
+            ]
+            async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as continuation_client:
+                continuation_response = await continuation_client.post(
+                    f"{MODEL_BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=continuation_payload,
+                )
+            continuation_response.raise_for_status()
+            continuation_data = continuation_response.json()
+            continuation_choices = continuation_data.get("choices") or []
+            if not continuation_choices:
+                break
+            continuation_message = continuation_choices[0].get("message") or {}
+            continuation_text = continuation_message.get("content", "")
+            if isinstance(continuation_text, list):
+                continuation_text = "".join(
+                    str(item.get("text", "")) for item in continuation_text if isinstance(item, dict)
+                )
+            if not isinstance(continuation_text, str) or not continuation_text.strip():
+                break
+            reply = reply.rstrip() + "\\n" + continuation_text.strip()
+            finish_reason = continuation_choices[0].get("finish_reason")
+
         print(f"Model provider completed in {time.perf_counter() - started_at:.2f}s")
         return ChatResponse(reply=reply.strip(), model=str(data.get("model", MODEL_NAME)))
     except httpx.TimeoutException:
