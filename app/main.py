@@ -196,7 +196,7 @@ _KNOWLEDGE_STOPWORDS = {
 
 def _knowledge_tokens(text: str) -> set[str]:
     return {
-        token for token in re.findall(r"[^\\W_]+", text.lower(), flags=re.UNICODE)
+        token for token in re.findall(r"[^\W_]+", text.lower(), flags=re.UNICODE)
         if len(token) > 1 and token not in _KNOWLEDGE_STOPWORDS
     }
 
@@ -227,7 +227,7 @@ def retrieve_knowledge(query: str) -> list[tuple[str, str]]:
             continue
         files_seen += 1
 
-        paragraphs = [part.strip() for part in re.split(r"\\n\\s*\\n", content) if part.strip()]
+        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", content) if part.strip()]
         chunks: list[str] = []
         for paragraph in paragraphs:
             if len(paragraph) <= 2200:
@@ -264,15 +264,15 @@ def build_system_prompt(mode: str, query: str) -> str:
     matches = retrieve_knowledge(query)
     if not matches:
         return prompt
-    context = "\\n\\n".join(
-        f"[Fonte: {filename}]\\n{chunk}" for filename, chunk in matches
+    context = "\n\n".join(
+        f"[Fonte: {filename}]\n{chunk}" for filename, chunk in matches
     )
     return (
         prompt
-        + "\\n\\nContexto recuperado da base privada do projeto (pode estar incompleto ou desatualizado):"
-        + "\\n<knowledge_context>\\n"
+        + "\n\nContexto recuperado da base privada do projeto (pode estar incompleto ou desatualizado):"
+        + "\n<knowledge_context>\n"
         + context[:8000]
-        + "\\n</knowledge_context>\\nUse este contexto somente quando for relevante. Se ele não responder à pergunta, diga isso claramente."
+        + "\n</knowledge_context>\nUse este contexto somente quando for relevante. Se ele não responder à pergunta, diga isso claramente."
     )
 
 
