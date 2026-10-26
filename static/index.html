@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#000000">
-  <meta name="description" content="Matheus AI — assistente pessoal para programação, Linux, Termux, arquivos e imagens.">
+  <meta name="description" content="Matheus AI — assistente pessoal para programação, Linux, Termux e arquivos.">
   <title>Matheus AI</title>
   <style>
     :root { color-scheme: dark; --bg:#000000; --panel:#0b0b0b; --panel2:#141414; --text:#f5f5f5; --muted:#a3a3a3; --accent:#70e1c1; --border:#292929; }
@@ -62,7 +62,6 @@
       <div class="tools">
         <button class="tool-btn" type="button" id="photo-button"><span>📷</span>Enviar foto</button>
         <button class="tool-btn" type="button" id="file-button"><span>📎</span>Anexar arquivo</button>
-        <button class="tool-btn" type="button" id="edit-image-button"><span>✨</span>Editar foto com IA</button>
         <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
         <input id="file-input" type="file" accept=".pdf,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yaml,.yml,.log,.sh,.toml,.ini,.sql,.java,.c,.cpp,.h,.go,.rs" multiple hidden>
       </div>
@@ -79,7 +78,6 @@
     const photoInput = document.getElementById('photo-input');
     const fileInput = document.getElementById('file-input');
     const selectedFilesEl = document.getElementById('selected-files');
-    const editImageButton = document.getElementById('edit-image-button');
     const freeModeToggle = document.getElementById('free-mode');
     const modeBadge = document.getElementById('mode-badge');
     freeModeToggle.addEventListener('change', () => {
@@ -95,7 +93,6 @@
     });
     document.getElementById('photo-button').addEventListener('click', () => photoInput.click());
     document.getElementById('file-button').addEventListener('click', () => fileInput.click());
-    editImageButton.addEventListener('click', editSelectedImage);
     photoInput.addEventListener('change', () => { addSelectedFiles([...photoInput.files]); photoInput.value = ''; });
     fileInput.addEventListener('change', () => { addSelectedFiles([...fileInput.files]); fileInput.value = ''; });
     promptEl.addEventListener('keydown', event => {
@@ -120,8 +117,6 @@
 
     function renderSelectedFiles() {
       selectedFilesEl.replaceChildren();
-      editImageButton.disabled = !selectedFiles.some(file => ['image/jpeg','image/png','image/webp'].includes(file.type));
-      editImageButton.title = editImageButton.disabled ? 'Anexe uma foto primeiro' : 'Edite a foto selecionada usando uma instrução de texto';
       selectedFiles.forEach((file, index) => {
         const chip = document.createElement('div');
         chip.className = 'selected-file';
@@ -187,66 +182,10 @@
     }
 
 
-    async function editSelectedImage() {
-      const imageFile = selectedFiles.find(file => ['image/jpeg','image/png','image/webp'].includes(file.type));
-      const editPrompt = promptEl.value.trim();
-      if (!imageFile) { alert('Anexe uma foto JPG, PNG ou WebP primeiro.'); return; }
-      if (editPrompt.length < 3) { alert('Escreva como deseja editar a foto, por exemplo: "troque o fundo por uma praia ao pôr do sol".'); promptEl.focus(); return; }
-      if (sendBtn.disabled) return;
-      sendBtn.disabled = true;
-      editImageButton.disabled = true;
-      const pending = addBubble('Editando sua foto com IA… Isso pode levar alguns minutos.', 'assistant');
-      try {
-        const image = await serializeFile(imageFile);
-        const response = await fetch('/api/edit-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_data: image.data, mime_type: image.mime_type, prompt: editPrompt })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Não foi possível editar a imagem.');
-        pending.replaceChildren();
-        const label = document.createElement('div');
-        label.textContent = 'Foto editada com IA';
-        const output = document.createElement('img');
-        output.className = 'bubble-image';
-        output.alt = 'Imagem editada pelo Matheus AI';
-        output.src = 'data:' + data.mime_type + ';base64,' + data.image_data;
-        output.style.maxWidth = '100%';
-        output.style.maxHeight = 'none';
-        const download = document.createElement('a');
-        download.href = output.src;
-        download.download = 'matheus-ai-foto-editada.png';
-        download.textContent = 'Baixar imagem editada';
-        download.style.display = 'inline-block';
-        download.style.marginTop = '12px';
-        download.style.color = 'var(--accent)';
-        pending.append(label, output, download);
-        promptEl.value = '';
-        selectedFiles.splice(0, selectedFiles.length);
-        renderSelectedFiles();
-      } catch (error) {
-        pending.firstChild.textContent = 'Erro ao editar a foto: ' + (error.message || 'Falha de conexão.');
-        pending.classList.add('error');
-      } finally {
-        sendBtn.disabled = false;
-        renderSelectedFiles();
-      }
-    }
-
     form.addEventListener('submit', async event => {
       event.preventDefault();
       const text = promptEl.value.trim();
       if ((!text && selectedFiles.length === 0) || sendBtn.disabled) return;
-
-      // Quando o usuário pede uma edição e anexou uma imagem, use o endpoint
-      // de edição de imagem em vez de pedir ao modelo de chat para fazer isso por texto.
-      const hasImage = selectedFiles.some(file => ['image/jpeg','image/png','image/webp'].includes(file.type));
-      const asksToEditImage = /\b(tire|tirar|remova|remover|remove|apague|apagar|troque|trocar|mude|mudar|edite|editar|recorte|recortar|deixe|deixar)\b.{0,70}\b(fundo|background|foto|imagem|objeto)\b|\b(sem fundo|fundo transparente|remover fundo|tirar fundo|remove background)\b/i.test(text);
-      if (hasImage && asksToEditImage) {
-        await editSelectedImage();
-        return;
-      }
 
       const files = [...selectedFiles];
       const userText = text || 'Analise os arquivos anexados.';
