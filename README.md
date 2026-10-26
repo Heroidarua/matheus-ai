@@ -49,9 +49,9 @@ A interface inclui uma auditoria passiva de cabeçalhos HTTP em domínios explic
 A auditoria verifica HSTS, Content-Security-Policy, X-Content-Type-Options, proteção contra clickjacking, Referrer-Policy e Permissions-Policy. Ela não explora falhas nem substitui um pentest.
 
 ### Ferramentas de código aberto para integração futura
-- [OWASP ZAP](https://github.com/zaproxy/zaproxy): proxy e scanner de aplicações web, com API de automação.
-- [Nuclei](https://github.com/projectdiscovery/nuclei): scanner de vulnerabilidades baseado em templates.
-- [OWASP Penetration Testing Kit](https://owasp.github.io/www-project-penetration-testing-kit/): análise e testes de segurança web.
+- [Nuclei — repositório Git](https://github.com/projectdiscovery/nuclei.git): scanner de vulnerabilidades baseado em templates. O link está na interface, mas o binário ainda não está instalado nem é executado pelo backend.
+- [OWASP ZAP — API, chamadas básicas](https://www.zaproxy.org/docs/api/#basics-on-the-api-request): proxy e scanner de aplicações web. Para executar scans pelo Matheus AI, configure uma instância ZAP isolada e a autenticação da API; não exponha a API do ZAP publicamente sem proteção.
+- [OWASP Penetration Testing Kit](https://owasp.github.io/www-project-penetration-testing-kit/): kit para testes web no navegador; é uma ferramenta separada, não um scanner executado pelo backend.
 
 Esses projetos **não são executados pelo Matheus AI só por aparecerem na interface**. Para execução real, cada um precisa ser instalado e configurado em um runner isolado, com limites de rede, autenticação, fila de tarefas e autorização de alvo. O serviço web do Render não instala essas ferramentas automaticamente.
 
