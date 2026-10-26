@@ -395,11 +395,25 @@ async def chat(request: ChatRequest) -> ChatResponse:
     started_at = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
-            response = await client.post(
-                f"{MODEL_BASE_URL}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
+            response = None
+            # Erros 429/5xx podem ser temporários. Fazer no máximo 2 novas
+            # tentativas com espera progressiva, sem repetir erros de configuração.
+            for attempt in range(3):
+                response = await client.post(
+                    f"{MODEL_BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
+                    break
+                retry_after = response.headers.get("retry-after")
+                try:
+                    delay = min(max(float(retry_after), 0.5), 4.0) if retry_after else (1.0 * (2 ** attempt))
+                except ValueError:
+                    delay = 1.0 * (2 ** attempt)
+                print(f"Model provider HTTP {response.status_code}; retry {attempt + 1}/2 in {delay:.1f}s")
+                await asyncio.sleep(delay)
+        assert response is not None
         response.raise_for_status()
         data = response.json()
         reply = data["choices"][0]["message"]["content"]
