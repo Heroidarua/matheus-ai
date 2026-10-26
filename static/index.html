@@ -451,7 +451,24 @@
         utterance.lang = 'pt-BR';
         window.speechSynthesis.speak(utterance);
       });
-      actions.append(copy, edit, speak);
+      const regenerate = document.createElement('button');
+      regenerate.type = 'button'; regenerate.className = 'tool-btn'; regenerate.textContent = 'Regenerar';
+      regenerate.addEventListener('click', () => {
+        if (sendBtn.disabled) return;
+        const lastAssistantIndex = history.map(item => item.role).lastIndexOf('assistant');
+        if (lastAssistantIndex >= 0) history.splice(lastAssistantIndex, 1);
+        const lastUserIndex = history.map(item => item.role).lastIndexOf('user');
+        if (lastUserIndex < 0) return;
+        const previousQuestion = contentText(history[lastUserIndex].content);
+        history.splice(lastUserIndex, 1);
+        const assistantBubbles = [...messagesEl.querySelectorAll('.bubble.assistant')];
+        const userBubbles = [...messagesEl.querySelectorAll('.bubble.user')];
+        assistantBubbles[assistantBubbles.length - 1]?.remove();
+        userBubbles[userBubbles.length - 1]?.remove();
+        promptEl.value = previousQuestion;
+        form.requestSubmit();
+      });
+      actions.append(copy, edit, speak, regenerate);
       bubble.appendChild(actions);
     }
 
