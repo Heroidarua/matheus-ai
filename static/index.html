@@ -68,11 +68,24 @@
         <button id="security-audit-button" type="button">Auditar</button>
       </div>
       <div id="security-results" aria-live="polite" style="margin-top:12px"></div>
-      <div class="quick">
-        <a href="https://www.zaproxy.org/docs/api/" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">OWASP ZAP API ↗</a>
-        <a href="https://github.com/projectdiscovery/nuclei" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Nuclei ↗</a>
-        <a href="https://owasp.github.io/www-project-penetration-testing-kit/" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">OWASP PTK ↗</a>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px">
+        <article style="padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2)">
+          <strong>🧪 Nuclei</strong>
+          <p style="margin:6px 0;color:var(--muted)">Scanner de vulnerabilidades por templates. Esta página abre o projeto oficial; o binário ainda não está instalado nem executando scans neste serviço.</p>
+          <a href="https://github.com/projectdiscovery/nuclei.git" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Repositório oficial ↗</a>
+        </article>
+        <article style="padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2)">
+          <strong>🕷️ OWASP ZAP</strong>
+          <p style="margin:6px 0;color:var(--muted)">Scanner e proxy para aplicações web. A integração real exige uma instância ZAP separada e configuração segura da API.</p>
+          <a href="https://www.zaproxy.org/docs/api/#basics-on-the-api-request" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Documentação da API ↗</a>
+        </article>
+        <article style="padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2)">
+          <strong>🛡️ OWASP Penetration Testing Kit</strong>
+          <p style="margin:6px 0;color:var(--muted)">Kit de testes de segurança web para uso no navegador. É uma ferramenta separada, não um serviço de scan do backend.</p>
+          <a href="https://owasp.github.io/www-project-penetration-testing-kit/" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Abrir projeto ↗</a>
+        </article>
       </div>
+      <p style="font-size:.9em;color:var(--muted);margin-top:10px">Estado atual: a auditoria passiva de cabeçalhos é a única destas funções executada pelo backend Matheus AI (com <code>SECURITY_ALLOWED_HOSTS</code> configurado). Nuclei e ZAP ainda precisam de um runner isolado; o PTK funciona separadamente no navegador.</p>
     </section>
     <form id="chat-form">
       <div class="input-wrap">
