@@ -64,6 +64,27 @@ Configure no `.env`:
 
 O blueprint `render.yaml` cria somente o serviço web. **Ele não hospeda automaticamente os pesos do modelo nem faz fine-tuning.** Configure um endpoint de modelo acessível pela internet em `MODEL_BASE_URL`, o nome em `MODEL_NAME` e os segredos nas variáveis de ambiente do Render. Não coloque chaves no código nem no repositório. Os arquivos de `data/knowledge/` são copiados para a imagem durante o build.
 
+### Configurar a API gratuita do Google Gemini
+
+O Matheus AI usa uma API compatível com OpenAI, então é possível conectar o Gemini alterando somente as variáveis de ambiente, sem trocar a interface nem a base RAG. A disponibilidade gratuita e os limites dependem do modelo, da conta e das regras atuais do Google.
+
+1. Crie uma chave em [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. No painel do Render, abra o serviço do Matheus AI e acesse **Environment**.
+3. Defina estas variáveis:
+
+```dotenv
+MODEL_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+MODEL_NAME=gemini-3.8-flash
+OPENAI_API_KEY=COLOQUE_A_CHAVE_DO_GEMINI_AQUI
+```
+
+4. Salve as alterações e aguarde o novo deploy.
+5. Teste uma conversa simples no site e confira os logs do Render se houver erro.
+
+**Segurança e custos:** mantenha a chave somente nas variáveis privadas do Render; nunca a coloque no código, no navegador ou em commits. Consulte [preços e limites oficiais do Gemini API](https://ai.google.dev/gemini-api/docs/pricing) antes de uso contínuo. O nível gratuito tem limites sujeitos a mudança e, segundo a política do Google para esse nível, os dados enviados podem ser usados para melhorar os produtos. Não envie segredos ou dados pessoais sensíveis. Essa alteração configura o provedor de texto; a edição de imagens continua usando a integração separada com Hugging Face.
+
+Se o modelo acima não estiver disponível na sua conta, confira os IDs atuais na [documentação oficial de modelos](https://ai.google.dev/gemini-api/docs/models) e atualize `MODEL_NAME`.
+
 ## Segurança e limitações
 
 - Não executa comandos de shell enviados pelo chat.
