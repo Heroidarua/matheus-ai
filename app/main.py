@@ -270,14 +270,42 @@ async def chat(request: ChatRequest) -> ChatResponse:
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="O modelo demorou demais para responder.")
     except httpx.HTTPStatusError as exc:
+        # Registra a resposta do provedor para diagnóstico, sem registrar cabeçalhos
+        # nem a chave de API. A resposta costuma explicar 401, 402, 403, 404 ou 5xx.
+        status_code = exc.response.status_code
+        response_text = exc.response.text[:1200]
+        print(f"Model provider HTTP {status_code}: {response_text}")
+
         detail = "O provedor do modelo retornou um erro."
         try:
             error_data = exc.response.json()
-            detail = error_data.get("error", {}).get("message", detail) if isinstance(error_data, dict) else detail
+            if isinstance(error_data, dict):
+                error_field = error_data.get("error")
+                if isinstance(error_field, dict):
+                    detail = str(
+                        error_field.get("message")
+                        or error_field.get("detail")
+                        or error_field.get("type")
+                        or detail
+                    )
+                elif isinstance(error_field, str):
+                    detail = error_field
+                elif isinstance(error_data.get("message"), str):
+                    detail = error_data["message"]
+                elif isinstance(error_data.get("detail"), str):
+                    detail = error_data["detail"]
+            elif isinstance(error_data, str):
+                detail = error_data
         except Exception:
-            pass
-        raise HTTPException(status_code=502, detail=str(detail)[:500])
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+            if response_text.strip():
+                detail = response_text.strip()
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Provedor HTTP {status_code}: {detail[:400]}",
+        )
+    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
+        print(f"Model provider connection/response error ({type(exc).__name__}): {str(exc)[:500]}")
         raise HTTPException(
             status_code=502,
             detail="Não foi possível obter uma resposta válida do modelo. Confira o provedor, o modelo e a chave configurada.",
