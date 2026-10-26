@@ -63,37 +63,6 @@
         </div>
       </div>
     </section>
-    <section class="welcome" id="security-panel" aria-labelledby="security-title">
-      <h2 id="security-title">🛡️ Laboratório de segurança</h2>
-      <p>Audite cabeçalhos HTTP de um domínio previamente autorizado. Para habilitar, configure <code>SECURITY_ALLOWED_HOSTS</code> no Render.</p>
-      <div class="input-wrap" style="margin-top:12px">
-        <input id="security-url" type="url" placeholder="https://seu-dominio.com.br" aria-label="URL autorizada para auditoria" style="flex:1;min-width:0;background:transparent;color:var(--text);border:0;outline:0;padding:10px;font:inherit">
-        <button id="security-audit-button" type="button">Auditar</button>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
-        <button id="security-nuclei-button" type="button">Executar Nuclei</button>
-        <button id="security-zap-button" type="button">Executar ZAP passivo</button>
-      </div>
-      <div id="security-results" aria-live="polite" style="margin-top:12px"></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px">
-        <article style="padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2)">
-          <strong>🧪 Nuclei</strong>
-          <p style="margin:6px 0;color:var(--muted)">Scanner de vulnerabilidades por templates. Esta página abre o projeto oficial; o binário ainda não está instalado nem executando scans neste serviço.</p>
-          <a href="https://github.com/projectdiscovery/nuclei.git" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Repositório oficial ↗</a>
-        </article>
-        <article style="padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2)">
-          <strong>🕷️ OWASP ZAP</strong>
-          <p style="margin:6px 0;color:var(--muted)">Scanner e proxy para aplicações web. A integração real exige uma instância ZAP separada e configuração segura da API.</p>
-          <a href="https://www.zaproxy.org/docs/api/#basics-on-the-api-request" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Documentação da API ↗</a>
-        </article>
-        <article style="padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel2)">
-          <strong>🛡️ OWASP Penetration Testing Kit</strong>
-          <p style="margin:6px 0;color:var(--muted)">Kit de testes de segurança web para uso no navegador. É uma ferramenta separada, não um serviço de scan do backend.</p>
-          <a href="https://owasp.github.io/www-project-penetration-testing-kit/" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Abrir projeto ↗</a>
-        </article>
-      </div>
-      <p style="font-size:.9em;color:var(--muted);margin-top:10px">Execução real: auditoria de cabeçalhos e Nuclei usam este backend; ZAP usa uma instância externa configurada. Os scans só aceitam hosts listados em <code>SECURITY_ALLOWED_HOSTS</code>. ZAP executa spider e alertas passivos, não active scan. PTK funciona separadamente no navegador.</p>
-    </section>
     <form id="chat-form">
       <div class="input-wrap">
         <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
@@ -129,82 +98,6 @@
     const history = [];
     const MAX_FILE_BYTES = 5 * 1024 * 1024;
     const MAX_FILES = 3;
-
-    const securityUrlInput = document.getElementById('security-url');
-    const securityAuditButton = document.getElementById('security-audit-button');
-    const securityResults = document.getElementById('security-results');
-    const securityNucleiButton = document.getElementById('security-nuclei-button');
-    const securityZapButton = document.getElementById('security-zap-button');
-    securityAuditButton.addEventListener('click', auditSecurityHeaders);
-    securityNucleiButton.addEventListener('click', () => runSecurityScanner('nuclei'));
-    securityZapButton.addEventListener('click', () => runSecurityScanner('zap-scan'));
-
-    async function runSecurityScanner(tool) {
-      const url = securityUrlInput.value.trim();
-      if (!url) { securityResults.textContent = 'Informe uma URL HTTPS autorizada.'; return; }
-      const button = tool === 'nuclei' ? securityNucleiButton : securityZapButton;
-      button.disabled = true;
-      securityResults.textContent = 'Executando ' + (tool === 'nuclei' ? 'Nuclei' : 'ZAP passivo') + '… aguarde.';
-      try {
-        const response = await fetch('/api/security/' + tool, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'O scanner falhou.');
-        securityResults.replaceChildren();
-        const summary = document.createElement('p');
-        summary.textContent = data.tool + ' · ' + data.target + ' · ' +
-          (data.finding_count ?? data.alert_count ?? 0) + ' achado(s). ' + data.note;
-        securityResults.appendChild(summary);
-        const items = data.findings || data.alerts || [];
-        if (!items.length) {
-          const empty = document.createElement('p'); empty.textContent = 'Nenhum achado retornado.'; securityResults.appendChild(empty);
-        }
-        items.forEach(item => {
-          const card = document.createElement('div');
-          card.style.cssText = 'padding:9px 10px;margin-top:6px;border:1px solid var(--border);border-radius:9px;background:var(--panel2);overflow-wrap:anywhere';
-          const title = document.createElement('strong');
-          title.textContent = '[' + (item.severity || item.risk || 'Info') + '] ' + (item.name || item.template_id || 'Achado');
-          card.appendChild(title);
-          const detail = document.createElement('p');
-          detail.style.cssText = 'margin:5px 0 0;color:var(--muted);white-space:pre-wrap';
-          detail.textContent = [item.matched_at || item.url, item.description, item.solution].filter(Boolean).join('\n\n');
-          card.appendChild(detail); securityResults.appendChild(card);
-        });
-      } catch (error) {
-        securityResults.textContent = 'Scanner não concluído: ' + (error.message || 'erro de conexão');
-      } finally { button.disabled = false; }
-    }
-
-    async function auditSecurityHeaders() {
-      const url = securityUrlInput.value.trim();
-      if (!url) { securityResults.textContent = 'Informe uma URL HTTPS que você tem autorização para testar.'; return; }
-      securityAuditButton.disabled = true;
-      securityResults.textContent = 'Verificando cabeçalhos…';
-      try {
-        const response = await fetch('/api/security/audit-headers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'A auditoria falhou.');
-        securityResults.replaceChildren();
-        const summary = document.createElement('p');
-        summary.textContent = 'Status HTTP: ' + data.http_status + '. ' + data.note;
-        securityResults.appendChild(summary);
-        data.checks.forEach(check => {
-          const item = document.createElement('div');
-          item.style.cssText = 'padding:8px 10px;margin-top:6px;border:1px solid var(--border);border-radius:9px;background:var(--panel2);overflow-wrap:anywhere';
-          item.textContent = (check.status === 'present' ? '✓ ' : '⚠ ') + check.name + ': ' + check.detail;
-          securityResults.appendChild(item);
-        });
-      } catch (error) {
-        securityResults.textContent = 'Auditoria não concluída: ' + (error.message || 'erro de conexão');
-      } finally {
-        securityAuditButton.disabled = false;
-      }
-    }
 
     document.querySelectorAll('[data-prompt]').forEach(button => {
       button.addEventListener('click', () => { promptEl.value = button.dataset.prompt; promptEl.focus(); });
