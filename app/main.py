@@ -411,49 +411,52 @@ def provider_content(content: str | list[dict[str, Any]]) -> str | list[dict[str
 
 
 class _SearchResultsParser(HTMLParser):
-    """Extrai resultados da página HTML pública do DuckDuckGo sem API."""
+    """Extrai links de resultados em diferentes layouts HTML de buscadores."""
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.results: list[dict[str, str]] = []
         self._anchor: dict[str, str] | None = None
-        self._capture_snippet = False
-        self._snippet_depth = 0
         self._text: list[str] = []
+        self._in_h2 = False
+        self._snippet_depth = 0
         self._snippet: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        attrs_dict = {key: value or "" for key, value in attrs}
-        classes = set(attrs_dict.get("class", "").split())
-        if tag == "a" and "result__a" in classes:
-            self._anchor = {"title": "", "url": attrs_dict.get("href", "")}
+        values = {k: v or "" for k, v in attrs}
+        classes = set(values.get("class", "").split())
+        if tag == "h2":
+            self._in_h2 = True
+        if tag == "a" and (classes.intersection({"result__a", "result-link"}) or self._in_h2):
+            self._anchor = {"title": "", "url": values.get("href", "")}
             self._text = []
-        if "result__snippet" in classes:
-            self._capture_snippet = True
+        if classes.intersection({"result__snippet", "result-snippet", "b_caption"}):
             self._snippet_depth = 1
             self._snippet = []
-        elif self._capture_snippet and tag not in {"br", "img", "meta", "input"}:
+        elif self._snippet_depth and tag not in {"br", "img", "meta", "input"}:
             self._snippet_depth += 1
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "h2":
+            self._in_h2 = False
         if self._anchor is not None and tag == "a":
-            self._anchor["title"] = " ".join("".join(self._text).split())[:200]
-            self.results.append(self._anchor)
+            title = " ".join("".join(self._text).split())[:200]
+            if title and self._anchor.get("url"):
+                self._anchor["title"] = title
+                self.results.append(self._anchor)
             self._anchor = None
-        if self._capture_snippet:
+        if self._snippet_depth and tag not in {"br", "img", "meta", "input"}:
             self._snippet_depth -= 1
             if self._snippet_depth <= 0:
                 snippet = " ".join("".join(self._snippet).split())[:500]
-                if self.results and snippet:
+                if self.results and snippet and not self.results[-1].get("snippet"):
                     self.results[-1]["snippet"] = snippet
-                self._capture_snippet = False
                 self._snippet_depth = 0
 
     def handle_data(self, data: str) -> None:
         if self._anchor is not None:
             self._text.append(data)
-        if self._capture_snippet:
+        if self._snippet_depth:
             self._snippet.append(data)
-
 
 class _PageTextParser(HTMLParser):
     """Extrai texto legível e ignora scripts, estilos e elementos não informativos."""
