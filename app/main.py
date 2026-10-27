@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import ipaddress
 import asyncio
 import base64
 import binascii
@@ -9,9 +10,11 @@ import os
 import re
 import time
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 import httpx
 from dotenv import load_dotenv
@@ -408,53 +411,195 @@ def provider_content(content: str | list[dict[str, Any]]) -> str | list[dict[str
     return parts or "O usuário enviou uma mensagem vazia."
 
 
+class _SearchResultsParser(HTMLParser):
+    """Extrai resultados da página HTML pública do DuckDuckGo sem API."""
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.results: list[dict[str, str]] = []
+        self._anchor: dict[str, str] | None = None
+        self._capture_snippet = False
+        self._snippet_depth = 0
+        self._text: list[str] = []
+        self._snippet: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = {key: value or "" for key, value in attrs}
+        classes = set(attrs_dict.get("class", "").split())
+        if tag == "a" and "result__a" in classes:
+            self._anchor = {"title": "", "url": attrs_dict.get("href", "")}
+            self._text = []
+        if "result__snippet" in classes:
+            self._capture_snippet = True
+            self._snippet_depth = 1
+            self._snippet = []
+        elif self._capture_snippet and tag not in {"br", "img", "meta", "input"}:
+            self._snippet_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._anchor is not None and tag == "a":
+            self._anchor["title"] = " ".join("".join(self._text).split())[:200]
+            self.results.append(self._anchor)
+            self._anchor = None
+        if self._capture_snippet:
+            self._snippet_depth -= 1
+            if self._snippet_depth <= 0:
+                snippet = " ".join("".join(self._snippet).split())[:500]
+                if self.results and snippet:
+                    self.results[-1]["snippet"] = snippet
+                self._capture_snippet = False
+                self._snippet_depth = 0
+
+    def handle_data(self, data: str) -> None:
+        if self._anchor is not None:
+            self._text.append(data)
+        if self._capture_snippet:
+            self._snippet.append(data)
+
+
+class _PageTextParser(HTMLParser):
+    """Extrai texto legível e ignora scripts, estilos e elementos não informativos."""
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._skip = 0
+        self._skip_tags = {"script", "style", "noscript", "svg", "nav", "footer", "header", "form"}
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in self._skip_tags:
+            self._skip += 1
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._skip_tags and self._skip:
+            self._skip -= 1
+        elif tag in {"p", "br", "div", "li", "h1", "h2", "h3", "article"}:
+            self.parts.append("\n")
+    def handle_data(self, data: str) -> None:
+        if not self._skip:
+            text = " ".join(data.split())
+            if text:
+                self.parts.append(text)
+
+
+def _public_http_url(value: str) -> bool:
+    """Aceita somente URLs HTTP(S) públicas; evita localhost e IPs privados."""
+    try:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+            return False
+        host = parsed.hostname.lower().rstrip(".")
+        if host in {"localhost", "localhost.localdomain"} or host.endswith((".local", ".internal", ".localhost")):
+            return False
+        try:
+            ip = ipaddress.ip_address(host)
+            if not ip.is_global:
+                return False
+        except ValueError:
+            pass
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[str, str]:
+    """Tenta ler a página de origem para enriquecer o resultado, sem bloquear a busca."""
+    url = source.get("url", "")
+    if not _public_http_url(url):
+        return source
+    try:
+        response = await client.get(url, follow_redirects=True)
+        if not response.is_success or "text/html" not in response.headers.get("content-type", "").lower():
+            return source
+        # Revalida a URL final após redirecionamentos.
+        if not _public_http_url(str(response.url)):
+            return source
+        parser = _PageTextParser()
+        parser.feed(response.text[:500_000])
+        page_text = re.sub(r"\s+", " ", " ".join(parser.parts)).strip()
+        if len(page_text) > 100:
+            source["page_text"] = page_text[:1800]
+    except (httpx.HTTPError, ValueError, UnicodeError):
+        pass
+    return source
+
+
 async def search_web(query: str) -> list[dict[str, str]]:
-    """Pesquisa na web via Brave; devolve somente metadados de fontes HTTP(S)."""
-    if not BRAVE_SEARCH_API_KEY:
-        raise HTTPException(status_code=503, detail="Pesquisa na internet não configurada. Adicione BRAVE_SEARCH_API_KEY nas variáveis do Render.")
+    """Pesquisa sem API comercial: SearXNG opcional, DuckDuckGo HTML como fallback e leitura de páginas."""
     cleaned_query = re.sub(r"\s+", " ", query).strip()[:400]
     if not cleaned_query:
         return []
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0)) as client:
-            response = await client.get(
-                "https://api.search.brave.com/res/v1/web/search",
-                headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_SEARCH_API_KEY},
-                params={"q": cleaned_query, "count": 5, "country": "BR", "search_lang": "pt-br", "safesearch": "moderate"},
-            )
-            response.raise_for_status()
-            payload = response.json()
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="A pesquisa na internet demorou demais. Tente novamente.")
-    except httpx.HTTPStatusError as exc:
-        status = exc.response.status_code
-        print(f"Brave Search HTTP {status}: {exc.response.text[:300]}")
-        if status in {401, 403, 422}:
+    timeout = httpx.Timeout(10.0, connect=4.0)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; ADAM-WebSearch/1.0; +https://matheus-ai.onrender.com)",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.7",
+    }
+    failures: list[str] = []
+    sources: list[dict[str, str]] = []
+    async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
+        # Se o proprietário configurar uma instância SearXNG própria, ela é preferida.
+        searx_url = os.getenv("SEARXNG_URL", "").strip().rstrip("/")
+        if searx_url and _public_http_url(searx_url):
+            try:
+                response = await client.get(
+                    searx_url + "/search",
+                    params={"q": cleaned_query, "format": "json", "language": "pt-BR", "safesearch": 1},
+                )
+                response.raise_for_status()
+                payload = response.json()
+                for item in (payload.get("results") or [])[:6]:
+                    url = str(item.get("url", "")).strip()
+                    if _public_http_url(url):
+                        sources.append({
+                            "title": str(item.get("title") or url)[:200],
+                            "url": url[:2000],
+                            "snippet": str(item.get("content") or item.get("snippet") or "")[:500],
+                        })
+            except (httpx.HTTPError, ValueError, TypeError) as exc:
+                failures.append(f"SearXNG: {type(exc).__name__}")
+                print(f"SearXNG search failed ({type(exc).__name__}): {str(exc)[:180]}")
+
+        # Sem SearXNG ou se ele falhar, consulta a página HTML pública do DuckDuckGo.
+        if not sources:
+            try:
+                response = await client.get("https://html.duckduckgo.com/html/", params={"q": cleaned_query})
+                response.raise_for_status()
+                parser = _SearchResultsParser()
+                parser.feed(response.text[:1_000_000])
+                for item in parser.results:
+                    url = str(item.get("url", "")).strip()
+                    # DuckDuckGo pode devolver links de redirecionamento; resolve quando possível.
+                    if "duckduckgo.com/l/?" in url:
+                        parsed = urlparse(url)
+                        url = parse_qs(parsed.query).get("uddg", [url])[0]
+                    url = urljoin("https://html.duckduckgo.com", url)
+                    if not _public_http_url(url):
+                        continue
+                    if any(existing["url"] == url for existing in sources):
+                        continue
+                    sources.append({
+                        "title": str(item.get("title") or url)[:200],
+                        "url": url[:2000],
+                        "snippet": str(item.get("snippet") or "")[:500],
+                    })
+                    if len(sources) >= 6:
+                        break
+            except (httpx.HTTPError, ValueError, TypeError) as exc:
+                failures.append(f"DuckDuckGo: {type(exc).__name__}")
+                print(f"DuckDuckGo HTML search failed ({type(exc).__name__}): {str(exc)[:180]}")
+
+        if not sources:
             raise HTTPException(
                 status_code=502,
-                detail="O Brave Search recusou BRAVE_SEARCH_API_KEY (token inválido). Gere uma chave válida no painel do Brave Search API e atualize a variável no Render.",
+                detail="Não foi possível obter resultados de busca agora. Os buscadores públicos podem estar indisponíveis ou bloquear esta conexão; tente novamente mais tarde.",
             )
-        if status == 429:
-            raise HTTPException(status_code=429, detail="Limite de pesquisas atingido. Aguarde e tente novamente.")
-        raise HTTPException(status_code=502, detail="O serviço de pesquisa na internet falhou.")
-    except (httpx.HTTPError, ValueError) as exc:
-        print(f"Brave Search error ({type(exc).__name__}): {str(exc)[:200]}")
-        raise HTTPException(status_code=502, detail="Não foi possível consultar a internet agora.")
 
-    web = payload.get("web") or {}
-    results = web.get("results") or []
-    sources: list[dict[str, str]] = []
-    for item in results[:5]:
-        url = str(item.get("url", "")).strip()
-        if not url.startswith(("https://", "http://")):
-            continue
-        sources.append({
-            "title": str(item.get("title") or url)[:200],
-            "url": url[:2000],
-            "snippet": str(item.get("description") or "")[:500],
-        })
-    return sources
+        # Lê algumas páginas encontradas para dar ao modelo contexto além dos snippets.
+        try:
+            await asyncio.gather(*(_read_page(client, item) for item in sources[:3]), return_exceptions=True)
+        except Exception as exc:
+            print(f"Page reading fallback error ({type(exc).__name__}): {str(exc)[:180]}")
 
+    for source in sources:
+        if source.get("page_text"):
+            source["snippet"] = (source.get("snippet", "") + "\nConteúdo da página: " + source["page_text"][:1400]).strip()[:1900]
+    return sources[:6]
 
 @app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
 async def chat(request: ChatRequest) -> ChatResponse:
@@ -492,7 +637,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
     if sources:
         web_context = "\n\n".join(
-            f"[{i}] {source['title']}\nURL: {source['url']}\nTrecho: {source['snippet']}"
+            f"[{i}] {source['title']}\nURL: {source['url']}\nTrecho/conteúdo extraído: {source['snippet']}"
             for i, source in enumerate(sources, start=1)
         )
         system_prompt += (
