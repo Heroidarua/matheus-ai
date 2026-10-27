@@ -130,16 +130,16 @@ async def test_web_search_uses_brave_when_configured(monkeypatch):
     class FakeResponse:
         status_code = 200
         headers = {"content-type": "application/json"}
-        text = '{"web":{"results":[{"title":"Notícia oficial","url":"https://example.com/noticia","description":"Resumo verificável"}]}}'
+        text = '{"web":{"results":[{"title":"Notícias de hoje: comunicado oficial","url":"https://example.com/noticia","description":"Notícias de hoje com informações confirmadas"}]}}'
         url = "https://api.search.brave.com/res/v1/web/search"
 
         def json(self):
             return {
                 "web": {
                     "results": [{
-                        "title": "Notícia oficial",
+                        "title": "Notícias de hoje: comunicado oficial",
                         "url": "https://example.com/noticia",
-                        "description": "Resumo verificável",
+                        "description": "Notícias de hoje com informações confirmadas",
                     }]
                 }
             }
@@ -172,5 +172,68 @@ async def test_web_search_uses_brave_when_configured(monkeypatch):
     results = await main.search_web("notícias de hoje")
 
     assert len(results) == 1
-    assert results[0]["title"] == "Notícia oficial"
+    assert results[0]["title"] == "Notícias de hoje: comunicado oficial"
     assert results[0]["url"] == "https://example.com/noticia"
+
+
+
+@pytest.mark.parametrize(
+    ("question", "topic"),
+    [
+        ("Quem ganhou a eleição presidencial?", "elections"),
+        ("Quais são as últimas notícias de hoje?", "news"),
+        ("Quais novidades de tecnologia foram lançadas?", "technology"),
+        ("O que diz o estudo científico mais recente?", "science"),
+        ("Como faço uma lista em Python?", "general"),
+    ],
+)
+def test_research_engine_classifies_topics(question, topic):
+    assert main.classify_research_topic(question) == topic
+
+
+def test_research_query_expansion_keeps_original_question_and_adds_source_hints():
+    query = main.build_search_query("Qual foi a última descoberta científica?")
+    assert "Qual foi a última descoberta científica?" in query
+    assert "artigo científico" in query
+    assert "fonte primária" in query
+
+
+def test_research_engine_rejects_dictionary_results_for_election_questions():
+    item = {
+        "title": "Significado da palavra ganhou",
+        "url": "https://dictionary.example/ganhou",
+        "snippet": "Definição e conjugação do verbo ganhar.",
+    }
+    assert not main.is_relevant_result("Quem ganhou a eleição presidencial?", item)
+
+
+def test_research_engine_prioritizes_official_election_sources():
+    official = {
+        "title": "Resultado oficial da eleição presidencial",
+        "url": "https://www.tse.jus.br/comunicacao/noticias/resultado-eleicao",
+        "snippet": "O TSE publicou os votos válidos e o resultado eleitoral.",
+    }
+    generic = {
+        "title": "Discussão sobre o resultado",
+        "url": "https://example.org/discussao",
+        "snippet": "Discussão sobre o resultado da eleição presidencial.",
+    }
+    ranked = main.rank_results("Quem ganhou a eleição presidencial?", [generic, official])
+    assert ranked[0]["url"] == official["url"]
+    assert len(ranked) == 2
+
+
+def test_research_engine_deduplicates_urls_and_discards_unrelated_results():
+    relevant = {
+        "title": "Documentação oficial do Python",
+        "url": "https://docs.python.org/3/tutorial/",
+        "snippet": "Tutorial oficial da linguagem Python.",
+    }
+    unrelated = {
+        "title": "Receitas de bolo",
+        "url": "https://example.org/bolo",
+        "snippet": "Receita de bolo de chocolate.",
+    }
+    ranked = main.rank_results("documentação oficial Python", [relevant, relevant, unrelated])
+    assert len(ranked) == 1
+    assert ranked[0]["url"] == relevant["url"]
