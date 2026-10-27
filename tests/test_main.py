@@ -62,25 +62,20 @@ def test_chat_rejects_empty_text_without_attachments():
 
 
 @pytest.mark.asyncio
-async def test_web_search_reports_missing_brave_key(monkeypatch):
-    monkeypatch.setattr(main, "BRAVE_SEARCH_API_KEY", "")
-    with pytest.raises(main.HTTPException) as error:
-        await main.search_web("teste")
-    assert error.value.status_code == 503
-
-
-
-@pytest.mark.asyncio
-async def test_web_search_maps_invalid_subscription_token(monkeypatch):
+async def test_web_search_falls_back_when_public_search_engines_fail(monkeypatch):
     class FakeResponse:
-        status_code = 422
-        text = '{"error":{"code":"SUBSCRIPTION_TOKEN_INVALID"}}'
-        request = httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search")
+        status_code = 503
+        text = "temporarily unavailable"
+
+        def __init__(self, url):
+            self.request = httpx.Request("GET", url)
 
         def raise_for_status(self):
-            raise httpx.HTTPStatusError("422 invalid token", request=self.request, response=httpx.Response(
-                422, request=self.request, text=self.text
-            ))
+            raise httpx.HTTPStatusError(
+                "search engine unavailable",
+                request=self.request,
+                response=httpx.Response(503, request=self.request, text=self.text),
+            )
 
     class FakeClient:
         def __init__(self, *args, **kwargs):
@@ -92,14 +87,66 @@ async def test_web_search_maps_invalid_subscription_token(monkeypatch):
         async def __aexit__(self, *args):
             return False
 
-        async def get(self, *args, **kwargs):
-            return FakeResponse()
+        async def get(self, url, *args, **kwargs):
+            return FakeResponse(url)
 
-    monkeypatch.setattr(main, "BRAVE_SEARCH_API_KEY", "invalid-test-token")
+    monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
+    monkeypatch.delenv("SEARXNG_URL", raising=False)
     monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
 
     with pytest.raises(main.HTTPException) as error:
-        await main.search_web("teste")
+        await main.search_web("notícias de hoje")
 
     assert error.value.status_code == 502
-    assert "token inválido" in error.value.detail
+    assert "Nenhum buscador retornou resultados" in error.value.detail
+
+
+@pytest.mark.asyncio
+async def test_web_search_uses_brave_when_configured(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-type": "application/json"}
+        text = '{"web":{"results":[{"title":"Notícia oficial","url":"https://example.com/noticia","description":"Resumo verificável"}]}}'
+        url = "https://api.search.brave.com/res/v1/web/search"
+
+        def json(self):
+            return {
+                "web": {
+                    "results": [{
+                        "title": "Notícia oficial",
+                        "url": "https://example.com/noticia",
+                        "description": "Resumo verificável",
+                    }]
+                }
+            }
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, *args, **kwargs):
+            assert url == "https://api.search.brave.com/res/v1/web/search"
+            assert kwargs["headers"]["X-Subscription-Token"] == "test-token"
+            return FakeResponse()
+
+    async def fake_read_page(client, source):
+        return source
+
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "test-token")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(main, "_read_page", fake_read_page)
+
+    results = await main.search_web("notícias de hoje")
+
+    assert len(results) == 1
+    assert results[0]["title"] == "Notícia oficial"
+    assert results[0]["url"] == "https://example.com/noticia"
