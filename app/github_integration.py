@@ -28,7 +28,7 @@ def _config() -> tuple[str, str, str, str]:
     slug = os.getenv("GITHUB_APP_SLUG", "").strip()
     private_key = os.getenv("GITHUB_APP_PRIVATE_KEY", "").replace("\\n", "\n").strip()
     public_url = os.getenv("PUBLIC_APP_URL", "").strip().rstrip("/")
-    if not all((app_id, slug, private_key, public_url)):
+    if not all((app_id, slug, private_key, public_url, os.getenv("GITHUB_SESSION_SECRET", "").strip())):
         raise HTTPException(
             status_code=503,
             detail="Integração GitHub não configurada. Configure GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY e PUBLIC_APP_URL no servidor.",
@@ -155,7 +155,7 @@ async def github_setup_callback(request: Request, installation_id: int = Query(g
 @router.get("/status")
 async def github_status(request: Request) -> dict[str, Any]:
     return {
-        "configured": all(os.getenv(k, "").strip() for k in ("GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY", "PUBLIC_APP_URL")),
+        "configured": all(os.getenv(k, "").strip() for k in ("GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY", "GITHUB_SESSION_SECRET", "PUBLIC_APP_URL")),
         "connected": isinstance(request.session.get("github_installation_id"), int),
         "account": request.session.get("github_account"),
         "selected_repository": request.session.get("github_selected_repo"),
