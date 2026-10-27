@@ -579,7 +579,6 @@ async def search_web(query: str) -> list[dict[str, str]]:
         return []
     topic = classify_research_topic(original_query)
     cleaned_query = build_search_query(original_query)
-    election_query = topic == "elections"
 
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36",
@@ -639,7 +638,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                             "url": url[:2000],
                             "snippet": str(item.get("content") or item.get("snippet") or "")[:500],
                         }
-                        if not election_query or _is_relevant_election_result(candidate):
+                        if is_relevant_result(original_query, candidate):
                             sources.append(candidate)
             except (httpx.HTTPError, ValueError, TypeError) as exc:
                 print(f"SearXNG failed ({type(exc).__name__}): {str(exc)[:160]}")
