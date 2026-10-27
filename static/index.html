@@ -682,19 +682,50 @@
           method: 'POST',
           signal: activeController.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : responseMode.value, response_length: responseLength.value, web_search: webSearchToggle.checked, memory: memories })
+          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : responseMode.value, response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true, memory: memories })
         });
-        const responseText = await response.text();
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          const detail = responseText.trim().replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 240);
-          throw new Error(detail || `O servidor respondeu com HTTP ${response.status}, mas não retornou JSON válido.`);
+        if (!response.ok) {
+          const failureText = await response.text();
+          let detail = failureText;
+          try { detail = JSON.parse(failureText).detail || failureText; } catch {}
+          throw new Error(String(detail).replace(/<[^>]*>/g, ' ').slice(0, 300) || `Falha na solicitação (HTTP ${response.status}).`);
         }
-        if (!response.ok) throw new Error(data.detail || `Falha na solicitação (HTTP ${response.status}).`);
-        displayAssistantReply(pending, data.reply, data.sources || []);
-        history.push({ role: 'assistant', content: data.reply });
+        if (!response.body) throw new Error('Este navegador não oferece suporte à resposta em tempo real.');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '', answer = '', streamSources = [];
+        const consumeEvent = eventText => {
+          let eventName = 'message', dataText = '';
+          for (const line of eventText.split('\\n')) {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) dataText += line.slice(5).trim();
+          }
+          if (!dataText) return;
+          let payload;
+          try { payload = JSON.parse(dataText); } catch { return; }
+          if (eventName === 'error') throw new Error(payload.detail || 'A geração falhou.');
+          if (eventName === 'done') { streamSources = Array.isArray(payload.sources) ? payload.sources : []; return; }
+          if (typeof payload.token === 'string') {
+            answer += payload.token;
+            pending.replaceChildren(renderMarkdown(answer));
+            pending.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }
+        };
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split('\\n\\n');
+            buffer = events.pop() || '';
+            for (const eventText of events) consumeEvent(eventText);
+          }
+          buffer += decoder.decode();
+          if (buffer.trim()) consumeEvent(buffer);
+        } finally { reader.releaseLock(); }
+        if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
+        displayAssistantReply(pending, answer, streamSources);
+        history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
       } catch (error) {
         if (error.name === 'AbortError') {
