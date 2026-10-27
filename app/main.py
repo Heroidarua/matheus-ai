@@ -426,8 +426,11 @@ async def search_web(query: str) -> list[dict[str, str]]:
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         print(f"Brave Search HTTP {status}: {exc.response.text[:300]}")
-        if status in {401, 403}:
-            raise HTTPException(status_code=502, detail="A chave da pesquisa na internet foi recusada. Confira BRAVE_SEARCH_API_KEY.")
+        if status in {401, 403, 422}:
+            raise HTTPException(
+                status_code=502,
+                detail="O Brave Search recusou BRAVE_SEARCH_API_KEY (token inválido). Gere uma chave válida no painel do Brave Search API e atualize a variável no Render.",
+            )
         if status == 429:
             raise HTTPException(status_code=429, detail="Limite de pesquisas atingido. Aguarde e tente novamente.")
         raise HTTPException(status_code=502, detail="O serviço de pesquisa na internet falhou.")
@@ -465,8 +468,25 @@ async def chat(request: ChatRequest) -> ChatResponse:
             return StreamingResponse(local_tool_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
         return ChatResponse(reply=tool_result, model="ferramenta-local")
 
-    sources = await search_web(last_user_message) if request.web_search else []
+    search_unavailable = False
+    sources: list[dict[str, str]] = []
+    if request.web_search:
+        try:
+            sources = await search_web(last_user_message)
+        except HTTPException as exc:
+            # Uma falha do Brave não deve impedir a conversa com o modelo.
+            # A interface recebe uma resposta normal, mas o modelo é avisado
+            # para não fingir que consultou a internet.
+            search_unavailable = True
+            print(f"Web search unavailable (HTTP {exc.status_code}): {str(exc.detail)[:250]}")
+
     system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
+    if search_unavailable:
+        system_prompt += (
+            "\\n\\nA pesquisa na internet foi solicitada, mas o serviço de busca falhou nesta solicitação. "
+            "Não diga que pesquisou na web, não invente citações ou fontes e avise brevemente o usuário "
+            "que está respondendo sem pesquisa ao vivo."
+        )
     if sources:
         web_context = "\n\n".join(
             f"[{i}] {source['title']}\nURL: {source['url']}\nTrecho: {source['snippet']}"
