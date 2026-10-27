@@ -52,18 +52,19 @@ TRUSTED_DOMAINS = {
 
 
 def classify_research_topic(query: str) -> str:
-    """Classifica a área principal da pesquisa sem chamar um modelo externo."""
-    text = re.sub(r"\s+", " ", query.casefold()).strip()
-    # A intenção explícita de notícia/atualidade deve prevalecer sobre o tema
-    # (ex.: "notícias de IA hoje" é uma pesquisa de notícias, não documentação).
-    if any(term in text for term in ("eleição", "eleições", "eleitoral", "apura", "votos válidos", "resultado eleitoral", "quem ganhou", "quem venceu", "foi eleito")):
+    """Classifica a intenção principal, dando prioridade a pedidos explícitos de notícia."""
+    text = re.sub(r"\\s+", " ", query.casefold()).strip()
+    election_terms = ("eleição", "eleições", "eleitoral", "apura", "votos válidos", "resultado eleitoral", "quem ganhou", "quem venceu", "foi eleito")
+    if any(term in text for term in election_terms):
         return "elections"
-    if any(term in text for term in ("notícia", "notícias", "aconteceu", "últimas", "hoje", "ontem", "agora", "recente", "atual", "breaking", "latest", "today", "mais recente", "versão atual", "versão estável", "stable release", "latest version")):
+    if any(term in text for term in ("notícia", "notícias", "news", "manchetes", "principais notícias")):
         return "news"
     if any(keyword in text for keyword in TOPIC_KEYWORDS["science"]):
         return "science"
     if any(keyword in text for keyword in TOPIC_KEYWORDS["technology"]):
         return "technology"
+    if any(term in text for term in ("aconteceu", "últimas", "hoje", "ontem", "agora", "recente", "atual", "breaking", "latest", "today")):
+        return "news"
     return "general"
 
 
