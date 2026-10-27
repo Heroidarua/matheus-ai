@@ -606,7 +606,10 @@ async def search_web(query: str) -> list[dict[str, str]]:
             if grounded_sources:
                 sources = grounded_sources
                 if summary:
-                    # Used only in the model context; the UI still lists individual citations.
+                    # Used for relevance ranking and in the model context; the UI still
+                    # lists the individual citation excerpts and URLs.
+                    for item in sources:
+                        item["page_text"] = summary
                     sources[0]["summary"] = summary
                 print(f"Google Search Grounding: citations={len(grounded_sources)}")
             else:
