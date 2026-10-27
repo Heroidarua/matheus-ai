@@ -457,6 +457,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=400, detail="Envie uma mensagem ou anexe um arquivo.")
     tool_result = local_tool(last_user_message)
     if tool_result is not None:
+        if request.stream:
+            async def local_tool_stream():
+                import json
+                yield "data: " + json.dumps({"token": tool_result}, ensure_ascii=False) + "\\n\\n"
+                yield "event: done\\ndata: " + json.dumps({"model": "ferramenta-local", "sources": []}, ensure_ascii=False) + "\\n\\n"
+            return StreamingResponse(local_tool_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
         return ChatResponse(reply=tool_result, model="ferramenta-local")
 
     sources = await search_web(last_user_message) if request.web_search else []
