@@ -461,7 +461,7 @@
     });
     refreshGithubStatus();
     if (new URLSearchParams(window.location.search).get('github') === 'connected') {
-      history.replaceState({}, '', window.location.pathname);
+      window.history.replaceState({}, '', window.location.pathname);
       setTimeout(() => document.querySelector('.tools-drawer')?.setAttribute('open', ''), 100);
     }
     photoInput.addEventListener('change', () => { addSelectedFiles([...photoInput.files]); photoInput.value = ''; });
