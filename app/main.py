@@ -186,14 +186,14 @@ def content_as_text(content: str | list[dict[str, Any]]) -> str:
 
 def requires_live_search(message: str) -> bool:
     """Detecta perguntas factuais atuais que devem pesquisar mesmo se o toggle estiver desligado."""
-    text = re.sub(r"\\s+", " ", message.casefold()).strip()
+    text = re.sub(r"\s+", " ", message.casefold()).strip()
     current_topic_patterns = (
-        r"\\bele[ií]ç(?:ão|ões)\\b", r"\\bresultado(?:s)?\\b.*\\b(ele[ií]ç|vota|jogo|partida)",
-        r"\\bquem (?:ganhou|venceu|é o vencedor|foi eleito)\\b", r"\\bapuraç(?:ão|ões)\\b",
-        r"\\bnot[ií]cias?\\b", r"\\b(?:hoje|ontem|agora|atualmente|neste momento|últim[oa]s?)\\b",
-        r"\\baconteceu\\b", r"\\bquem (?:é|está como) (?:o|a) (?:atual|presidente|governador|prefeito)\\b",
-        r"\\b(?:lançamento|lançou|anunciou|anúncio|decisão judicial|cotação|preço atual)\\b",
-        r"\\b(?:latest|breaking|current|today|yesterday|right now)\\b",
+        r"\bele[ií]ç(?:ão|ões)\b", r"\bresultado(?:s)?\b.*\b(ele[ií]ç|vota|jogo|partida)",
+        r"\bquem (?:ganhou|venceu|é o vencedor|foi eleito)\b", r"\bapuraç(?:ão|ões)\b",
+        r"\bnot[ií]cias?\b", r"\b(?:hoje|ontem|agora|atualmente|neste momento|últim[oa]s?)\b",
+        r"\baconteceu\b", r"\bquem (?:é|está como) (?:o|a) (?:atual|presidente|governador|prefeito)\b",
+        r"\b(?:lançamento|lançou|anunciou|anúncio|decisão judicial|cotação|preço atual)\b",
+        r"\b(?:latest|breaking|current|today|yesterday|right now)\b",
     )
     return any(re.search(pattern, text) for pattern in current_topic_patterns)
 
@@ -696,10 +696,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
             print(f"Web search unavailable (HTTP {exc.status_code}): {str(exc.detail)[:250]}")
 
     system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
-    system_prompt += f"\\n\\nDATA ATUAL DO SISTEMA (fuso de Manaus): {current_local_date()}. Use esta data como referência; não diga que um evento ainda vai acontecer sem conferir as fontes atuais."
+    system_prompt += f"\n\nDATA ATUAL DO SISTEMA (fuso de Manaus): {current_local_date()}. Use esta data como referência; não diga que um evento ainda vai acontecer sem conferir as fontes atuais."
     if search_unavailable:
         system_prompt += (
-            "\\n\\nA pesquisa automática/manual foi tentada, mas todos os buscadores falharam. "
+            "\n\nA pesquisa automática/manual foi tentada, mas todos os buscadores falharam. "
             "Não diga que pesquisou na web, não invente citações ou fontes. É proibido afirmar que um evento atual não aconteceu só porque não conseguiu consultar a internet. "
             "Diga claramente que não conseguiu verificar o resultado em tempo real e evite concluir quem venceu."
         )
