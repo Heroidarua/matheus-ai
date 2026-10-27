@@ -53,16 +53,6 @@
     .hint { color:var(--muted);font-size:11px;text-align:center;padding-top:9px; }
     .quick { display:flex;flex-wrap:wrap;gap:8px;margin-top:16px; }
     .quick button { background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:500;padding:9px 12px; }
-    .memory-panel { margin:0 0 12px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--panel); }
-    .memory-panel[hidden] { display:none; }
-    .memory-panel h2 { margin:0 0 5px;font-size:16px; }
-    .memory-panel p { margin:0 0 10px;color:var(--muted);font-size:12px; }
-    .memory-entry { display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-top:1px solid var(--border);font-size:13px; }
-    .memory-entry span { flex:1;overflow-wrap:anywhere; }
-    .memory-entry button,.memory-actions button { padding:6px 9px;font-size:12px; }
-    .memory-actions { display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px; }
-    #memory-input { width:100%;min-height:60px;resize:vertical;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px;font:inherit; }
-    .memory-empty { color:var(--muted);font-size:12px;padding:8px 0; }
     .chat-toolbar { display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 0; }
     .chat-toolbar .tool-btn { padding:6px 9px;font-size:11px; }
     .assistant-content { white-space:normal;line-height:1.65; }
@@ -184,7 +174,6 @@
           <div class="tools">
             <button class="tool-btn" type="button" id="photo-button">Enviar foto</button>
             <button class="tool-btn" type="button" id="file-button">Anexar arquivo</button>
-            <button class="tool-btn" type="button" id="memory-button">Memória <span id="memory-count">(0)</span></button>
             <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
             <input id="file-input" type="file" accept=".pdf,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yaml,.yml,.log,.sh,.toml,.ini,.sql,.java,.c,.cpp,.h,.go,.rs" multiple hidden>
           </div>
@@ -192,18 +181,6 @@
       </details>
       <div class="hint">Enter para enviar · Shift+Enter para nova linha</div>
     </form>
-    <section id="memory-panel" class="memory-panel" hidden aria-label="Gerenciar memória">
-      <h2>Memória do Matheus AI</h2>
-      <p>As memórias ficam salvas neste navegador e são enviadas junto com suas mensagens para personalizar as respostas. Não salve senhas, tokens ou dados sensíveis.</p>
-      <label for="memory-input" class="subtitle">Adicionar uma informação para lembrar</label>
-      <textarea id="memory-input" rows="2" maxlength="300" placeholder="Ex.: Estou desenvolvendo o projeto Matheus AI."></textarea>
-      <div class="memory-actions">
-        <button id="memory-save" type="button">Salvar memória</button>
-        <button id="memory-clear" class="tool-btn" type="button">Apagar todas</button>
-        <button id="memory-close" class="tool-btn" type="button">Fechar</button>
-      </div>
-      <div id="memory-list" aria-live="polite"></div>
-    </section>
   </main>
   <script>
     const messagesEl = document.getElementById('messages');
@@ -221,13 +198,6 @@
     const stopButton = document.getElementById('stop-button');
     const voiceStatus = document.getElementById('voice-status');
     let activeController = null;
-    const memoryButton = document.getElementById('memory-button');
-    const memoryPanel = document.getElementById('memory-panel');
-    const memoryInput = document.getElementById('memory-input');
-    const memoryList = document.getElementById('memory-list');
-    const memoryCount = document.getElementById('memory-count');
-    const MEMORY_KEY = 'matheus-ai-memory-v1';
-    let memories = loadMemories();
     function updateModeBadge() {
       modeBadge.textContent = freeModeToggle.checked ? 'Modo Livre' :
         ({normal:'Modo geral',programador:'Programador',estudo:'Estudo',criativo:'Criativo'}[responseMode.value] || 'Modo geral');
@@ -254,23 +224,6 @@
     document.querySelectorAll('[data-prompt]').forEach(button => {
       button.addEventListener('click', () => { promptEl.value = button.dataset.prompt; promptEl.focus(); });
     });
-    memoryButton.addEventListener('click', () => {
-      memoryPanel.hidden = !memoryPanel.hidden;
-      if (!memoryPanel.hidden) { renderMemories(); memoryInput.focus(); }
-    });
-    document.getElementById('memory-close').addEventListener('click', () => { memoryPanel.hidden = true; });
-    document.getElementById('memory-save').addEventListener('click', () => {
-      const value = memoryInput.value.trim();
-      if (!value) return;
-      addMemory(value);
-      memoryInput.value = '';
-      renderMemories();
-    });
-    document.getElementById('memory-clear').addEventListener('click', () => {
-      if (!memories.length || !confirm('Apagar todas as memórias salvas neste navegador?')) return;
-      memories = [];
-      persistMemories();
-      renderMemories();
     });
     renderMemories();
     document.getElementById('stop-button').addEventListener('click', () => {
@@ -292,85 +245,6 @@
       const title = document.createElement('h2'); title.textContent = 'Olá! Sou o Matheus AI.';
       const description = document.createElement('p'); description.textContent = 'Como posso ajudar você hoje?';
       welcome.append(title, description); messagesEl.appendChild(welcome);
-    }
-
-    function loadMemories() {
-      try {
-        const parsed = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]');
-        return Array.isArray(parsed)
-          ? parsed.filter(item => typeof item === 'string' && item.trim()).slice(0, 30).map(item => item.trim().slice(0, 300))
-          : [];
-      } catch { return []; }
-    }
-
-    function persistMemories() {
-      try {
-        localStorage.setItem(MEMORY_KEY, JSON.stringify(memories.slice(0, 30)));
-      } catch {
-        alert('Não foi possível salvar a memória neste navegador. Verifique as configurações de armazenamento.');
-      }
-    }
-
-    function addMemory(value) {
-      const normalized = value.replace(/\s+/g, ' ').trim().slice(0, 300);
-      if (!normalized) return;
-      memories = memories.filter(item => item.toLocaleLowerCase() !== normalized.toLocaleLowerCase());
-      memories.unshift(normalized);
-      memories = memories.slice(0, 30);
-      persistMemories();
-    }
-
-    function renderMemories() {
-      memoryList.replaceChildren();
-      memoryCount.textContent = '(' + memories.length + ')';
-      if (!memories.length) {
-        const empty = document.createElement('div');
-        empty.className = 'memory-empty';
-        empty.textContent = 'Nenhuma memória salva. Você também pode dizer “lembre que...” no chat.';
-        memoryList.appendChild(empty);
-        return;
-      }
-      memories.forEach((memory, index) => {
-        const row = document.createElement('div');
-        row.className = 'memory-entry';
-        const label = document.createElement('span');
-        label.textContent = memory;
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'tool-btn';
-        remove.textContent = 'Apagar';
-        remove.setAttribute('aria-label', 'Apagar memória ' + (index + 1));
-        remove.addEventListener('click', () => {
-          memories.splice(index, 1);
-          persistMemories();
-          renderMemories();
-        });
-        row.append(label, remove);
-        memoryList.appendChild(row);
-      });
-    }
-
-    function processMemoryCommand(message) {
-      const normalized = message.trim();
-      if (/^(apague|apagar|exclua|excluir|limpe|limpar) (todas? as? )?mem[oó]rias$/i.test(normalized)) {
-        memories = [];
-        persistMemories();
-        renderMemories();
-        return;
-      }
-      const forgetMatch = normalized.match(/^(?:esqueça|esqueca|apague|exclua|remova) (?:que )?(.+)$/i);
-      if (forgetMatch && /^(esqueça|esqueca|apague|exclua|remova)/i.test(normalized)) {
-        const target = forgetMatch[1].trim().toLocaleLowerCase();
-        memories = memories.filter(item => !item.toLocaleLowerCase().includes(target));
-        persistMemories();
-        renderMemories();
-        return;
-      }
-      const rememberMatch = normalized.match(/^(?:por favor,? )?(?:lembre(?:-se)?|lembre-se|guarde|memorize|não esqueça|nao esqueça|não se esqueça|nao se esqueça) (?:que |de )?(.+)$/i);
-      if (rememberMatch && rememberMatch[1].trim().length >= 3) {
-        addMemory(rememberMatch[1].trim());
-        renderMemories();
-      }
     }
 
     document.getElementById('photo-button').addEventListener('click', () => photoInput.click());
@@ -649,7 +523,7 @@
 
       const files = [...selectedFiles];
       const userText = text || 'Analise os arquivos anexados.';
-      if (text) processMemoryCommand(text);
+      
       let content;
       try {
         content = [{ type: 'text', text: userText }];
@@ -675,7 +549,7 @@
           method: 'POST',
           signal: activeController.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : responseMode.value, response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true, memory: memories })
+          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : responseMode.value, response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true })
         });
         if (!response.ok) {
           const failureText = await response.text();
