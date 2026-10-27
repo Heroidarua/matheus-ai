@@ -483,7 +483,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
     if search_unavailable:
         system_prompt += (
-            "\\n\\nA pesquisa na internet foi solicitada, mas o serviço de busca falhou nesta solicitação. "
+            "\n\nA pesquisa na internet foi solicitada, mas o serviço de busca falhou nesta solicitação. "
             "Não diga que pesquisou na web, não invente citações ou fontes e avise brevemente o usuário "
             "que está respondendo sem pesquisa ao vivo."
         )
