@@ -29,6 +29,7 @@ from pypdf import PdfReader
 
 from app.research_engine import build_search_query, classify_research_topic, is_relevant_result, rank_results
 from app.google_search import google_grounded_search
+from app.google_workspace import router as google_workspace_router
 
 load_dotenv()
 
@@ -59,6 +60,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 from app.github_integration import router as github_router
 app.include_router(github_router)
+app.include_router(google_workspace_router)
 
 
 class ChatMessage(BaseModel):
