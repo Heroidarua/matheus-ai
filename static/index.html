@@ -187,11 +187,6 @@
             <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
             <span id="voice-status" class="voice-status" aria-live="polite"></span>
           </div>
-          <div class="saved-row">
-            <label class="subtitle" for="saved-chats">Conversas salvas</label>
-            <select id="saved-chats" aria-label="Conversas salvas"><option value="">Esta conversa</option></select>
-            <button class="tool-btn" type="button" id="save-chat-button">Salvar</button>
-          </div>
           <div class="tools">
             <button class="tool-btn" type="button" id="photo-button">Enviar foto</button>
             <button class="tool-btn" type="button" id="file-button">Anexar arquivo</button>
@@ -231,10 +226,7 @@
     const webSearchToggle = document.getElementById('web-search-toggle');
     const stopButton = document.getElementById('stop-button');
     const voiceStatus = document.getElementById('voice-status');
-    const savedChatsSelect = document.getElementById('saved-chats');
-    const CHAT_STORE_KEY = 'matheus-ai-conversations-v1';
     let activeController = null;
-    let currentConversationId = null;
     const memoryButton = document.getElementById('memory-button');
     const memoryPanel = document.getElementById('memory-panel');
     const memoryInput = document.getElementById('memory-input');
@@ -287,24 +279,17 @@
       renderMemories();
     });
     renderMemories();
-    refreshSavedChats();
     document.getElementById('stop-button').addEventListener('click', () => {
       if (activeController) activeController.abort();
     });
     document.getElementById('new-chat-button').addEventListener('click', () => {
       if (activeController) activeController.abort();
       history.splice(0, history.length);
-      currentConversationId = null;
       messagesEl.replaceChildren();
       promptEl.value = '';
-      savedChatsSelect.value = '';
       showWelcome();
     });
     document.getElementById('export-button').addEventListener('click', exportConversation);
-    document.getElementById('save-chat-button').addEventListener('click', saveConversation);
-    savedChatsSelect.addEventListener('change', () => {
-      if (savedChatsSelect.value) loadConversation(savedChatsSelect.value);
-    });
     document.getElementById('voice-button').addEventListener('click', toggleVoiceInput);
 
     function showWelcome() {
@@ -604,60 +589,6 @@
     function contentText(content) {
       if (typeof content === 'string') return content;
       return Array.isArray(content) ? content.map(part => part && part.type === 'text' ? part.text || '' : '').join(' ') : '';
-    }
-
-    function readChatStore() {
-      try {
-        const value = JSON.parse(localStorage.getItem(CHAT_STORE_KEY) || '[]');
-        return Array.isArray(value) ? value.filter(item => item && typeof item.id === 'string' && Array.isArray(item.messages)).slice(0, 25) : [];
-      } catch { return []; }
-    }
-
-    function refreshSavedChats(selectedId = '') {
-      savedChatsSelect.replaceChildren();
-      const current = document.createElement('option');
-      current.value = ''; current.textContent = 'Esta conversa'; savedChatsSelect.appendChild(current);
-      readChatStore().forEach(chat => {
-        const option = document.createElement('option');
-        option.value = chat.id; option.textContent = chat.title || 'Conversa salva';
-        savedChatsSelect.appendChild(option);
-      });
-      savedChatsSelect.value = selectedId;
-    }
-
-    function saveConversation() {
-      if (!history.length) { alert('Envie uma mensagem antes de salvar.'); return; }
-      const chats = readChatStore();
-      const firstUser = history.find(item => item.role === 'user');
-      const title = (firstUser ? contentText(firstUser.content) : 'Conversa').slice(0, 55) || 'Conversa';
-      const id = currentConversationId || (Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
-      const record = {
-        id, title, updatedAt: new Date().toISOString(), mode: responseMode.value,
-        freeMode: freeModeToggle.checked,
-        messages: history.map(item => ({ role: item.role, content: contentText(item.content) }))
-      };
-      try {
-        localStorage.setItem(CHAT_STORE_KEY, JSON.stringify([record, ...chats.filter(item => item.id !== id)].slice(0, 25)));
-        currentConversationId = id; refreshSavedChats(id);
-        voiceStatus.textContent = 'Conversa salva neste navegador.';
-      } catch { alert('Não foi possível salvar: armazenamento do navegador cheio ou indisponível.'); }
-    }
-
-    function loadConversation(id) {
-      const chat = readChatStore().find(item => item.id === id);
-      if (!chat) return;
-      history.splice(0, history.length, ...chat.messages.map(item => ({ role: item.role, content: item.content })));
-      currentConversationId = chat.id;
-      responseMode.value = ['normal','programador','estudo','criativo'].includes(chat.mode) ? chat.mode : 'normal';
-      freeModeToggle.checked = Boolean(chat.freeMode); updateModeBadge();
-      messagesEl.replaceChildren();
-      history.forEach(item => {
-        if (item.role === 'assistant') {
-          const bubble = addBubble('', 'assistant');
-          displayAssistantReply(bubble, contentText(item.content));
-        } else addBubble(contentText(item.content), 'user');
-      });
-      refreshSavedChats(id);
     }
 
     function exportConversation() {
