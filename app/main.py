@@ -27,6 +27,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
+from app.research_engine import build_search_query, classify_research_topic, is_relevant_result, rank_results
+
 load_dotenv()
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -572,20 +574,20 @@ def _is_relevant_election_result(item: dict[str, str]) -> bool:
 
 async def search_web(query: str) -> list[dict[str, str]]:
     """Busca notícias/web: Brave API quando configurada, com fallback a buscadores públicos."""
-    cleaned_query = re.sub(r"\s+", " ", query).strip()[:400]
-    election_query = _is_election_query(cleaned_query)
-    if election_query:
-        cleaned_query = "resultado oficial eleição presidencial Brasil 2026 segundo turno TSE Lula Flávio Bolsonaro"
-    if not cleaned_query:
+    original_query = re.sub(r"\s+", " ", query).strip()[:400]
+    if not original_query:
         return []
+    topic = classify_research_topic(original_query)
+    cleaned_query = build_search_query(original_query)
+    election_query = topic == "elections"
 
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.7",
     }
     sources: list[dict[str, str]] = []
-    recent_terms = ("hoje", "atual", "últimas", "ultimas", "notícias", "noticias", "agora", "esta semana", "ontem")
-    is_recent_query = any(term in cleaned_query.lower() for term in recent_terms)
+    recent_terms = ("hoje", "atual", "últimas", "ultimas", "notícias", "noticias", "agora", "esta semana", "ontem", "recente", "latest", "today")
+    is_recent_query = any(term in original_query.casefold() for term in recent_terms)
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), headers=headers, follow_redirects=True) as client:
         # O Brave é opcional. Se a chave estiver inválida, registre o erro e
@@ -616,7 +618,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                             "url": url[:2000],
                             "snippet": str(item.get("description") or "")[:500],
                         }
-                        if not election_query or _is_relevant_election_result(candidate):
+                        if is_relevant_result(original_query, candidate):
                             sources.append(candidate)
             except (httpx.HTTPError, ValueError, TypeError) as exc:
                 print(f"Brave Search failed ({type(exc).__name__}): {str(exc)[:160]}")
@@ -667,7 +669,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                         "url": url[:2000],
                         "snippet": str(item.get("snippet") or "")[:500],
                     }
-                    if election_query and not _is_relevant_election_result(candidate):
+                    if not is_relevant_result(original_query, candidate):
                         continue
                     sources.append(candidate)
                     if len(sources) >= 6:
@@ -676,6 +678,9 @@ async def search_web(query: str) -> list[dict[str, str]]:
             except (httpx.HTTPError, ValueError, TypeError) as exc:
                 print(f"Search {urlparse(engine_url).netloc} failed ({type(exc).__name__}): {str(exc)[:160]}")
 
+        # Só considera resultados que passaram pela avaliação de relevância.
+        # Ordena fontes primárias antes de enviar evidências ao modelo.
+        sources = rank_results(original_query, sources)
         if not sources:
             raise HTTPException(
                 status_code=502,
