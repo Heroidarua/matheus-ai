@@ -13,6 +13,14 @@ services:
         sync: false
       - key: GOOGLE_SEARCH_MODEL
         value: gemini-3.8-flash
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_TOKEN_ENCRYPTION_KEY
+        sync: false
       - key: KNOWLEDGE_DIR
         value: data/knowledge
       - key: OPENAI_API_KEY
