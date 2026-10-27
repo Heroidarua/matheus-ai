@@ -196,7 +196,7 @@ def requires_live_search(message: str) -> bool:
         r"\baconteceu\b", r"\bquem (?:é|está como) (?:o|a) (?:atual|presidente|governador|prefeito)\b",
         r"\b(?:lançamento|lançou|anunciou|anúncio|decisão judicial|cotação|preço atual)\b",
         r"\b(?:versão mais recente|versão atual|versão estável|última versão|mais nova versão|latest version|stable release|newest release|descoberta científica recente|estudo recente|pesquisa científica recente|recentemente publicado|recentemente)\b",
-        r"\b(?:latest|breaking|current|today|yesterday|right now|recent)\b",
+        r"\b(?:mais recente|mais recentes|recentemente|latest|breaking|current|today|yesterday|right now|recent)\b",
     )
     return any(re.search(pattern, text) for pattern in current_topic_patterns)
 
