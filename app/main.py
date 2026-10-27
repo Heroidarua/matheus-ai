@@ -520,84 +520,62 @@ async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[
 
 
 async def search_web(query: str) -> list[dict[str, str]]:
-    """Pesquisa sem API comercial: SearXNG opcional, DuckDuckGo HTML como fallback e leitura de páginas."""
-    cleaned_query = re.sub(r"\s+", " ", query).strip()[:400]
+    """Busca sem API comercial, com fallback entre SearXNG, DuckDuckGo e Bing."""
+    cleaned_query = re.sub(r"\\s+", " ", query).strip()[:400]
     if not cleaned_query:
         return []
-    timeout = httpx.Timeout(10.0, connect=4.0)
     headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; ADAM-WebSearch/1.0; +https://matheus-ai.onrender.com)",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.7",
     }
-    failures: list[str] = []
     sources: list[dict[str, str]] = []
-    async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
-        # Se o proprietário configurar uma instância SearXNG própria, ela é preferida.
+    async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), headers=headers, follow_redirects=True) as client:
         searx_url = os.getenv("SEARXNG_URL", "").strip().rstrip("/")
         if searx_url and _public_http_url(searx_url):
             try:
-                response = await client.get(
-                    searx_url + "/search",
-                    params={"q": cleaned_query, "format": "json", "language": "pt-BR", "safesearch": 1},
-                )
+                response = await client.get(searx_url + "/search", params={"q": cleaned_query, "format": "json", "language": "pt-BR", "safesearch": 1})
                 response.raise_for_status()
-                payload = response.json()
-                for item in (payload.get("results") or [])[:6]:
+                for item in (response.json().get("results") or [])[:6]:
                     url = str(item.get("url", "")).strip()
                     if _public_http_url(url):
-                        sources.append({
-                            "title": str(item.get("title") or url)[:200],
-                            "url": url[:2000],
-                            "snippet": str(item.get("content") or item.get("snippet") or "")[:500],
-                        })
+                        sources.append({"title": str(item.get("title") or url)[:200], "url": url[:2000], "snippet": str(item.get("content") or item.get("snippet") or "")[:500]})
             except (httpx.HTTPError, ValueError, TypeError) as exc:
-                failures.append(f"SearXNG: {type(exc).__name__}")
-                print(f"SearXNG search failed ({type(exc).__name__}): {str(exc)[:180]}")
+                print(f"SearXNG failed ({type(exc).__name__}): {str(exc)[:160]}")
 
-        # Sem SearXNG ou se ele falhar, consulta a página HTML pública do DuckDuckGo.
-        if not sources:
+        engines = [
+            ("https://html.duckduckgo.com/html/", {"q": cleaned_query}),
+            ("https://lite.duckduckgo.com/lite/", {"q": cleaned_query}),
+            ("https://www.bing.com/search", {"q": cleaned_query, "setlang": "pt-br"}),
+        ]
+        for engine_url, params in engines:
+            if sources:
+                break
             try:
-                response = await client.get("https://html.duckduckgo.com/html/", params={"q": cleaned_query})
+                response = await client.get(engine_url, params=params)
                 response.raise_for_status()
                 parser = _SearchResultsParser()
-                parser.feed(response.text[:1_000_000])
+                parser.feed(response.text[:1_200_000])
                 for item in parser.results:
                     url = str(item.get("url", "")).strip()
-                    # DuckDuckGo pode devolver links de redirecionamento; resolve quando possível.
                     if "duckduckgo.com/l/?" in url:
-                        parsed = urlparse(url)
-                        url = parse_qs(parsed.query).get("uddg", [url])[0]
-                    url = urljoin("https://html.duckduckgo.com", url)
-                    if not _public_http_url(url):
+                        url = parse_qs(urlparse(url).query).get("uddg", [url])[0]
+                    url = urljoin(engine_url, url)
+                    if not _public_http_url(url) or any(x["url"] == url for x in sources):
                         continue
-                    if any(existing["url"] == url for existing in sources):
-                        continue
-                    sources.append({
-                        "title": str(item.get("title") or url)[:200],
-                        "url": url[:2000],
-                        "snippet": str(item.get("snippet") or "")[:500],
-                    })
+                    sources.append({"title": str(item.get("title") or url)[:200], "url": url[:2000], "snippet": str(item.get("snippet") or "")[:500]})
                     if len(sources) >= 6:
                         break
+                print(f"Search {urlparse(engine_url).netloc}: {len(sources)} results")
             except (httpx.HTTPError, ValueError, TypeError) as exc:
-                failures.append(f"DuckDuckGo: {type(exc).__name__}")
-                print(f"DuckDuckGo HTML search failed ({type(exc).__name__}): {str(exc)[:180]}")
+                print(f"Search {urlparse(engine_url).netloc} failed ({type(exc).__name__}): {str(exc)[:160]}")
 
         if not sources:
-            raise HTTPException(
-                status_code=502,
-                detail="Não foi possível obter resultados de busca agora. Os buscadores públicos podem estar indisponíveis ou bloquear esta conexão; tente novamente mais tarde.",
-            )
+            raise HTTPException(status_code=502, detail="Os buscadores públicos não retornaram resultados. Tente novamente ou configure SEARXNG_URL com uma instância acessível.")
 
-        # Lê algumas páginas encontradas para dar ao modelo contexto além dos snippets.
-        try:
-            await asyncio.gather(*(_read_page(client, item) for item in sources[:3]), return_exceptions=True)
-        except Exception as exc:
-            print(f"Page reading fallback error ({type(exc).__name__}): {str(exc)[:180]}")
-
+        await asyncio.gather(*(_read_page(client, item) for item in sources[:3]), return_exceptions=True)
     for source in sources:
         if source.get("page_text"):
-            source["snippet"] = (source.get("snippet", "") + "\nConteúdo da página: " + source["page_text"][:1400]).strip()[:1900]
+            source["snippet"] = (source.get("snippet", "") + "\\nConteúdo extraído: " + source["page_text"][:1400]).strip()[:1900]
     return sources[:6]
 
 @app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
