@@ -247,10 +247,22 @@ async def google_callback(request: Request, code: str = "", state: str = "", err
         print(f"Google OAuth token exchange failed (HTTP {response.status_code})")
         raise HTTPException(status_code=502, detail="Não foi possível concluir a autorização Google.")
     tokens = response.json()
-    tokens["expires_at"] = time.time() + int(tokens.get("expires_in", 3600))
     if not tokens.get("access_token"):
         raise HTTPException(status_code=502, detail="O Google não retornou um token de acesso.")
     session_id = _session_id(request, create=True)
+    # Google pode omitir refresh_token em autorizações subsequentes; preserve o
+    # refresh token já armazenado para não quebrar o acesso offline.
+    existing = await asyncio.to_thread(
+        _database_call,
+        "SELECT encrypted_tokens FROM google_oauth_tokens WHERE session_id = %s",
+        (session_id,),
+        fetch=True,
+    )
+    if not tokens.get("refresh_token") and existing:
+        previous = _decrypt_tokens(existing[0], key)
+        if previous.get("refresh_token"):
+            tokens["refresh_token"] = previous["refresh_token"]
+    tokens["expires_at"] = time.time() + int(tokens.get("expires_in", 3600))
     await asyncio.to_thread(
         _database_call,
         "INSERT INTO google_oauth_tokens(session_id, encrypted_tokens) VALUES (%s, %s) "
