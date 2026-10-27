@@ -53,7 +53,7 @@ TRUSTED_DOMAINS = {
 
 def classify_research_topic(query: str) -> str:
     """Classifica a intenção principal, dando prioridade a pedidos explícitos de notícia."""
-    text = re.sub(r"\\s+", " ", query.casefold()).strip()
+    text = re.sub(r"\s+", " ", query.casefold()).strip()
     election_terms = ("eleição", "eleições", "eleitoral", "apura", "votos válidos", "resultado eleitoral", "quem ganhou", "quem venceu", "foi eleito")
     if any(term in text for term in election_terms):
         return "elections"
