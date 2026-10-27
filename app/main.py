@@ -645,38 +645,57 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 print(f"SearXNG failed ({type(exc).__name__}): {str(exc)[:160]}")
 
         engines = [
-            ("https://html.duckduckgo.com/html/", {"q": cleaned_query}),
-            ("https://lite.duckduckgo.com/lite/", {"q": cleaned_query}),
-            ("https://www.bing.com/search", {"q": cleaned_query, "setlang": "pt-br"}),
+            "https://html.duckduckgo.com/html/",
+            "https://lite.duckduckgo.com/lite/",
+            "https://www.bing.com/search",
         ]
-        for engine_url, params in engines:
+        # A expansão pode prejudicar perguntas em português ou fazer o buscador
+        # retornar páginas lexicais. Se não houver resultados relevantes, tenta
+        # também a pergunta original, sem os termos adicionais.
+        query_variants = [cleaned_query]
+        if original_query.casefold() != cleaned_query.casefold():
+            query_variants.append(original_query)
+        for engine_url in engines:
             if sources:
                 break
-            try:
-                response = await client.get(engine_url, params=params)
-                response.raise_for_status()
-                parser = _SearchResultsParser()
-                parser.feed(response.text[:1_200_000])
-                for item in parser.results:
-                    url = str(item.get("url", "")).strip()
-                    if "duckduckgo.com/l/?" in url:
-                        url = parse_qs(urlparse(url).query).get("uddg", [url])[0]
-                    url = urljoin(engine_url, url)
-                    if not _public_http_url(url) or any(x["url"] == url for x in sources):
-                        continue
-                    candidate = {
-                        "title": str(item.get("title") or url)[:200],
-                        "url": url[:2000],
-                        "snippet": str(item.get("snippet") or "")[:500],
-                    }
-                    if not is_relevant_result(original_query, candidate):
-                        continue
-                    sources.append(candidate)
-                    if len(sources) >= 6:
+            for search_query in query_variants:
+                try:
+                    params = {"q": search_query}
+                    if "bing.com" in urlparse(engine_url).netloc:
+                        params["setlang"] = "pt-br"
+                    response = await client.get(engine_url, params=params)
+                    response.raise_for_status()
+                    parser = _SearchResultsParser()
+                    parser.feed(response.text[:1_200_000])
+                    found_before = len(sources)
+                    rejected = 0
+                    for item in parser.results:
+                        url = str(item.get("url", "")).strip()
+                        if "duckduckgo.com/l/?" in url:
+                            url = parse_qs(urlparse(url).query).get("uddg", [url])[0]
+                        url = urljoin(engine_url, url)
+                        if not _public_http_url(url) or any(x["url"] == url for x in sources):
+                            continue
+                        candidate = {
+                            "title": str(item.get("title") or url)[:200],
+                            "url": url[:2000],
+                            "snippet": str(item.get("snippet") or "")[:500],
+                        }
+                        if not is_relevant_result(original_query, candidate):
+                            rejected += 1
+                            continue
+                        sources.append(candidate)
+                        if len(sources) >= 6:
+                            break
+                    print(
+                        f"Search {urlparse(engine_url).netloc}: parsed={len(parser.results)}, "
+                        f"rejected={rejected}, accepted={len(sources) - found_before}, "
+                        f"query_variant={'expanded' if search_query == cleaned_query else 'original'}"
+                    )
+                    if sources:
                         break
-                print(f"Search {urlparse(engine_url).netloc}: {len(sources)} results")
-            except (httpx.HTTPError, ValueError, TypeError) as exc:
-                print(f"Search {urlparse(engine_url).netloc} failed ({type(exc).__name__}): {str(exc)[:160]}")
+                except (httpx.HTTPError, ValueError, TypeError) as exc:
+                    print(f"Search {urlparse(engine_url).netloc} failed ({type(exc).__name__}): {str(exc)[:160]}")
 
         # Só considera resultados que passaram pela avaliação de relevância.
         # Ordena fontes primárias antes de enviar evidências ao modelo.
