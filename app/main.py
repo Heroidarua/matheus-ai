@@ -557,9 +557,25 @@ async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[
     return source
 
 
+def _is_election_query(query: str) -> bool:
+    normalized = query.casefold()
+    return bool(re.search(r"\b(ele[ií]ç(?:ão|ões)|apuraç(?:ão|ões)|resultado eleitoral|quem ganhou.*elei|quem venceu.*elei)\b", normalized))
+
+
+def _is_relevant_election_result(item: dict[str, str]) -> bool:
+    """Descarta resultados lexicais que não tratam da eleição perguntada."""
+    haystack = " ".join((item.get("title", ""), item.get("url", ""), item.get("snippet", ""))).casefold()
+    topical = ("elei", "presidente", "presidencial", "tse", "tribunal superior eleitoral", "apura", "votos válidos", "votos validos")
+    specific = ("2026", "lula", "flávio", "flavio", "resultado", "reeleito", "reeleição", "reeleicao", "segundo turno", "2º turno")
+    return any(term in haystack for term in topical) and any(term in haystack for term in specific)
+
+
 async def search_web(query: str) -> list[dict[str, str]]:
     """Busca notícias/web: Brave API quando configurada, com fallback a buscadores públicos."""
     cleaned_query = re.sub(r"\s+", " ", query).strip()[:400]
+    election_query = _is_election_query(cleaned_query)
+    if election_query:
+        cleaned_query = "resultado oficial eleição presidencial Brasil 2026 segundo turno TSE Lula Flávio Bolsonaro"
     if not cleaned_query:
         return []
 
@@ -595,11 +611,13 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 for item in (payload.get("web", {}).get("results") or [])[:6]:
                     url = str(item.get("url", "")).strip()
                     if _public_http_url(url):
-                        sources.append({
+                        candidate = {
                             "title": str(item.get("title") or url)[:200],
                             "url": url[:2000],
                             "snippet": str(item.get("description") or "")[:500],
-                        })
+                        }
+                        if not election_query or _is_relevant_election_result(candidate):
+                            sources.append(candidate)
             except (httpx.HTTPError, ValueError, TypeError) as exc:
                 print(f"Brave Search failed ({type(exc).__name__}): {str(exc)[:160]}")
 
@@ -614,11 +632,13 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 for item in (response.json().get("results") or [])[:6]:
                     url = str(item.get("url", "")).strip()
                     if _public_http_url(url):
-                        sources.append({
+                        candidate = {
                             "title": str(item.get("title") or url)[:200],
                             "url": url[:2000],
                             "snippet": str(item.get("content") or item.get("snippet") or "")[:500],
-                        })
+                        }
+                        if not election_query or _is_relevant_election_result(candidate):
+                            sources.append(candidate)
             except (httpx.HTTPError, ValueError, TypeError) as exc:
                 print(f"SearXNG failed ({type(exc).__name__}): {str(exc)[:160]}")
 
@@ -642,11 +662,14 @@ async def search_web(query: str) -> list[dict[str, str]]:
                     url = urljoin(engine_url, url)
                     if not _public_http_url(url) or any(x["url"] == url for x in sources):
                         continue
-                    sources.append({
+                    candidate = {
                         "title": str(item.get("title") or url)[:200],
                         "url": url[:2000],
                         "snippet": str(item.get("snippet") or "")[:500],
-                    })
+                    }
+                    if election_query and not _is_relevant_election_result(candidate):
+                        continue
+                    sources.append(candidate)
                     if len(sources) >= 6:
                         break
                 print(f"Search {urlparse(engine_url).netloc}: {len(sources)} results")
