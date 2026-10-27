@@ -79,6 +79,48 @@ O ADA-M pode usar **Google Search Grounding** como provedor de pesquisa, sem tro
 
 **Limite desta etapa:** Gmail, Drive, Calendar, Docs e Sheets exigem OAuth consentido por cada usuário, escopos específicos e armazenamento seguro de tokens no servidor. Não são ativados automaticamente por uma chave de pesquisa; não conceda permissões de Workspace até que esse fluxo seja configurado e testado.
 
+### Integração Google Workspace (Gmail, Drive, Calendar, Docs e Sheets)
+
+O módulo `app/google_workspace.py` adiciona autorização OAuth no servidor e endpoints de leitura. Ele fica **desativado por padrão** até todas as credenciais abaixo estarem configuradas. Não muda o modelo principal nem a pesquisa Google.
+
+#### Configuração necessária
+
+1. Crie um projeto no [Google Cloud Console](https://console.cloud.google.com/).
+2. Ative Gmail API, Google Drive API, Google Calendar API, Google Docs API e Google Sheets API.
+3. Configure a tela de consentimento OAuth e crie um cliente OAuth do tipo **Aplicativo da Web**.
+4. Adicione exatamente `https://SEU-SERVICO.onrender.com/api/google/callback` em **Authorized redirect URIs** (use a URL real do serviço).
+5. No Render, crie um banco PostgreSQL e copie a URL interna/privada como `DATABASE_URL`. Não use a URL pública se a aplicação estiver no mesmo ambiente privado.
+6. Configure no Render:
+   - `GOOGLE_OAUTH_CLIENT_ID`: ID do cliente OAuth.
+   - `GOOGLE_OAUTH_CLIENT_SECRET`: segredo OAuth.
+   - `DATABASE_URL`: URL privada do PostgreSQL.
+   - `GOOGLE_TOKEN_ENCRYPTION_KEY`: chave Fernet criada uma única vez com `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+   - `PUBLIC_APP_URL`: URL HTTPS pública real, sem barra final.
+7. Faça deploy. Abra `/api/google/status`; conecte a conta acessando `/api/google/connect`. O callback devolve o usuário à página inicial.
+
+#### Endpoints de leitura
+
+- `GET /api/google/status` — estado da integração nesta sessão.
+- `GET /api/google/connect` — inicia o consentimento OAuth.
+- `POST /api/google/disconnect` — revoga o token de acesso quando possível e remove os tokens armazenados.
+- `GET /api/google/gmail/messages?q=...&max_results=10` — lista mensagens por pesquisa Gmail.
+- `GET /api/google/gmail/messages/{message_id}` — metadados e snippet da mensagem.
+- `GET /api/google/drive/files?q=relatorio&page_size=10` — pesquisa arquivos pelo nome.
+- `GET /api/google/calendar/events?max_results=10` — próximos eventos do calendário principal.
+- `GET /api/google/docs/{document_id}` — conteúdo estrutural do documento Google Docs.
+- `GET /api/google/sheets/{spreadsheet_id}/values/{range}` — valores de um intervalo, por exemplo `Sheet1!A1:C10`.
+
+Os endpoints são somente leitura. Esta primeira etapa não envia e-mails, edita arquivos, cria eventos nem altera planilhas.
+
+#### Segurança e limites
+
+- Tokens de acesso e refresh são criptografados com Fernet antes de serem persistidos no PostgreSQL; a chave de criptografia permanece apenas nas variáveis privadas do Render.
+- Cada sessão do navegador recebe seu próprio registro de token. Não exponha os endpoints através de um proxy que compartilhe a sessão de um usuário com outro.
+- Não registre tokens nem inclua chaves OAuth no frontend, no GitHub ou nos logs.
+- Solicita escopos de leitura de Gmail, Drive, Calendar, Docs e Sheets. O Google pode exigir verificação da aplicação e, dependendo do tipo de conta/escopo, revisão adicional antes de permitir usuários externos. Em modo de teste, tokens de atualização podem expirar; verifique as regras atuais da tela de consentimento.
+- Se a chave Fernet for perdida, os tokens armazenados não poderão ser recuperados; se for trocada, os usuários precisarão conectar novamente.
+- A integração não cria o banco automaticamente: `DATABASE_URL` deve apontar para um PostgreSQL provisionado. Se as variáveis estiverem ausentes, as rotas retornam estado não configurado e as funções existentes continuam funcionando.
+
 ### Configurar a API gratuita do Google Gemini
 
 O Matheus AI usa uma API compatível com OpenAI, então é possível conectar o Gemini alterando somente as variáveis de ambiente, sem trocar a interface nem a base RAG. A disponibilidade gratuita e os limites dependem do modelo, da conta e das regras atuais do Google.
