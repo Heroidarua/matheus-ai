@@ -277,8 +277,8 @@ def build_system_prompt(mode: str, query: str, memory: list[str] | None = None, 
     }
     prompt += mode_prompts.get(mode, "")
     length_prompts = {
-        "curta": "\\n\\nPreferência de tamanho: responda de forma concisa, com foco no essencial.",
-        "detalhada": "\\n\\nPreferência de tamanho: dê uma resposta completa e organizada, com contexto, etapas e exemplos quando úteis.",
+        "curta": "\n\nPreferência de tamanho: responda de forma concisa, com foco no essencial.",
+        "detalhada": "\n\nPreferência de tamanho: dê uma resposta completa e organizada, com contexto, etapas e exemplos quando úteis.",
     }
     prompt += length_prompts.get(response_length, "")
 
@@ -495,7 +495,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
                     async with stream_client.stream("POST", f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=stream_payload) as upstream:
                         if upstream.status_code >= 400:
                             body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
-                            yield "event: error\\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                            yield "event: error\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
                             return
                         async for line in upstream.aiter_lines():
                             if not line.startswith("data:"):
@@ -510,15 +510,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
                                 if isinstance(delta, list):
                                     delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
                                 if isinstance(delta, str) and delta:
-                                    yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\\n\\n"
+                                    yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
                             except (ValueError, TypeError, IndexError):
                                 continue
-                yield "event: done\\ndata: " + json.dumps({"model": MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\\n\\n"
+                yield "event: done\ndata: " + json.dumps({"model": MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\n\n"
             except httpx.TimeoutException:
-                yield "event: error\\ndata: " + json.dumps({"detail": "O modelo demorou para responder. Tente novamente."}, ensure_ascii=False) + "\\n\\n"
+                yield "event: error\ndata: " + json.dumps({"detail": "O modelo demorou para responder. Tente novamente."}, ensure_ascii=False) + "\n\n"
             except httpx.HTTPError as exc:
                 print(f"Streaming provider error ({type(exc).__name__}): {str(exc)[:200]}")
-                yield "event: error\\ndata: " + json.dumps({"detail": "A conexão com o provedor do modelo falhou."}, ensure_ascii=False) + "\\n\\n"
+                yield "event: error\ndata: " + json.dumps({"detail": "A conexão com o provedor do modelo falhou."}, ensure_ascii=False) + "\n\n"
         return StreamingResponse(stream_reply(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
     started_at = time.perf_counter()
