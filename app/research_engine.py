@@ -41,7 +41,7 @@ TRUSTED_DOMAINS = {
     ),
     "science": (
         "nature.com", "science.org", "pubmed.ncbi.nlm.nih.gov", "nih.gov",
-        "who.int", " nasa.gov", "esa.int", "noaa.gov", "gov.br",
+        "who.int", "nasa.gov", "esa.int", "noaa.gov", "gov.br",
         "arxiv.org", "doi.org",
     ),
     "news": (
@@ -54,9 +54,16 @@ TRUSTED_DOMAINS = {
 def classify_research_topic(query: str) -> str:
     """Classifica a área principal da pesquisa sem chamar um modelo externo."""
     text = re.sub(r"\s+", " ", query.casefold()).strip()
-    for topic in ("elections", "technology", "science", "news"):
-        if any(keyword in text for keyword in TOPIC_KEYWORDS[topic]):
-            return topic
+    # A intenção explícita de notícia/atualidade deve prevalecer sobre o tema
+    # (ex.: "notícias de IA hoje" é uma pesquisa de notícias, não documentação).
+    if any(term in text for term in ("eleição", "eleições", "eleitoral", "apura", "votos válidos", "resultado eleitoral", "quem ganhou", "quem venceu", "foi eleito")):
+        return "elections"
+    if any(term in text for term in ("notícia", "notícias", "aconteceu", "últimas", "hoje", "ontem", "agora", "recente", "atual", "breaking", "latest", "today", "mais recente", "versão atual", "versão estável", "stable release", "latest version")):
+        return "news"
+    if any(keyword in text for keyword in TOPIC_KEYWORDS["science"]):
+        return "science"
+    if any(keyword in text for keyword in TOPIC_KEYWORDS["technology"]):
+        return "technology"
     return "general"
 
 
@@ -70,7 +77,7 @@ def build_search_query(query: str) -> str:
         "elections": " resultado oficial fonte primária TSE TRE",
         "technology": " documentação oficial release notes",
         "science": " artigo científico fonte primária universidade órgão científico",
-        "news": " fontes confiáveis data publicação",
+        "news": " notícias recentes fontes confiáveis data publicação fonte oficial",
         "general": "",
     }
     # Não repete uma expansão que já tenha sido aplicada pelo chamador.
@@ -118,21 +125,30 @@ def is_relevant_result(query: str, item: dict[str, str]) -> bool:
     combined = title + " " + snippet
     topic = classify_research_topic(query)
 
-    if topic == "elections":
-        # Evita dicionários, traduções e páginas lexicais quando a pergunta é factual.
+    if topic in {"elections", "news", "technology", "science"}:
+        # Evita dicionários, traduções e páginas lexicais em pesquisas factuais.
         lexical_only = any(term in combined for term in (
             "significado da palavra", "definição de", "tradução de", "sinônimo de",
-            "dicionário", "dictionary", "conjugação do verbo",
+            "dicionário", "dictionary", "conjugação do verbo", "word meaning",
         ))
         if lexical_only:
             return False
-        election_terms = ("elei", "presidente", "presidencial", "tse", "tribunal superior eleitoral", "apura", "voto", "candidato", "resultado")
+
+    if topic == "elections":
+        election_terms = ("elei", "presidente", "presidencial", "tse", "tribunal superior eleitoral", "apura", "voto", "candidato", "resultado", "reeleito")
         if not any(term in combined for term in election_terms):
             return False
 
-    # Uma correspondência literal mínima impede que resultados totalmente genéricos
-    # sejam considerados suficientes. Para notícias curtas, uma palavra temática basta.
-    return result_relevance_score(query, item) >= 2 or source_trust_score(item, topic) > 0
+    # Busca pode usar siglas/sinônimos (IA/AI) e manchetes curtas. Aceita uma
+    # correspondência temática razoável, mas nunca aceita páginas lexicais acima.
+    score = result_relevance_score(query, item)
+    trusted = source_trust_score(item, topic) > 0
+    if trusted:
+        return True
+    if topic == "news":
+        topical_terms = ("notícia", "noticias", "news", "inteligência artificial", "artificial intelligence", " ai ", "ia", "tecnologia", "lançamento", "anunciou", "hoje", "today", "latest")
+        return score >= 2 or any(term in combined for term in topical_terms)
+    return score >= 2
 
 
 def rank_results(query: str, items: list[dict[str, str]]) -> list[dict[str, str]]:
