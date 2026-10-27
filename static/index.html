@@ -71,10 +71,13 @@
     .utility-row { display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0;align-items:center; }
     .utility-row select { background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px; }
     .voice-status { color:var(--muted);font-size:11px;align-self:center; }
-    .settings-drawer { margin-top:7px;border:1px solid var(--border);border-radius:12px;background:transparent;overflow:hidden; }
-    .settings-drawer > summary { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;cursor:pointer;list-style:none;font-size:12px;font-weight:600;color:var(--muted); }
+    .drawer-row { display:flex;align-items:flex-start;gap:8px;margin-top:5px; }
+    .settings-drawer { flex:1;min-width:0;margin-top:0;border:0;border-radius:10px;background:transparent;overflow:visible; }
+    .settings-drawer[open] { background:var(--panel);border:1px solid var(--border); }
+    .settings-drawer > summary { display:flex;align-items:center;justify-content:center;gap:7px;padding:7px 9px;cursor:pointer;list-style:none;font-size:12px;font-weight:500;color:var(--muted);border:1px solid var(--border);border-radius:18px; }
     .settings-drawer > summary::-webkit-details-marker { display:none; }
-    .settings-drawer > summary::after { content:'⌄';color:var(--muted);font-size:16px; }
+    .settings-drawer > summary::after { content:'⌄';color:var(--muted);font-size:13px; }
+    .settings-drawer[open] > summary { border-color:transparent; }
     .settings-drawer[open] > summary::after { content:'⌃'; }
     .drawer-hint { margin-left:auto;color:var(--muted);font-size:10px;font-weight:400;text-align:right; }
     .settings-grid,.drawer-content { padding:2px 11px 11px; }
@@ -147,15 +150,15 @@
       .input-wrap{gap:5px;padding:6px;border-radius:18px;}
       #prompt{padding:10px 8px;font-size:16px;min-height:44px;}
       #send{padding:12px 15px;white-space:nowrap;}
-      .settings-drawer > summary{padding:9px 10px;}
-      .drawer-hint{max-width:58%;font-size:10px;}
+      .settings-drawer > summary{padding:7px 8px;font-size:11px;}
+      .drawer-row{gap:6px;}
       .settings-grid,.drawer-content{padding:2px 10px 10px;}
       .tool-btn{padding:8px 10px;font-size:12px;}
       .tools{gap:6px;}
       .mode-toggle{font-size:12px;}
       .hint{font-size:10px;padding-top:5px;}
       .input-wrap{border-radius:16px;}
-      .settings-drawer{margin-top:5px;}
+      .settings-drawer{margin-top:0;}
       .status{display:none;}
     }
   </style>
@@ -175,8 +178,9 @@
         <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
         <button id="send" type="submit">Enviar</button>
       </div>
+      <div class="drawer-row">
       <details class="settings-drawer">
-        <summary><span>Preferências</span><span class="drawer-hint">Modo · resposta · pesquisa</span></summary>
+        <summary>Preferências</summary>
         <div class="settings-grid">
           <label class="field-label" for="response-mode">Modo de resposta
             <select id="response-mode" aria-label="Modo de resposta">
@@ -199,7 +203,7 @@
         </div>
       </details>
       <details class="settings-drawer tools-drawer">
-        <summary><span>Ferramentas</span><span class="drawer-hint">Nova conversa · voz</span></summary>
+        <summary>Ferramentas</summary>
         <div class="drawer-content">
           <div class="tools primary-tools">
             <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
@@ -209,6 +213,7 @@
           </div>
         </div>
       </details>
+      </div>
       <div class="hint">Enter para enviar · Shift+Enter para nova linha</div>
     </form>
   </main>
