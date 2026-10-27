@@ -460,8 +460,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         if request.stream:
             async def local_tool_stream():
                 import json
-                yield "data: " + json.dumps({"token": tool_result}, ensure_ascii=False) + "\\n\\n"
-                yield "event: done\\ndata: " + json.dumps({"model": "ferramenta-local", "sources": []}, ensure_ascii=False) + "\\n\\n"
+                yield "data: " + json.dumps({"token": tool_result}, ensure_ascii=False) + "\n\n"
+                yield "event: done\ndata: " + json.dumps({"model": "ferramenta-local", "sources": []}, ensure_ascii=False) + "\n\n"
             return StreamingResponse(local_tool_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
         return ChatResponse(reply=tool_result, model="ferramenta-local")
 
