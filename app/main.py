@@ -8,6 +8,7 @@ import binascii
 import operator
 import os
 import re
+import secrets
 import time
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -19,6 +20,7 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -41,8 +43,18 @@ IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
-app = FastAPI(title="ADA-M", version="0.2.0")
+app = FastAPI(title="ADA-M", version="0.3.0")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("GITHUB_SESSION_SECRET") or secrets.token_urlsafe(48),
+    session_cookie="matheus_ai_session",
+    same_site="lax",
+    https_only=os.getenv("COOKIE_HTTPS_ONLY", "true").lower() == "true",
+    max_age=60 * 60 * 24 * 14,
+)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+from app.github_integration import router as github_router
+app.include_router(github_router)
 
 
 class ChatMessage(BaseModel):
