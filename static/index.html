@@ -224,8 +224,6 @@
     document.querySelectorAll('[data-prompt]').forEach(button => {
       button.addEventListener('click', () => { promptEl.value = button.dataset.prompt; promptEl.focus(); });
     });
-    });
-    renderMemories();
     document.getElementById('stop-button').addEventListener('click', () => {
       if (activeController) activeController.abort();
     });
