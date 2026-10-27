@@ -64,6 +64,21 @@ Configure no `.env`:
 
 O blueprint `render.yaml` cria somente o serviço web. **Ele não hospeda automaticamente os pesos do modelo nem faz fine-tuning.** Configure um endpoint de modelo acessível pela internet em `MODEL_BASE_URL`, o nome em `MODEL_NAME` e os segredos nas variáveis de ambiente do Render. Não coloque chaves no código nem no repositório. Os arquivos de `data/knowledge/` são copiados para a imagem durante o build.
 
+### Pesquisa Google em tempo real mantendo o modelo atual
+
+O ADA-M pode usar **Google Search Grounding** como provedor de pesquisa, sem trocar o modelo que escreve a resposta final. O Gemini é chamado apenas para pesquisar na web e devolver uma síntese auxiliar com citações; o backend continua enviando as evidências ao modelo definido em `MODEL_BASE_URL` e `MODEL_NAME`. Se o Google falhar ou não devolver citações, o sistema continua tentando Brave, SearXNG (se configurado), DuckDuckGo e Bing.
+
+1. Crie uma chave no [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. No Render, abra **Environment** e configure:
+   - `GOOGLE_GEMINI_API_KEY`: sua chave, mantida somente no servidor.
+   - `GOOGLE_SEARCH_MODEL`: `gemini-3.8-flash` (opcional; pode ser ajustado para um modelo que suporte Google Search Grounding).
+3. Salve e aguarde o deploy. Ative **Pesquisar na web** no chat ou faça uma pergunta atual que acione a pesquisa automática.
+4. Consulte os logs do Render procurando `Google Search Grounding: citations=` para confirmar que a API retornou citações.
+
+**Custos e privacidade:** a pesquisa usa a Gemini API e pode consumir cota ou gerar cobrança. A documentação atual descreve cobrança por consulta de pesquisa para modelos Gemini 3+, com uma franquia que pode mudar; confira [preços oficiais](https://ai.google.dev/gemini-api/docs/pricing) antes de uso contínuo. A pergunta é enviada ao Google. Nunca coloque a chave no frontend, em mensagens ou em commits. A pesquisa Google é independente do provedor de resposta principal.
+
+**Limite desta etapa:** Gmail, Drive, Calendar, Docs e Sheets exigem OAuth consentido por cada usuário, escopos específicos e armazenamento seguro de tokens no servidor. Não são ativados automaticamente por uma chave de pesquisa; não conceda permissões de Workspace até que esse fluxo seja configurado e testado.
+
 ### Configurar a API gratuita do Google Gemini
 
 O Matheus AI usa uma API compatível com OpenAI, então é possível conectar o Gemini alterando somente as variáveis de ambiente, sem trocar a interface nem a base RAG. A disponibilidade gratuita e os limites dependem do modelo, da conta e das regras atuais do Google.

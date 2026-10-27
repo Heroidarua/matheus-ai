@@ -9,6 +9,10 @@ services:
         sync: false
       - key: MODEL_NAME
         value: qwen2.5:3b
+      - key: GOOGLE_GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_SEARCH_MODEL
+        value: gemini-3.8-flash
       - key: KNOWLEDGE_DIR
         value: data/knowledge
       - key: OPENAI_API_KEY
