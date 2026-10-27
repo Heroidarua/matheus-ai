@@ -66,3 +66,40 @@ async def test_web_search_reports_missing_brave_key(monkeypatch):
     with pytest.raises(main.HTTPException) as error:
         await main.search_web("teste")
     assert error.value.status_code == 503
+
+
+
+@pytest.mark.asyncio
+async def test_web_search_maps_invalid_subscription_token(monkeypatch):
+    class FakeResponse:
+        status_code = 422
+        text = '{"error":{"code":"SUBSCRIPTION_TOKEN_INVALID"}}'
+        request = httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search")
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError("422 invalid token", request=self.request, response=httpx.Response(
+                422, request=self.request, text=self.text
+            ))
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    import httpx
+    monkeypatch.setattr(main, "BRAVE_SEARCH_API_KEY", "invalid-test-token")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
+
+    with pytest.raises(main.HTTPException) as error:
+        await main.search_web("teste")
+
+    assert error.value.status_code == 502
+    assert "token inválido" in error.value.detail
