@@ -99,15 +99,6 @@
     .input-wrap { box-shadow:none; }
     #prompt { min-width:0;resize:none;min-height:44px;max-height:140px; }
     .hint { line-height:1.4;padding-top:6px;font-size:10px; }
-    .github-panel { margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--panel);display:grid;gap:9px; }
-    .github-panel h3 { margin:0;font-size:14px;font-weight:600; }
-    .github-panel p { margin:0;color:var(--muted);font-size:12px; }
-    .github-panel input,.github-panel select,.github-panel textarea { width:100%;min-width:0;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;font:inherit;font-size:13px; }
-    .github-panel textarea { min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.5; }
-    .github-actions { display:flex;flex-wrap:wrap;gap:7px; }
-    .github-actions button { font-size:12px;padding:8px 10px; }
-    .github-status { font-size:12px;color:var(--muted);overflow-wrap:anywhere; }
-    .github-panel [hidden] { display:none !important; }
     .tools-drawer .tools { margin-top:8px; }
     .tools-drawer .tool-btn { background:transparent;border-color:var(--border); }
     .selected-files:empty { display:none; }
@@ -227,41 +218,7 @@
         <summary>Ferramentas</summary>
         <div class="drawer-content">
           <div class="tools primary-tools">
-            <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>          <section class="github-panel" aria-label="Integração com GitHub">
-            <h3>⌘ GitHub</h3>
-            <p>Conecte uma instalação e trabalhe somente com os repositórios autorizados nela.</p>
-            <div class="github-actions">
-              <button class="tool-btn" type="button" id="github-connect">Conectar GitHub</button>
-              <button class="tool-btn" type="button" id="github-disconnect" hidden>Desconectar</button>
-            </div>
-            <div id="github-status" class="github-status" role="status" aria-live="polite">Verificando configuração…</div>
-            <div id="github-workspace" hidden>
-              <label class="field-label" for="github-repository">Repositório autorizado
-                <select id="github-repository"><option value="">Selecione um repositório</option></select>
-              </label>
-              <label class="field-label" for="github-file-path">Caminho do arquivo
-                <input id="github-file-path" type="text" placeholder="app/main.py" autocomplete="off">
-              </label>
-              <div class="github-actions">
-                <button class="tool-btn" type="button" id="github-read-file">Ler arquivo</button>
-                <button class="tool-btn" type="button" id="github-use-context">Enviar contexto ao chat</button>
-              </div>
-              <label class="field-label" for="github-file-content">Conteúdo do arquivo
-                <textarea id="github-file-content" spellcheck="false" placeholder="Leia um arquivo ou cole aqui o código revisado pela IA."></textarea>
-              </label>
-              <label class="field-label" for="github-branch">Nova branch
-                <input id="github-branch" type="text" value="matheus-ai/ajustes" maxlength="80">
-              </label>
-              <label class="field-label" for="github-commit-message">Mensagem do commit
-                <input id="github-commit-message" type="text" value="Prepare changes with Matheus IA" maxlength="200">
-              </label>
-              <div class="github-actions">
-                <button type="button" id="github-prepare-changes">Preparar alterações na branch</button>
-              </div>
-              <p>As alterações são gravadas numa branch nova; a branch principal não é modificada.</p>
-            </div>
-          </section>
-
+            <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
             <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
             <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
             <button class="tool-btn" type="button" id="export-button">Exportar conversa</button>
@@ -354,139 +311,6 @@
     document.getElementById('photo-button').addEventListener('click', () => photoInput.click());
     document.getElementById('file-button').addEventListener('click', () => fileInput.click());
 
-    const githubConnectButton = document.getElementById('github-connect');
-    const githubDisconnectButton = document.getElementById('github-disconnect');
-    const githubStatusEl = document.getElementById('github-status');
-    const githubWorkspace = document.getElementById('github-workspace');
-    const githubRepository = document.getElementById('github-repository');
-    const githubPath = document.getElementById('github-file-path');
-    const githubContent = document.getElementById('github-file-content');
-    const githubBranch = document.getElementById('github-branch');
-    const githubCommitMessage = document.getElementById('github-commit-message');
-
-    async function githubApi(path, options = {}) {
-      const response = await fetch('/api/github' + path, {
-        credentials: 'same-origin',
-        ...options,
-        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || 'A solicitação ao GitHub falhou.');
-      return data;
-    }
-
-    async function refreshGithubStatus() {
-      try {
-        const status = await githubApi('/status');
-        if (!status.configured) {
-          githubStatusEl.textContent = 'Aguardando configuração do GitHub App no servidor.';
-          githubConnectButton.disabled = true;
-          return;
-        }
-        githubConnectButton.disabled = false;
-        githubConnectButton.hidden = !!status.connected;
-        githubDisconnectButton.hidden = !status.connected;
-        githubWorkspace.hidden = !status.connected;
-        if (!status.connected) {
-          githubStatusEl.textContent = 'Não conectado. Conecte o GitHub para listar os repositórios autorizados.';
-          return;
-        }
-        githubStatusEl.textContent = 'Conectado como ' + (status.account || 'conta GitHub') +
-          (status.selected_repository ? ' · Selecionado: ' + status.selected_repository : '');
-        const data = await githubApi('/repositories');
-        const previous = status.selected_repository || githubRepository.value;
-        githubRepository.replaceChildren(new Option('Selecione um repositório', ''));
-        for (const repo of data.repositories || []) {
-          githubRepository.add(new Option(repo.full_name + (repo.private ? ' · privado' : ''), repo.full_name));
-        }
-        if (previous && [...githubRepository.options].some(option => option.value === previous)) {
-          githubRepository.value = previous;
-        }
-      } catch (error) {
-        githubStatusEl.textContent = error.message || 'Não foi possível consultar o GitHub.';
-      }
-    }
-
-    githubConnectButton.addEventListener('click', () => { window.location.href = '/api/github/connect'; });
-    githubDisconnectButton.addEventListener('click', async () => {
-      try {
-        await githubApi('/disconnect', { method: 'POST', body: '{}' });
-        githubRepository.replaceChildren(new Option('Selecione um repositório', ''));
-        githubWorkspace.hidden = true;
-        githubStatusEl.textContent = 'Sessão GitHub desconectada deste navegador.';
-        githubConnectButton.hidden = false;
-        githubDisconnectButton.hidden = true;
-      } catch (error) { githubStatusEl.textContent = error.message; }
-    });
-    githubRepository.addEventListener('change', async () => {
-      if (!githubRepository.value) return;
-      try {
-        const data = await githubApi('/select-repository', {
-          method: 'POST', body: JSON.stringify({ repository: githubRepository.value })
-        });
-        githubStatusEl.textContent = 'Repositório selecionado: ' + data.selected_repository;
-        githubContent.value = '';
-      } catch (error) { githubStatusEl.textContent = error.message; }
-    });
-    document.getElementById('github-read-file').addEventListener('click', async () => {
-      if (!githubRepository.value) { githubStatusEl.textContent = 'Selecione um repositório primeiro.'; return; }
-      const path = githubPath.value.trim();
-      if (!path) { githubStatusEl.textContent = 'Digite o caminho do arquivo.'; return; }
-      githubStatusEl.textContent = 'Lendo arquivo…';
-      try {
-        const data = await githubApi('/file?path=' + encodeURIComponent(path));
-        githubPath.value = data.path;
-        githubContent.value = data.content;
-        githubStatusEl.textContent = 'Arquivo carregado: ' + data.repository + '/' + data.path;
-      } catch (error) { githubStatusEl.textContent = error.message; }
-    });
-    document.getElementById('github-use-context').addEventListener('click', () => {
-      if (!githubRepository.value || !githubPath.value.trim() || !githubContent.value) {
-        githubStatusEl.textContent = 'Selecione um repositório e carregue um arquivo antes.';
-        return;
-      }
-      const fence = String.fromCharCode(96).repeat(3);
-      promptEl.value = 'Analise este arquivo do repositório ' + githubRepository.value + ', caminho ' + githubPath.value.trim() +
-        '. Explique problemas e proponha uma versão corrigida completa. Não afirme que alterou o GitHub; apenas devolva o conteúdo revisado.\n\n' +
-        fence + '\n' + githubContent.value.slice(0, 28000) + '\n' + fence;
-      promptEl.focus();
-      githubStatusEl.textContent = 'Contexto inserido no chat. Revise a resposta antes de gravar alterações.';
-    });
-    document.getElementById('github-prepare-changes').addEventListener('click', async () => {
-      if (!githubRepository.value || !githubPath.value.trim() || !githubContent.value) {
-        githubStatusEl.textContent = 'Selecione um repositório, carregue o arquivo e confira o conteúdo.';
-        return;
-      }
-      if (!confirm('Criar uma nova branch e gravar este arquivo no GitHub? A branch principal não será alterada.')) return;
-      const branch = githubBranch.value.trim();
-      const message = githubCommitMessage.value.trim();
-      if (!branch || !message) { githubStatusEl.textContent = 'Informe a branch e a mensagem do commit.'; return; }
-      githubStatusEl.textContent = 'Preparando branch e commit…';
-      const saveButton = document.getElementById('github-prepare-changes');
-      saveButton.disabled = true;
-      try {
-        const data = await githubApi('/prepare', {
-          method: 'POST',
-          body: JSON.stringify({
-            branch_name: branch,
-            commit_message: message,
-            files: [{ path: githubPath.value.trim(), content: githubContent.value }]
-          })
-        });
-        githubStatusEl.textContent = 'Alteração preparada. Branch: ' + data.branch + ' · ' + data.files.length + ' arquivo(s). ';
-        const link = document.createElement('a');
-        link.href = data.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-        link.textContent = 'Abrir branch no GitHub';
-        link.style.color = 'var(--accent)';
-        githubStatusEl.appendChild(link);
-      } catch (error) { githubStatusEl.textContent = error.message || 'Não foi possível preparar as alterações.'; }
-      finally { saveButton.disabled = false; }
-    });
-    refreshGithubStatus();
-    if (new URLSearchParams(window.location.search).get('github') === 'connected') {
-      window.history.replaceState({}, '', window.location.pathname);
-      setTimeout(() => document.querySelector('.tools-drawer')?.setAttribute('open', ''), 100);
-    }
     photoInput.addEventListener('change', () => { addSelectedFiles([...photoInput.files]); photoInput.value = ''; });
     fileInput.addEventListener('change', () => { addSelectedFiles([...fileInput.files]); fileInput.value = ''; });
     promptEl.addEventListener('keydown', event => {
@@ -687,27 +511,6 @@
           sourcePanel.appendChild(list);
           bubble.appendChild(sourcePanel);
         }
-      }
-      const fenceMarker = String.fromCharCode(96).repeat(3);
-      if (String(text).includes(fenceMarker)) {
-        const applyGithub = document.createElement('button');
-        applyGithub.type = 'button'; applyGithub.className = 'tool-btn'; applyGithub.textContent = 'Usar código no GitHub';
-        applyGithub.addEventListener('click', () => {
-          if (!githubRepository.value || !githubPath.value.trim()) {
-            githubStatusEl.textContent = 'Conecte o GitHub, selecione um repositório e informe o arquivo de destino primeiro.';
-            document.querySelector('.tools-drawer')?.setAttribute('open', '');
-            return;
-          }
-          const blocks = String(text).split(fenceMarker);
-          if (blocks.length < 3) { githubStatusEl.textContent = 'Não encontrei um bloco de código completo nesta resposta.'; return; }
-          let code = blocks[1];
-          if (/^[a-zA-Z0-9_+.-]+\n/.test(code)) code = code.replace(/^[^\n]*\n/, '');
-          githubContent.value = code.replace(/\n+$/, '');
-          githubStatusEl.textContent = 'Código da resposta inserido no editor. Revise antes de criar a branch.';
-          document.querySelector('.tools-drawer')?.setAttribute('open', '');
-          githubContent.focus();
-        });
-        actions.appendChild(applyGithub);
       }
       actions.append(copy, edit, speak, regenerate);
       bubble.appendChild(actions);
