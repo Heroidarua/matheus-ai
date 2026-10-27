@@ -17,3 +17,15 @@ services:
         sync: false
       - key: SEARXNG_URL
         sync: false
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_SLUG
+        sync: false
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_SESSION_SECRET
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: COOKIE_HTTPS_ONLY
+        value: "true"
