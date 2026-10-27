@@ -237,3 +237,38 @@ def test_research_engine_deduplicates_urls_and_discards_unrelated_results():
     ranked = main.rank_results("documentação oficial Python", [relevant, relevant, unrelated])
     assert len(ranked) == 1
     assert ranked[0]["url"] == relevant["url"]
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Qual é a versão estável mais recente do Python?",
+        "Qual a versão atual do Android?",
+        "Qual foi uma descoberta científica recente?",
+        "O que diz o estudo científico mais recente?",
+        "Quais novidades de IA foram anunciadas recentemente?",
+    ],
+)
+def test_requires_live_search_for_latest_technology_and_science(question):
+    assert main.requires_live_search(question) is True
+
+
+def test_news_intent_takes_priority_over_technology_topic():
+    assert main.classify_research_topic("Quais são as notícias de IA de hoje?") == "news"
+
+
+def test_latest_python_version_is_classified_as_technology():
+    assert main.classify_research_topic("Qual é a versão estável mais recente do Python?") == "technology"
+
+
+def test_recent_scientific_discovery_is_classified_as_science():
+    assert main.classify_research_topic("Qual foi uma descoberta científica recente?") == "science"
+
+
+def test_news_search_accepts_relevant_ai_headlines_with_synonyms():
+    item = {
+        "title": "AI companies announce new models today",
+        "url": "https://example.org/ai-models",
+        "snippet": "Latest artificial intelligence announcements and product releases.",
+    }
+    assert main.is_relevant_result("Quais são as notícias de IA de hoje?", item)
