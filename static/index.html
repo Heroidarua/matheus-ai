@@ -696,7 +696,7 @@
         let buffer = '', answer = '', streamSources = [];
         const consumeEvent = eventText => {
           let eventName = 'message', dataText = '';
-          for (const line of eventText.split('\\n')) {
+          for (const line of eventText.split('\n')) {
             if (line.startsWith('event:')) eventName = line.slice(6).trim();
             else if (line.startsWith('data:')) dataText += line.slice(5).trim();
           }
@@ -716,7 +716,7 @@
             const { value, done } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const events = buffer.split('\\n\\n');
+            const events = buffer.split('\n\n');
             buffer = events.pop() || '';
             for (const eventText of events) consumeEvent(eventText);
           }
