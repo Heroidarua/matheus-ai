@@ -523,25 +523,67 @@ async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[
 
 
 async def search_web(query: str) -> list[dict[str, str]]:
-    """Busca sem API comercial, com fallback entre SearXNG, DuckDuckGo e Bing."""
-    cleaned_query = re.sub(r"\\s+", " ", query).strip()[:400]
+    """Busca notícias/web: Brave API quando configurada, com fallback a buscadores públicos."""
+    cleaned_query = re.sub(r"\s+", " ", query).strip()[:400]
     if not cleaned_query:
         return []
+
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.7",
     }
     sources: list[dict[str, str]] = []
+    recent_terms = ("hoje", "atual", "últimas", "ultimas", "notícias", "noticias", "agora", "esta semana", "ontem")
+    is_recent_query = any(term in cleaned_query.lower() for term in recent_terms)
+
     async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), headers=headers, follow_redirects=True) as client:
-        searx_url = os.getenv("SEARXNG_URL", "").strip().rstrip("/")
-        if searx_url and _public_http_url(searx_url):
+        # O Brave é opcional. Se a chave estiver inválida, registre o erro e
+        # continue para os buscadores públicos em vez de interromper a pesquisa.
+        brave_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
+        if brave_key:
             try:
-                response = await client.get(searx_url + "/search", params={"q": cleaned_query, "format": "json", "language": "pt-BR", "safesearch": 1})
+                brave_params: dict[str, Any] = {
+                    "q": cleaned_query,
+                    "count": 6,
+                    "country": "BR",
+                    "search_lang": "pt",
+                }
+                if is_recent_query:
+                    brave_params["freshness"] = "pd"
+                response = await client.get(
+                    "https://api.search.brave.com/res/v1/web/search",
+                    params=brave_params,
+                    headers={"X-Subscription-Token": brave_key, "Accept": "application/json"},
+                )
+                response.raise_for_status()
+                payload = response.json()
+                for item in (payload.get("web", {}).get("results") or [])[:6]:
+                    url = str(item.get("url", "")).strip()
+                    if _public_http_url(url):
+                        sources.append({
+                            "title": str(item.get("title") or url)[:200],
+                            "url": url[:2000],
+                            "snippet": str(item.get("description") or "")[:500],
+                        })
+            except (httpx.HTTPError, ValueError, TypeError) as exc:
+                print(f"Brave Search failed ({type(exc).__name__}): {str(exc)[:160]}")
+
+        searx_url = os.getenv("SEARXNG_URL", "").strip().rstrip("/")
+        if not sources and searx_url and _public_http_url(searx_url):
+            try:
+                response = await client.get(
+                    searx_url + "/search",
+                    params={"q": cleaned_query, "format": "json", "language": "pt-BR", "safesearch": 1},
+                )
                 response.raise_for_status()
                 for item in (response.json().get("results") or [])[:6]:
                     url = str(item.get("url", "")).strip()
                     if _public_http_url(url):
-                        sources.append({"title": str(item.get("title") or url)[:200], "url": url[:2000], "snippet": str(item.get("content") or item.get("snippet") or "")[:500]})
+                        sources.append({
+                            "title": str(item.get("title") or url)[:200],
+                            "url": url[:2000],
+                            "snippet": str(item.get("content") or item.get("snippet") or "")[:500],
+                        })
             except (httpx.HTTPError, ValueError, TypeError) as exc:
                 print(f"SearXNG failed ({type(exc).__name__}): {str(exc)[:160]}")
 
@@ -565,7 +607,11 @@ async def search_web(query: str) -> list[dict[str, str]]:
                     url = urljoin(engine_url, url)
                     if not _public_http_url(url) or any(x["url"] == url for x in sources):
                         continue
-                    sources.append({"title": str(item.get("title") or url)[:200], "url": url[:2000], "snippet": str(item.get("snippet") or "")[:500]})
+                    sources.append({
+                        "title": str(item.get("title") or url)[:200],
+                        "url": url[:2000],
+                        "snippet": str(item.get("snippet") or "")[:500],
+                    })
                     if len(sources) >= 6:
                         break
                 print(f"Search {urlparse(engine_url).netloc}: {len(sources)} results")
@@ -573,12 +619,16 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 print(f"Search {urlparse(engine_url).netloc} failed ({type(exc).__name__}): {str(exc)[:160]}")
 
         if not sources:
-            raise HTTPException(status_code=502, detail="Os buscadores públicos não retornaram resultados. Tente novamente ou configure SEARXNG_URL com uma instância acessível.")
+            raise HTTPException(
+                status_code=502,
+                detail="Nenhum buscador retornou resultados nesta tentativa. Verifique a conexão do serviço ou configure uma chave válida em BRAVE_SEARCH_API_KEY.",
+            )
 
         await asyncio.gather(*(_read_page(client, item) for item in sources[:3]), return_exceptions=True)
+
     for source in sources:
         if source.get("page_text"):
-            source["snippet"] = (source.get("snippet", "") + "\\nConteúdo extraído: " + source["page_text"][:1400]).strip()[:1900]
+            source["snippet"] = (source.get("snippet", "") + "\nConteúdo extraído: " + source["page_text"][:1400]).strip()[:1900]
     return sources[:6]
 
 @app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
