@@ -16,7 +16,7 @@ from typing import Any
 import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
@@ -53,6 +53,7 @@ class ChatRequest(BaseModel):
     mode: str = Field(default="normal", pattern="^(normal|livre|programador|estudo|criativo)$")
     response_length: str = Field(default="normal", pattern="^(curta|normal|detalhada)$")
     web_search: bool = False
+    stream: bool = False
     memory: list[str] = Field(default_factory=list, max_length=30)
 
 
@@ -483,6 +484,42 @@ async def chat(request: ChatRequest) -> ChatResponse:
         "reasoning_effort": "low",
         "max_tokens": 1400,
     }
+
+    if request.stream:
+        async def stream_reply():
+            import json
+            stream_payload = dict(payload)
+            stream_payload["stream"] = True
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as stream_client:
+                    async with stream_client.stream("POST", f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=stream_payload) as upstream:
+                        if upstream.status_code >= 400:
+                            body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
+                            yield "event: error\\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                            return
+                        async for line in upstream.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            raw = line[5:].strip()
+                            if raw == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(raw)
+                                choices = chunk.get("choices") or []
+                                delta = (choices[0].get("delta") or {}).get("content", "") if choices else ""
+                                if isinstance(delta, list):
+                                    delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
+                                if isinstance(delta, str) and delta:
+                                    yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\\n\\n"
+                            except (ValueError, TypeError, IndexError):
+                                continue
+                yield "event: done\\ndata: " + json.dumps({"model": MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\\n\\n"
+            except httpx.TimeoutException:
+                yield "event: error\\ndata: " + json.dumps({"detail": "O modelo demorou para responder. Tente novamente."}, ensure_ascii=False) + "\\n\\n"
+            except httpx.HTTPError as exc:
+                print(f"Streaming provider error ({type(exc).__name__}): {str(exc)[:200]}")
+                yield "event: error\\ndata: " + json.dumps({"detail": "A conexão com o provedor do modelo falhou."}, ensure_ascii=False) + "\\n\\n"
+        return StreamingResponse(stream_reply(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
     started_at = time.perf_counter()
     try:
