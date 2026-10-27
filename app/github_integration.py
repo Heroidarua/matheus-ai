@@ -31,7 +31,7 @@ def _config() -> tuple[str, str, str, str]:
     if not all((app_id, slug, private_key, public_url, os.getenv("GITHUB_SESSION_SECRET", "").strip())):
         raise HTTPException(
             status_code=503,
-            detail="Integração GitHub não configurada. Configure GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY e PUBLIC_APP_URL no servidor.",
+            detail="Integração GitHub não configurada. Configure GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY, GITHUB_SESSION_SECRET e PUBLIC_APP_URL no servidor.",
         )
     return app_id, slug, private_key, public_url
 
