@@ -31,7 +31,6 @@ STATIC_DIR = ROOT / "static"
 MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:11434/v1").rstrip("/")
 MODEL_NAME = os.getenv("MODEL_NAME", "qwen2.5:3b")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
-BRAVE_SEARCH_API_KEY = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
 MAX_KNOWLEDGE_FILES = 100
@@ -504,7 +503,7 @@ async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[
     if not _public_http_url(url):
         return source
     try:
-        response = await client.get(url, follow_redirects=True)
+        response = await client.get(url, follow_redirects=False)
         if not response.is_success or "text/html" not in response.headers.get("content-type", "").lower():
             return source
         # Revalida a URL final após redirecionamentos.
