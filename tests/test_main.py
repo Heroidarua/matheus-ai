@@ -56,6 +56,30 @@ def test_content_as_text_handles_text_and_parts():
     ]) == "linha 1\nlinha 2"
 
 
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("Quem ganhou a eleição 2026?", True),
+        ("Qual foi o resultado da eleição?", True),
+        ("Quais são as notícias de hoje?", True),
+        ("O que aconteceu ontem no Brasil?", True),
+        ("Explique o que é uma eleição presidencial", True),
+        ("Como faço uma lista em Python?", False),
+        ("Me ajude a escrever um poema", False),
+    ],
+)
+def test_requires_live_search_for_current_or_election_questions(question, expected):
+    assert main.requires_live_search(question) is expected
+
+
+def test_current_local_date_has_iso_date_format():
+    assert len(main.current_local_date()) >= 10
+    assert main.current_local_date()[4] == "-"
+    assert main.current_local_date()[7] == "-"
+
+
 def test_chat_rejects_empty_text_without_attachments():
     response = client.post("/api/chat", json={"messages": [{"role": "user", "content": ""}]})
     assert response.status_code == 400
