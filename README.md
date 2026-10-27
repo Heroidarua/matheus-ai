@@ -110,3 +110,21 @@ render.yaml
 ## Edição de imagens com IA
 
 Para ativar o botão **Editar foto com IA**, configure `HF_TOKEN` no ambiente do Render com um token da Hugging Face que tenha acesso a Inference Providers. A integração usa `Qwen/Qwen-Image-Edit` via provedor `fal-ai`; disponibilidade e cobrança dependem da conta e do provedor. Opcionalmente, configure `IMAGE_EDIT_MODEL` para outro modelo de edição compatível com image-to-image.
+
+
+## Integração com GitHub
+
+O painel **Ferramentas → GitHub** usa um GitHub App instalado nos repositórios que o usuário autorizar. A chave privada e os tokens temporários ficam somente no backend. O painel permite listar os repositórios da instalação, escolher um repositório, ler um arquivo, enviar seu conteúdo ao chat e preparar uma alteração em uma nova branch com confirmação explícita. A branch padrão não é modificada.
+
+### Configuração obrigatória no GitHub
+
+1. Crie um GitHub App em **Settings → Developer settings → GitHub Apps → New GitHub App**.
+2. Defina a **Setup URL** como `https://SEU-SERVICO.onrender.com/api/github/callback`.
+3. Ative a permissão de repositório **Contents: Read and write**. A permissão Metadata de leitura é concedida automaticamente. Não habilite permissões adicionais sem necessidade.
+4. Gere uma chave privada do App e guarde o arquivo PEM com segurança.
+5. Copie o **App ID** e o **App slug** para as variáveis de ambiente.
+6. Instale o App escolhendo **Only select repositories** e marque apenas os repositórios desejados.
+7. Configure no Render `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_SESSION_SECRET` e `PUBLIC_APP_URL`. O valor de `GITHUB_APP_PRIVATE_KEY` é o PEM inteiro; em variáveis de ambiente que não preservem quebras de linha, use `\\n`. Gere `GITHUB_SESSION_SECRET` com um gerador criptograficamente seguro, com pelo menos 32 bytes.
+8. Faça deploy e abra **Ferramentas → GitHub → Conectar GitHub**.
+
+O endpoint de instalação cria tokens temporários limitados ao repositório selecionado e à permissão Contents necessária. As alterações são gravadas numa branch separada. Revise o diff e abra um pull request manualmente no GitHub antes de mesclar. A sessão de conexão é mantida em cookie assinado, HttpOnly e SameSite=Lax; use HTTPS em produção. Não compartilhe a chave privada do App nem a inclua no repositório.
