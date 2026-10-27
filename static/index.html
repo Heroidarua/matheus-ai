@@ -310,6 +310,20 @@
     } catch {}
     const selectedFiles = [];
     const history = [];
+    function resizePrompt() {
+      promptEl.style.height = 'auto';
+      promptEl.style.height = Math.min(promptEl.scrollHeight, 200) + 'px';
+      promptEl.style.overflowY = promptEl.scrollHeight > 200 ? 'auto' : 'hidden';
+    }
+    promptEl.addEventListener('input', resizePrompt);
+    promptEl.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else sendBtn.click();
+      }
+    });
+    resizePrompt();
     const MAX_FILE_BYTES = 5 * 1024 * 1024;
     const MAX_FILES = 3;
 
