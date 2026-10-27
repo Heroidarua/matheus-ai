@@ -80,24 +80,34 @@
     .saved-row { display:flex;gap:8px;margin:8px 0 0;align-items:center; }
     .saved-row select { flex:1;min-width:0; }
     .voice-status { color:var(--muted);font-size:11px;align-self:center; }
-    .settings-drawer { margin-top:8px;border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden; }
-    .settings-drawer > summary { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;cursor:pointer;list-style:none;font-size:13px;font-weight:650; }
+    .settings-drawer { margin-top:7px;border:1px solid var(--border);border-radius:12px;background:transparent;overflow:hidden; }
+    .settings-drawer > summary { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;cursor:pointer;list-style:none;font-size:12px;font-weight:600;color:var(--muted); }
     .settings-drawer > summary::-webkit-details-marker { display:none; }
-    .settings-drawer > summary::after { content:'＋';color:var(--accent);font-size:18px; }
-    .settings-drawer[open] > summary::after { content:'−'; }
-    .drawer-hint { margin-left:auto;color:var(--muted);font-size:11px;font-weight:400;text-align:right; }
-    .settings-grid,.drawer-content { padding:0 12px 12px; }
-    .settings-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center; }
+    .settings-drawer > summary::after { content:'⌄';color:var(--muted);font-size:16px; }
+    .settings-drawer[open] > summary::after { content:'⌃'; }
+    .drawer-hint { margin-left:auto;color:var(--muted);font-size:10px;font-weight:400;text-align:right; }
+    .settings-grid,.drawer-content { padding:2px 11px 11px; }
+    .settings-grid { display:grid;grid-template-columns:1fr 1fr;gap:9px;align-items:center; }
     .field-label { display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:12px; }
     .field-label select { width:100%;min-width:0;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;font:inherit;font-size:13px; }
-    .settings-grid .web-search-toggle { grid-column:1 / -1;margin:0; }
+    .settings-grid .web-search-toggle,.settings-grid .free-mode-toggle { grid-column:1 / -1;margin:0; }
     .settings-grid #theme-button { justify-self:start; }
     .primary-tools { margin-top:0; }
     .saved-row { flex-wrap:wrap; }
     .saved-row > label { width:100%; }
-    .input-wrap { box-shadow:0 8px 24px rgba(0,0,0,.14); }
-    #prompt { min-width:0;resize:none;min-height:46px;max-height:140px; }
-    .hint { line-height:1.4; }
+    .input-wrap { box-shadow:none; }
+    #prompt { min-width:0;resize:none;min-height:44px;max-height:140px; }
+    .hint { line-height:1.4;padding-top:6px;font-size:10px; }
+    .tools-drawer .tools { margin-top:8px; }
+    .tools-drawer .tool-btn { background:transparent;border-color:var(--border); }
+    .selected-files:empty { display:none; }
+    .selected-files { margin:0 0 7px; }
+    .theme-button { align-self:start; }
+    #send { min-width:76px; }
+    .assistant { border-color:transparent;background:transparent; }
+    .user { background:var(--panel2);border-color:var(--border); }
+    .chat-toolbar { opacity:.78; }
+    .chat-toolbar .tool-btn { background:transparent;border-color:transparent; }
 
     @media(max-width:520px) {
       .app{padding:10px 12px max(12px,env(safe-area-inset-bottom));min-height:100dvh;}
@@ -114,15 +124,18 @@
       .input-wrap{gap:5px;padding:6px;border-radius:18px;}
       #prompt{padding:10px 8px;font-size:16px;min-height:44px;}
       #send{padding:12px 15px;white-space:nowrap;}
-      .settings-drawer > summary{padding:10px 12px;}
-      .drawer-hint{max-width:55%;font-size:10px;}
-      .settings-grid,.drawer-content{padding:0 10px 10px;}
-      .tool-btn{padding:9px 10px;font-size:12px;}
+      .settings-drawer > summary{padding:9px 10px;}
+      .drawer-hint{max-width:58%;font-size:10px;}
+      .settings-grid,.drawer-content{padding:2px 10px 10px;}
+      .tool-btn{padding:8px 10px;font-size:12px;}
       .tools{gap:6px;}
       .saved-row{gap:7px;}
-      .saved-row select{flex:1 1 65%;padding:10px;font-size:13px;}
+      .saved-row select{flex:1 1 65%;padding:9px;font-size:13px;}
       .mode-toggle{font-size:12px;}
-      .hint{font-size:10px;padding-top:7px;}
+      .hint{font-size:10px;padding-top:5px;}
+      .input-wrap{border-radius:16px;}
+      .settings-drawer{margin-top:5px;}
+      .status{display:none;}
     }
   </style>
 </head>
@@ -136,12 +149,13 @@
     <section id="messages" aria-live="polite">
     </section>
     <form id="chat-form">
+      <div id="selected-files" class="selected-files" aria-live="polite"></div>
       <div class="input-wrap">
         <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
         <button id="send" type="submit">Enviar</button>
       </div>
       <details class="settings-drawer">
-        <summary><span>⚙️ Configurações</span><span class="drawer-hint">Modo, tamanho e pesquisa</span></summary>
+        <summary><span>Preferências</span><span class="drawer-hint">Modo · resposta · pesquisa</span></summary>
         <div class="settings-grid">
           <label class="field-label" for="response-mode">Modo de resposta
             <select id="response-mode" aria-label="Modo de resposta">
@@ -158,17 +172,18 @@
               <option value="detalhada">Detalhada</option>
             </select>
           </label>
-          <label class="mode-toggle web-search-toggle"><input id="web-search-toggle" type="checkbox"> <span>🌐 Pesquisar na internet e citar fontes</span></label>
-          <button class="tool-btn" type="button" id="theme-button">Tema claro</button>
+          <label class="mode-toggle web-search-toggle"><input id="web-search-toggle" type="checkbox"> <span>Pesquisar na internet e citar fontes</span></label>
+          <label class="mode-toggle free-mode-toggle"><input id="free-mode" type="checkbox"> <span>Modo livre</span></label>
+          <button class="tool-btn theme-button" type="button" id="theme-button">Tema claro</button>
         </div>
       </details>
-      <details class="settings-drawer">
-        <summary><span>🧰 Ferramentas</span><span class="drawer-hint">Conversas, voz, arquivos e memória</span></summary>
+      <details class="settings-drawer tools-drawer">
+        <summary><span>Ferramentas</span><span class="drawer-hint">Arquivos · voz · memória · histórico</span></summary>
         <div class="drawer-content">
           <div class="tools primary-tools">
-            <button class="tool-btn" type="button" id="new-chat-button">＋ Nova conversa</button>
+            <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
             <button class="tool-btn" type="button" id="export-button">Exportar</button>
-            <button class="tool-btn" type="button" id="voice-button">🎙️ Falar</button>
+            <button class="tool-btn" type="button" id="voice-button">Voz</button>
             <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
             <span id="voice-status" class="voice-status" aria-live="polite"></span>
           </div>
@@ -178,17 +193,15 @@
             <button class="tool-btn" type="button" id="save-chat-button">Salvar</button>
           </div>
           <div class="tools">
-            <button class="tool-btn" type="button" id="photo-button"><span>📷</span>Enviar foto</button>
-            <button class="tool-btn" type="button" id="file-button"><span>📎</span>Anexar arquivo</button>
-            <button class="tool-btn" type="button" id="memory-button"><span>🧠</span>Memória <span id="memory-count">(0)</span></button>
+            <button class="tool-btn" type="button" id="photo-button">Enviar foto</button>
+            <button class="tool-btn" type="button" id="file-button">Anexar arquivo</button>
+            <button class="tool-btn" type="button" id="memory-button">Memória <span id="memory-count">(0)</span></button>
             <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
             <input id="file-input" type="file" accept=".pdf,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yaml,.yml,.log,.sh,.toml,.ini,.sql,.java,.c,.cpp,.h,.go,.rs" multiple hidden>
           </div>
         </div>
       </details>
-      <div id="selected-files" class="selected-files" aria-live="polite"></div>
-      <label class="mode-toggle"><input id="free-mode" type="checkbox"> <span><strong>Modo Livre / Jailbreak</strong> — respostas mais francas, sem sermões desnecessários.</span></label>
-      <div class="hint">O modo muda as instruções da IA, mas não remove limitações do provedor. Enter para enviar · Shift+Enter para nova linha · Até 5 MB por arquivo.</div>
+      <div class="hint">Enter para enviar · Shift+Enter para nova linha</div>
     </form>
     <section id="memory-panel" class="memory-panel" hidden aria-label="Gerenciar memória">
       <h2>Memória do Matheus AI</h2>
