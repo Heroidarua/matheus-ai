@@ -665,6 +665,27 @@
           bubble.appendChild(sourcePanel);
         }
       }
+      const fenceMarker = String.fromCharCode(96).repeat(3);
+      if (String(text).includes(fenceMarker)) {
+        const applyGithub = document.createElement('button');
+        applyGithub.type = 'button'; applyGithub.className = 'tool-btn'; applyGithub.textContent = 'Usar código no GitHub';
+        applyGithub.addEventListener('click', () => {
+          if (!githubRepository.value || !githubPath.value.trim()) {
+            githubStatusEl.textContent = 'Conecte o GitHub, selecione um repositório e informe o arquivo de destino primeiro.';
+            document.querySelector('.tools-drawer')?.setAttribute('open', '');
+            return;
+          }
+          const blocks = String(text).split(fenceMarker);
+          if (blocks.length < 3) { githubStatusEl.textContent = 'Não encontrei um bloco de código completo nesta resposta.'; return; }
+          let code = blocks[1];
+          if (/^[a-zA-Z0-9_+.-]+\n/.test(code)) code = code.replace(/^[^\n]*\n/, '');
+          githubContent.value = code.replace(/\n+$/, '');
+          githubStatusEl.textContent = 'Código da resposta inserido no editor. Revise antes de criar a branch.';
+          document.querySelector('.tools-drawer')?.setAttribute('open', '');
+          githubContent.focus();
+        });
+        actions.appendChild(applyGithub);
+      }
       actions.append(copy, edit, speak, regenerate);
       bubble.appendChild(actions);
     }
