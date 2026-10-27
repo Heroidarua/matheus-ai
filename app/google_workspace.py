@@ -319,19 +319,38 @@ async def google_calendar_events(request: Request, max_results: int = 10) -> dic
     return {"events": data.get("items", [])}
 
 
+@router.get("/gmail/messages/{message_id}")
+async def google_gmail_message(request: Request, message_id: str) -> dict[str, Any]:
+    if not message_id or len(message_id) > 200 or not all(c.isalnum() or c in "-_" for c in message_id):
+        raise HTTPException(status_code=400, detail="ID de mensagem inválido.")
+    data = await _google_get(request, f"/gmail/v1/users/me/messages/{message_id}", {
+        "format": "metadata", "metadataHeaders": ["From", "To", "Subject", "Date"]
+    })
+    return {
+        "id": data.get("id"),
+        "threadId": data.get("threadId"),
+        "internalDate": data.get("internalDate"),
+        "labelIds": data.get("labelIds", []),
+        "snippet": data.get("snippet", ""),
+        "payload": data.get("payload", {}),
+    }
+
+
 @router.get("/docs/{document_id}")
 async def google_document(request: Request, document_id: str) -> dict[str, Any]:
     if not document_id or len(document_id) > 200 or not all(c.isalnum() or c in "-_" for c in document_id):
         raise HTTPException(status_code=400, detail="ID de documento inválido.")
-    return await _google_get(request, f"/drive/v3/files/{document_id}", {
-        "fields": "id,name,mimeType,modifiedTime,webViewLink"
-    })
+    return await _google_get(request, f"/docs/v1/documents/{document_id}")
 
 
-@router.get("/sheets/{spreadsheet_id}")
-async def google_spreadsheet(request: Request, spreadsheet_id: str) -> dict[str, Any]:
+@router.get("/sheets/{spreadsheet_id}/values/{cell_range:path}")
+async def google_spreadsheet_values(request: Request, spreadsheet_id: str, cell_range: str) -> dict[str, Any]:
     if not spreadsheet_id or len(spreadsheet_id) > 200 or not all(c.isalnum() or c in "-_" for c in spreadsheet_id):
         raise HTTPException(status_code=400, detail="ID de planilha inválido.")
-    return await _google_get(request, f"/sheets/v4/spreadsheets/{spreadsheet_id}", {
-        "includeGridData": "false"
+    if not cell_range or len(cell_range) > 200 or any(ord(c) < 32 for c in cell_range):
+        raise HTTPException(status_code=400, detail="Intervalo da planilha inválido.")
+    from urllib.parse import quote
+    safe_range = quote(cell_range, safe="!:._-")
+    return await _google_get(request, f"/sheets/v4/spreadsheets/{spreadsheet_id}/values/{safe_range}", {
+        "majorDimension": "ROWS", "valueRenderOption": "FORMATTED_VALUE"
     })
