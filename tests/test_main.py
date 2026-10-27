@@ -1,3 +1,4 @@
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -94,7 +95,6 @@ async def test_web_search_maps_invalid_subscription_token(monkeypatch):
         async def get(self, *args, **kwargs):
             return FakeResponse()
 
-    import httpx
     monkeypatch.setattr(main, "BRAVE_SEARCH_API_KEY", "invalid-test-token")
     monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
 
