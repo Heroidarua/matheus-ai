@@ -9,7 +9,7 @@
 .wrap{max-width:1200px;margin:auto;padding:20px}.top{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding-bottom:16px}
 .logo{background:var(--accent);color:#071411;border-radius:12px;padding:10px;font-weight:900}.muted{color:var(--muted)}h1{font-size:21px;margin:0}p{margin:5px 0}
 .layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;margin-top:18px}.panel,.stage-wrap{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px;min-width:0}
-.panel h2{font-size:15px;margin:0 0 12px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.panel h2{font-size:15px;margin:0 0 12px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.smart-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.smart-grid button{padding:9px 8px;font-size:13px}.smart-grid #removeBg{grid-column:1/-1}
 button,.pick{border:1px solid var(--border);background:#1a2421;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit;cursor:pointer}
 button.primary{background:var(--accent);color:#081613;border-color:var(--accent);font-weight:750}button:disabled{opacity:.4;cursor:not-allowed}
 input[type=range]{width:100%;accent-color:var(--accent)}.canvas-shell{width:100%;min-height:280px;display:grid;place-items:center;overflow:auto;background:#080b0a;border-radius:12px;padding:8px}
@@ -23,6 +23,13 @@ canvas{display:block;max-width:100%;height:auto;touch-action:none;cursor:crossha
 <aside class="panel">
 <h2>Imagem</h2><label class="pick" for="file">Escolher imagem</label><input id="file" class="hidden" type="file" accept="image/jpeg,image/png,image/webp">
 <p class="note">A foto é processada neste dispositivo. Na primeira utilização, o navegador baixa o modelo de IA (cerca de dezenas de MB).</p>
+<h2 style="margin-top:20px">Ferramentas inteligentes</h2>
+<div class="smart-grid">
+<button id="removeBg" class="primary">✦ Remover fundo</button>
+<button id="whiteBg">Fundo branco</button>
+<button id="blurBg">Desfocar fundo</button>
+</div>
+<p class="note">As opções de fundo detectam pessoas/rostos e funcionam localmente no navegador. Para produtos ou objetos, use o pincel + MI-GAN.</p>
 <h2 style="margin-top:20px">Marque o objeto</h2><label for="brush">Tamanho do pincel</label><input id="brush" type="range" min="8" max="120" value="32"><p class="note"><span id="brushValue">32</span> px · Pinte em vermelho sobre tudo o que deseja remover.</p>
 <div class="actions"><button id="undo" disabled>Desfazer</button><button id="clear" disabled>Limpar máscara</button></div>
 <button id="run" class="primary" disabled>Remover objeto com IA</button>
@@ -37,7 +44,7 @@ const MODEL_URL='https://huggingface.co/andraniksargsyan/migan/resolve/main/miga
 const ORT_URL='https://esm.sh/onnxruntime-web@1.26.0/webgpu';
 const ORT_CDN='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/';
 const $=id=>document.getElementById(id),canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
-let originalImage=null,displayImage=null,sourceName='imagem',strokes=[],drawing=false,currentStroke=null,displayScale=1,resultBlob=null,sessionPromise=null;
+let originalImage=null,displayImage=null,sourceName='imagem',strokes=[],drawing=false,currentStroke=null,displayScale=1,resultBlob=null,sessionPromise=null,segmenterPromise=null;
 const MAX_PROCESS_DIM=1536,MAX_FILE_SIZE=25*1024*1024;
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error)}
 function updateButtons(){$('run').disabled=!originalImage||!strokes.length;$('undo').disabled=!strokes.length;$('clear').disabled=!strokes.length}
@@ -64,6 +71,61 @@ function loadFile(file){
  image.onerror=()=>{URL.revokeObjectURL(url);status('Não foi possível abrir essa imagem.',true)};image.src=url;
 }
 $('file').addEventListener('change',e=>loadFile(e.target.files?.[0]));
+
+async function getSegmenter(){
+ if(segmenterPromise)return segmenterPromise;
+ segmenterPromise=(async()=>{
+  status('Carregando o detector de pessoa…');
+  const vision=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22');
+  const files=await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');
+  return vision.ImageSegmenter.createFromOptions(files,{
+   baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite'},
+   runningMode:'IMAGE',outputCategoryMask:false,outputConfidenceMasks:true
+  });
+ })();
+ try{return await segmenterPromise}catch(err){segmenterPromise=null;throw err}
+}
+async function applyBackgroundMode(mode){
+ if(!originalImage){status('Escolha uma imagem primeiro.',true);return}
+ const buttons=[$('removeBg'),$('whiteBg'),$('blurBg')];buttons.forEach(b=>b.disabled=true);
+ try{
+  const segmenter=await getSegmenter();status('Detectando pessoa e separando o fundo…');
+  const result=segmenter.segment(originalImage);
+  const mask=result.confidenceMasks?.[0];
+  if(!mask)throw new Error('O detector não retornou uma máscara. Tente outra foto com a pessoa bem visível.');
+  const mw=mask.width,mh=mask.height,prob=mask.getAsFloat32Array();
+  if(!mw||!mh||!prob?.length)throw new Error('A máscara de pessoa está vazia.');
+  const w=originalImage.naturalWidth,h=originalImage.naturalHeight;
+  const base=makeCanvas(w,h),bctx=base.getContext('2d',{willReadFrequently:true});bctx.drawImage(originalImage,0,0,w,h);
+  const pixels=bctx.getImageData(0,0,w,h),alphaCanvas=makeCanvas(mw,mh),actx=alphaCanvas.getContext('2d'),maskImage=actx.createImageData(mw,mh);
+  for(let i=0;i<prob.length;i++){const a=Math.max(0,Math.min(1,(prob[i]-.22)/.56));maskImage.data[i*4]=255;maskImage.data[i*4+1]=255;maskImage.data[i*4+2]=255;maskImage.data[i*4+3]=Math.round(a*255)}
+  actx.putImageData(maskImage,0,0);
+  const fullMask=makeCanvas(w,h),fm=fullMask.getContext('2d');fm.drawImage(alphaCanvas,0,0,w,h);
+  const rgba=bctx.getImageData(0,0,w,h),maskPixels=fm.getImageData(0,0,w,h).data;
+  let out=makeCanvas(w,h),octx=out.getContext('2d');
+  if(mode==='blur'){
+   octx.save();octx.filter='blur(14px)';octx.drawImage(base,0,0);octx.restore();
+   const blurred=octx.getImageData(0,0,w,h);
+   for(let i=0;i<w*h;i++){const a=maskPixels[i*4+3]/255;blurred.data[i*4]=Math.round(rgba.data[i*4]*a+blurred.data[i*4]*(1-a));blurred.data[i*4+1]=Math.round(rgba.data[i*4+1]*a+blurred.data[i*4+1]*(1-a));blurred.data[i*4+2]=Math.round(rgba.data[i*4+2]*a+blurred.data[i*4+2]*(1-a));blurred.data[i*4+3]=255}
+   octx.putImageData(blurred,0,0);
+  }else{
+   const outData=octx.createImageData(w,h);
+   for(let i=0;i<w*h;i++){const a=maskPixels[i*4+3]/255;outData.data[i*4]=mode==='white'?Math.round(rgba.data[i*4]*a+255*(1-a)):rgba.data[i*4];outData.data[i*4+1]=mode==='white'?Math.round(rgba.data[i*4+1]*a+255*(1-a)):rgba.data[i*4+1];outData.data[i*4+2]=mode==='white'?Math.round(rgba.data[i*4+2]*a+255*(1-a)):rgba.data[i*4+2];outData.data[i*4+3]=mode==='white'?255:Math.round(rgba.data[i*4+3]*a)}
+   octx.putImageData(outData,0,0);
+  }
+  resultBlob=await new Promise((resolve,reject)=>out.toBlob(b=>b?resolve(b):reject(new Error('Falha ao gerar PNG.')),'image/png'));
+  const url=URL.createObjectURL(resultBlob);$('download').href=url;
+  const suffix=mode==='transparent'?'sem-fundo':mode==='white'?'fundo-branco':'fundo-desfocado';
+  $('download').download=sourceName+'-'+suffix+'.png';$('output').classList.remove('hidden');
+  displayImage=new Image();displayImage.onload=()=>{strokes=[];fitImage(displayImage)};displayImage.src=url;
+  status(mode==='transparent'?'Fundo removido! O resultado é PNG com transparência.':mode==='white'?'Fundo substituído por branco.':'Fundo desfocado. Confira as bordas antes de baixar.');
+ }catch(err){console.error(err);status((err?.message||'Não foi possível separar o fundo.')+' Tente uma foto com a pessoa bem visível.',true)}
+ finally{buttons.forEach(b=>b.disabled=!originalImage)}
+}
+$('removeBg').onclick=()=>applyBackgroundMode('transparent');
+$('whiteBg').onclick=()=>applyBackgroundMode('white');
+$('blurBg').onclick=()=>applyBackgroundMode('blur');
+
 window.addEventListener('message',e=>{if(e.origin!==location.origin||e.data?.type!=='matheus-ai-image'||!(e.data.file instanceof Blob))return;loadFile(e.data.file)});
 if(window.opener)window.opener.postMessage({type:'matheus-ai-object-remover-ready'},location.origin);
 async function getSession(){
