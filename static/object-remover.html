@@ -33,7 +33,7 @@ canvas{display:block;max-width:100%;height:auto;touch-action:none;cursor:crossha
 <section class="stage-wrap"><div class="canvas-shell"><canvas id="canvas" width="640" height="420"></canvas></div><p class="note">A área vermelha é a máscara. A imagem original não é alterada até você usar ou baixar o resultado.</p></section>
 </div></main>
 <script type="module">
-const MODEL_URL='https://huggingface.co/edgetools/migan/resolve/main/migan_pipeline_v2.onnx';
+const MODEL_URL='https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx';
 const ORT_URL='https://esm.sh/onnxruntime-web@1.26.0/webgpu';
 const ORT_CDN='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/';
 const $=id=>document.getElementById(id),canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
