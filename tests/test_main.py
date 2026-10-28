@@ -272,3 +272,48 @@ def test_news_search_accepts_relevant_ai_headlines_with_synonyms():
         "snippet": "Latest artificial intelligence announcements and product releases.",
     }
     assert main.is_relevant_result("Quais são as notícias de IA de hoje?", item)
+
+
+def test_extract_document_text_formats_csv_and_json():
+    csv_text = main.extract_document_text("dados.csv", "text/csv", b"nome,valor\\nAna,10\\n")
+    assert "nome | valor" in csv_text
+    assert "Ana | 10" in csv_text
+
+    json_text = main.extract_document_text("dados.json", "application/json", b'{"nome":"Ana","valor":10}')
+    assert '"nome": "Ana"' in json_text
+    assert '"valor": 10' in json_text
+
+
+def test_extract_document_text_reads_docx_tables():
+    from docx import Document
+    from io import BytesIO
+
+    document = Document()
+    document.add_paragraph("Relatório de teste")
+    table = document.add_table(rows=1, cols=2)
+    table.cell(0, 0).text = "Item"
+    table.cell(0, 1).text = "Valor"
+    output = BytesIO()
+    document.save(output)
+
+    extracted = main.extract_document_text("relatorio.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", output.getvalue())
+    assert "Relatório de teste" in extracted
+    assert "Item | Valor" in extracted
+
+
+def test_extract_document_text_reads_xlsx():
+    from openpyxl import Workbook
+    from io import BytesIO
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Vendas"
+    sheet.append(["Produto", "Total"])
+    sheet.append(["Livro", 25])
+    output = BytesIO()
+    workbook.save(output)
+
+    extracted = main.extract_document_text("vendas.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", output.getvalue())
+    assert "[Planilha: Vendas]" in extracted
+    assert "Produto | Total" in extracted
+    assert "Livro | 25" in extracted
