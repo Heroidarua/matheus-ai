@@ -76,8 +76,18 @@ async function getSegmenter(){
  if(segmenterPromise)return segmenterPromise;
  segmenterPromise=(async()=>{
   status('Carregando o detector de pessoa…');
-  const vision=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');
-  const files=await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');
+  // Importa o arquivo ESM oficial do pacote, evitando o endpoint transformado "+esm".
+  // Se o jsDelivr falhar na rede do usuário, tenta o mesmo arquivo no unpkg.
+  let vision,wasmRoot,lastImportError;
+  for(const base of [
+   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22',
+   'https://unpkg.com/@mediapipe/tasks-vision@0.10.22'
+  ]){
+   try{vision=await import(base+'/vision_bundle.mjs');wasmRoot=base+'/wasm';break}
+   catch(err){lastImportError=err;console.warn('Falha ao carregar MediaPipe por',base,err)}
+  }
+  if(!vision)throw new Error('Não foi possível carregar o módulo MediaPipe por nenhum CDN. Verifique a conexão, bloqueadores de conteúdo ou a rede e tente novamente. Detalhe: '+(lastImportError?.message||'importação bloqueada'));
+  const files=await vision.FilesetResolver.forVisionTasks(wasmRoot);
   return vision.ImageSegmenter.createFromOptions(files,{
    baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite'},
    runningMode:'IMAGE',outputCategoryMask:false,outputConfidenceMasks:true
