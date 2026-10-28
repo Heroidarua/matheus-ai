@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import ipaddress
 import asyncio
+import csv
+import json
 import base64
 import binascii
 import operator
@@ -46,7 +48,10 @@ APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+MAX_EXTRACTED_FILE_CHARS = 40000
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+APP_STARTED_AT = time.time()
+DIAGNOSTICS = {"requests": 0, "successes": 0, "errors": 0, "searches": 0, "search_successes": 0, "last_error": None, "last_search_provider": None}
 
 app = FastAPI(title="ADA-M", version="0.3.0")
 app.add_middleware(
@@ -108,6 +113,44 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
+
+
+@app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
+async def diagnostics() -> dict[str, Any]:
+    """Diagnóstico operacional sem revelar chaves, URLs privadas ou conteúdo do usuário."""
+    provider_configured = bool(MODEL_BASE_URL and MODEL_NAME and OPENAI_API_KEY)
+    probe = {"status": "não verificado", "latency_ms": None}
+    if provider_configured:
+        started = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(4.0, connect=2.0)) as client:
+                response = await client.get(
+                    f"{MODEL_BASE_URL}/models",
+                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                )
+            probe["latency_ms"] = round((time.perf_counter() - started) * 1000)
+            probe["status"] = "disponível" if response.is_success else f"HTTP {response.status_code}"
+        except httpx.TimeoutException:
+            probe["latency_ms"] = round((time.perf_counter() - started) * 1000)
+            probe["status"] = "tempo esgotado"
+        except httpx.HTTPError:
+            probe["latency_ms"] = round((time.perf_counter() - started) * 1000)
+            probe["status"] = "falha de conexão"
+    search_providers = {
+        "Google Grounding": bool(os.getenv("GOOGLE_GEMINI_API_KEY", "").strip() or os.getenv("GEMINI_API_KEY", "").strip()),
+        "Brave": bool(os.getenv("BRAVE_SEARCH_API_KEY", "").strip()),
+        "SearXNG": bool(os.getenv("SEARXNG_URL", "").strip()),
+        "Buscadores públicos de fallback": True,
+    }
+    return {
+        "app": "operacional",
+        "uptime_seconds": round(time.time() - APP_STARTED_AT),
+        "model": {"configured": provider_configured, **probe},
+        "search": {"providers": search_providers, "last_provider": DIAGNOSTICS["last_search_provider"]},
+        "metrics": {key: DIAGNOSTICS[key] for key in ("requests", "successes", "errors", "searches", "search_successes")},
+        "last_error": DIAGNOSTICS["last_error"],
+        "note": "Métricas em memória deste processo; podem reiniciar após novo deploy ou reinicialização.",
+    }
 
 
 @app.post("/api/edit-image", response_model=ImageEditResponse, dependencies=[Depends(require_app_key)])
@@ -410,6 +453,63 @@ def decode_attachment(part: dict[str, Any]) -> bytes:
     return raw
 
 
+def extract_document_text(name: str, mime_type: str, raw: bytes) -> str:
+    """Extrai texto de formatos suportados sem executar o conteúdo anexado."""
+    suffix = Path(name).suffix.lower()
+    if mime_type == "application/pdf" or suffix == ".pdf":
+        try:
+            reader = PdfReader(BytesIO(raw))
+            return "\n".join(page.extract_text() or "" for page in reader.pages)[:MAX_EXTRACTED_FILE_CHARS]
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Não foi possível ler o PDF {name}.")
+    if suffix == ".docx":
+        try:
+            from docx import Document
+            document = Document(BytesIO(raw))
+            lines = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+            for table in document.tables:
+                for row in table.rows:
+                    lines.append(" | ".join(cell.text.replace("\n", " ") for cell in row.cells))
+            return "\n".join(lines)[:MAX_EXTRACTED_FILE_CHARS]
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Não foi possível ler o documento Word {name}.")
+    if suffix in {".xlsx", ".xlsm"}:
+        try:
+            from openpyxl import load_workbook
+            workbook = load_workbook(BytesIO(raw), read_only=True, data_only=True)
+            lines = []
+            for sheet in workbook.worksheets:
+                lines.append(f"[Planilha: {sheet.title}]")
+                for row in sheet.iter_rows(values_only=True):
+                    values = [str(value) if value is not None else "" for value in row]
+                    if any(values):
+                        lines.append(" | ".join(values))
+                    if sum(len(line) for line in lines) >= MAX_EXTRACTED_FILE_CHARS:
+                        break
+                if sum(len(line) for line in lines) >= MAX_EXTRACTED_FILE_CHARS:
+                    break
+            workbook.close()
+            return "\n".join(lines)[:MAX_EXTRACTED_FILE_CHARS]
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Não foi possível ler a planilha {name}.")
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=415, detail=f"O arquivo {name} não é texto UTF-8, PDF, DOCX ou XLSX suportado.")
+    if suffix == ".json":
+        try:
+            text = json.dumps(json.loads(text), ensure_ascii=False, indent=2)
+        except ValueError:
+            pass
+    elif suffix == ".csv":
+        try:
+            rows = list(csv.reader(text.splitlines()))
+            text = "\n".join(" | ".join(row) for row in rows)
+        except csv.Error:
+            pass
+    return text[:MAX_EXTRACTED_FILE_CHARS]
+
+
 def provider_content(content: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
     if isinstance(content, str):
         return content
@@ -431,21 +531,10 @@ def provider_content(content: str | list[dict[str, Any]]) -> str | list[dict[str
             name = str(part.get("name", "arquivo"))[:120]
             mime_type = str(part.get("mime_type", "application/octet-stream")).lower()
             raw = decode_attachment(part)
-            if mime_type == "application/pdf" or name.lower().endswith(".pdf"):
-                try:
-                    reader = PdfReader(BytesIO(raw))
-                    extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
-                except Exception:
-                    raise HTTPException(status_code=400, detail=f"Não foi possível ler o PDF {name}.")
-                if not extracted.strip():
-                    extracted = "Não foi encontrado texto extraível neste PDF; pode ser um documento digitalizado."
-                parts.append({"type": "text", "text": f"[Conteúdo extraído do PDF: {name}]\n{extracted[:40000]}"})
-            else:
-                try:
-                    extracted = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    raise HTTPException(status_code=415, detail=f"O arquivo {name} não é texto UTF-8 nem PDF suportado.")
-                parts.append({"type": "text", "text": f"[Conteúdo do arquivo: {name}]\n{extracted[:30000]}"})
+            extracted = extract_document_text(name, mime_type, raw)
+            if not extracted.strip() and (mime_type == "application/pdf" or name.lower().endswith(".pdf")):
+                extracted = "Não foi encontrado texto extraível neste PDF; pode ser um documento digitalizado ou exigir OCR."
+            parts.append({"type": "text", "text": f"[Conteúdo extraído do arquivo: {name}]\n{extracted}"})
         else:
             raise HTTPException(status_code=400, detail="Tipo de anexo desconhecido.")
     return parts or "O usuário enviou uma mensagem vazia."
