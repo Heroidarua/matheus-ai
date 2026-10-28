@@ -441,8 +441,56 @@
       parent.appendChild(document.createTextNode(text.slice(cursor)));
     }
 
+    // Converte referências numéricas como [1] ou [1, 2] em links para as fontes
+    // correspondentes, sem interpretar HTML fornecido pelo modelo.
+    function linkCitationReferences(root, sources = []) {
+      if (!Array.isArray(sources) || !sources.length) return;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.parentElement?.closest('a, code, pre, script, style')) continue;
+        if (/\[\d+(?:\s*,\s*\d+)*\]/.test(node.nodeValue || '')) textNodes.push(node);
+      }
+      const citationPattern = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+      for (const textNode of textNodes) {
+        const value = textNode.nodeValue || '';
+        const fragment = document.createDocumentFragment();
+        let cursor = 0, match;
+        citationPattern.lastIndex = 0;
+        while ((match = citationPattern.exec(value)) !== null) {
+          fragment.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+          const numbers = match[1].split(',').map(number => Number(number.trim()));
+          let linkedAny = false;
+          numbers.forEach((number, index) => {
+            if (index) fragment.appendChild(document.createTextNode(', '));
+            const source = sources[number - 1];
+            if (source && typeof source.url === 'string' && /^https?:\/\//i.test(source.url)) {
+              const link = document.createElement('a');
+              link.href = source.url;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.textContent = '[' + number + ']';
+              link.title = source.title || source.url;
+              link.setAttribute('aria-label', 'Abrir fonte ' + number + ': ' + (source.title || source.url));
+              fragment.appendChild(link);
+              linkedAny = true;
+            } else {
+              fragment.appendChild(document.createTextNode('[' + number + ']'));
+            }
+          });
+          cursor = match.index + match[0].length;
+        }
+        if (cursor === 0) continue;
+        fragment.appendChild(document.createTextNode(value.slice(cursor)));
+        textNode.parentNode?.replaceChild(fragment, textNode);
+      }
+    }
+
     function displayAssistantReply(bubble, text, sources = []) {
-      bubble.replaceChildren(renderMarkdown(text));
+      const rendered = renderMarkdown(text);
+      linkCitationReferences(rendered, sources);
+      bubble.replaceChildren(rendered);
       const actions = document.createElement('div');
       actions.className = 'chat-toolbar';
       const copy = document.createElement('button');
