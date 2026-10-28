@@ -666,7 +666,8 @@ def _is_relevant_election_result(item: dict[str, str]) -> bool:
 
 
 async def search_web(query: str) -> list[dict[str, str]]:
-    """Busca notícias/web: Brave API quando configurada, com fallback a buscadores públicos."""
+    """Busca notícias/web: fontes verificáveis e fallback automático entre provedores."""
+    DIAGNOSTICS["searches"] += 1
     original_query = re.sub(r"\s+", " ", query).strip()[:400]
     if not original_query:
         return []
@@ -696,6 +697,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
             )
             if grounded_sources:
                 sources = grounded_sources
+                DIAGNOSTICS["last_search_provider"] = "Google Search Grounding"
                 if summary:
                     # Used for relevance ranking and in the model context; the UI still
                     # lists the individual citation excerpts and URLs.
@@ -732,6 +734,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 )
                 response.raise_for_status()
                 payload = response.json()
+                DIAGNOSTICS["last_search_provider"] = "Brave"
                 for item in (payload.get("web", {}).get("results") or [])[:6]:
                     url = str(item.get("url", "")).strip()
                     if _public_http_url(url):
@@ -753,6 +756,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                     params={"q": cleaned_query, "format": "json", "language": "pt-BR", "safesearch": 1},
                 )
                 response.raise_for_status()
+                DIAGNOSTICS["last_search_provider"] = "SearXNG"
                 for item in (response.json().get("results") or [])[:6]:
                     url = str(item.get("url", "")).strip()
                     if _public_http_url(url):
@@ -815,6 +819,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                         f"query_variant={'expanded' if search_query == cleaned_query else 'original'}"
                     )
                     if sources:
+                        DIAGNOSTICS["last_search_provider"] = urlparse(engine_url).netloc
                         break
                 except (httpx.HTTPError, ValueError, TypeError) as exc:
                     print(f"Search {urlparse(engine_url).netloc} failed ({type(exc).__name__}): {str(exc)[:160]}")
@@ -833,10 +838,26 @@ async def search_web(query: str) -> list[dict[str, str]]:
     for source in sources:
         if source.get("page_text"):
             source["snippet"] = (source.get("snippet", "") + "\nConteúdo extraído: " + source["page_text"][:1400]).strip()[:1900]
-    return sources[:6]
+    DIAGNOSTICS["search_successes"] += 1
+    # Remova URLs duplicadas e evite que um único domínio ocupe quase todas as fontes.
+    diverse: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    seen_domains: set[str] = set()
+    for source in sources:
+        url = source.get("url", "")
+        domain = (urlparse(url).hostname or "").lower().removeprefix("www.")
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        if domain in seen_domains and len(sources) > 2:
+            continue
+        seen_domains.add(domain)
+        diverse.append(source)
+    return diverse[:6]
 
 @app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
 async def chat(request: ChatRequest) -> ChatResponse:
+    DIAGNOSTICS["requests"] += 1
     last_user_message = next((content_as_text(m.content) for m in reversed(request.messages) if m.role == "user"), "")
     if not last_user_message and isinstance(request.messages[-1].content, str):
         raise HTTPException(status_code=400, detail="Envie uma mensagem ou anexe um arquivo.")
@@ -1027,15 +1048,21 @@ async def chat(request: ChatRequest) -> ChatResponse:
             finish_reason = continuation_choices[0].get("finish_reason")
 
         print(f"Model provider completed in {time.perf_counter() - started_at:.2f}s")
+        DIAGNOSTICS["successes"] += 1
+        DIAGNOSTICS["last_error"] = None
         return ChatResponse(reply=reply.strip(), model=str(data.get("model", MODEL_NAME)), sources=sources)
     except httpx.TimeoutException:
         elapsed = time.perf_counter() - started_at
+        DIAGNOSTICS["errors"] += 1
+        DIAGNOSTICS["last_error"] = "Tempo esgotado no provedor do modelo"
         print(f"Model provider timeout after {elapsed:.2f}s (model={MODEL_NAME})")
         raise HTTPException(status_code=504, detail="O modelo demorou mais de 45 segundos para responder. Tente novamente.")
     except httpx.HTTPStatusError as exc:
         # Registra a resposta do provedor para diagnóstico, sem registrar cabeçalhos
         # nem a chave de API. A resposta costuma explicar 401, 402, 403, 404 ou 5xx.
         status_code = exc.response.status_code
+        DIAGNOSTICS["errors"] += 1
+        DIAGNOSTICS["last_error"] = f"Erro HTTP {status_code} do provedor"
         response_text = exc.response.text[:1200]
         print(f"Model provider HTTP {status_code}: {response_text}")
 
@@ -1068,6 +1095,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             detail=f"Provedor HTTP {status_code}: {detail[:400]}",
         )
     except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
+        DIAGNOSTICS["errors"] += 1
+        DIAGNOSTICS["last_error"] = f"Falha de conexão/resposta: {type(exc).__name__}"
         print(f"Model provider connection/response error ({type(exc).__name__}): {str(exc)[:500]}")
         raise HTTPException(
             status_code=502,
