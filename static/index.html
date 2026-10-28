@@ -184,7 +184,7 @@
     <form id="chat-form">
       <div id="selected-files" class="selected-files" aria-live="polite"></div>
       <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden aria-label="Selecionar fotos">
-      <input id="file-input" type="file" accept=".pdf,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yml,.yaml,.log,.sh,.toml,.ini,.sql,.java,.c,.cpp,.h,.go,.rs" multiple hidden aria-label="Selecionar arquivos">
+      <input id="file-input" type="file" accept=".pdf,.docx,.xlsx,.xlsm,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yml,.yaml,.log,.sh,.toml,.ini,.sql,.java,.c,.cpp,.h,.go,.rs" multiple hidden aria-label="Selecionar arquivos">
       <div class="input-wrap">
         <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
         <button class="tool-btn" type="button" id="voice-button" aria-label="Iniciar voz" title="Iniciar voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0" ><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
@@ -222,12 +222,15 @@
             <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
             <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
             <button class="tool-btn" type="button" id="export-button">Exportar conversa</button>
+            <button class="tool-btn" type="button" id="diagnostics-button">Saúde e diagnóstico</button>
             <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
             <span id="voice-status" class="voice-status" aria-live="polite"></span>
           </div>
         </div>
       </details>
       </div>
+      <label class="mode-toggle" style="margin-top:8px"><input id="voice-conversation-toggle" type="checkbox"> <span>Conversa por voz: ler respostas automaticamente</span></label>
+      <div id="diagnostics-panel" class="web-sources" hidden aria-live="polite"></div>
       <div class="hint">Enter para enviar · Shift+Enter para nova linha</div>
     </form>
   </main>
@@ -299,6 +302,57 @@
     });
     document.getElementById('export-button').addEventListener('click', exportConversation);
     document.getElementById('voice-button').addEventListener('click', toggleVoiceInput);
+    document.getElementById('diagnostics-button').addEventListener('click', loadDiagnostics);
+    const voiceConversationToggle = document.getElementById('voice-conversation-toggle');
+
+    function speakText(text) {
+      if (!('speechSynthesis' in window)) { voiceStatus.textContent = 'Leitura de voz não suportada neste navegador.'; return; }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'pt-BR';
+      window.speechSynthesis.speak(utterance);
+    }
+
+    async function loadDiagnostics() {
+      const panel = document.getElementById('diagnostics-panel');
+      panel.hidden = false;
+      panel.textContent = 'Verificando aplicação, provedor e pesquisa…';
+      try {
+        const response = await fetch('/api/diagnostics', { headers: { 'Accept': 'application/json' } });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Não foi possível consultar o diagnóstico.');
+        panel.replaceChildren();
+        const heading = document.createElement('strong');
+        heading.textContent = 'Saúde e diagnóstico da IA';
+        panel.appendChild(heading);
+        const list = document.createElement('ul');
+        const rows = [
+          ['Aplicação', data.app],
+          ['Provedor do modelo', data.model?.status || 'não verificado'],
+          ['Latência do provedor', data.model?.latency_ms == null ? 'não medida' : data.model.latency_ms + ' ms'],
+          ['Tempo ativo', (data.uptime_seconds || 0) + ' s'],
+          ['Conversas recebidas / respostas concluídas', (data.metrics?.requests || 0) + ' / ' + (data.metrics?.successes || 0)],
+          ['Falhas registradas', String(data.metrics?.errors || 0)],
+          ['Pesquisas tentadas / concluídas', (data.metrics?.searches || 0) + ' / ' + (data.metrics?.search_successes || 0)],
+          ['Último provedor de pesquisa', data.search?.last_provider || 'ainda não registrado'],
+          ['Último erro', data.last_error || 'nenhum registrado']
+        ];
+        for (const [label, value] of rows) {
+          const li = document.createElement('li');
+          li.textContent = label + ': ' + value;
+          list.appendChild(li);
+        }
+        panel.appendChild(list);
+        const providers = document.createElement('p');
+        providers.textContent = 'Pesquisa configurada: ' + Object.entries(data.search?.providers || {}).map(([name, enabled]) => name + ' (' + (enabled ? 'configurado' : 'não configurado') + ')').join(' · ');
+        panel.appendChild(providers);
+        const note = document.createElement('p');
+        note.textContent = data.note || 'O diagnóstico não exibe segredos nem conteúdo das conversas.';
+        panel.appendChild(note);
+      } catch (error) {
+        panel.textContent = 'Falha ao consultar diagnóstico: ' + (error.message || 'erro desconhecido');
+      }
+    }
 
     function showWelcome() {
       const welcome = document.createElement('div');
@@ -324,7 +378,7 @@
         if (selectedFiles.some(item => item.name === file.name && item.size === file.size)) continue;
         const isImage = ['image/jpeg','image/png','image/webp'].includes(file.type);
         const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-        if (!isImage && !isPdf && !/\.(txt|md|csv|json|py|js|ts|html|css|xml|ya?ml|log|sh|toml|ini|sql|java|c|cpp|h|go|rs)$/i.test(file.name)) {
+        if (!isImage && !isPdf && !/\.(docx|xlsx|xlsm|txt|md|csv|json|py|js|ts|html|css|xml|ya?ml|log|sh|toml|ini|sql|java|c|cpp|h|go|rs)$/i.test(file.name)) {
           alert('Formato não suportado: ' + file.name);
           continue;
         }
@@ -364,8 +418,10 @@
       const data = await fileToBase64(file);
       const isImage = ['image/jpeg','image/png','image/webp'].includes(file.type);
       if (isImage) return { type: 'image', name: file.name, mime_type: file.type, data };
-      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-      return { type: 'file', name: file.name, mime_type: isPdf ? 'application/pdf' : (file.type || 'text/plain'), data };
+      const lowerName = file.name.toLowerCase();
+      const isPdf = file.type === 'application/pdf' || lowerName.endsWith('.pdf');
+      const mimeByExtension = lowerName.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xlsm')) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : '';
+      return { type: 'file', name: file.name, mime_type: isPdf ? 'application/pdf' : (mimeByExtension || file.type || 'text/plain'), data };
     }
 
     function renderMarkdown(text) {
@@ -508,13 +564,7 @@
       });
       const speak = document.createElement('button');
       speak.type = 'button'; speak.className = 'tool-btn'; speak.textContent = 'Ler em voz alta';
-      speak.addEventListener('click', () => {
-        if (!('speechSynthesis' in window)) { voiceStatus.textContent = 'Leitura de voz não suportada.'; return; }
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'pt-BR';
-        window.speechSynthesis.speak(utterance);
-      });
+      speak.addEventListener('click', () => speakText(text));
       const regenerate = document.createElement('button');
       regenerate.type = 'button'; regenerate.className = 'tool-btn'; regenerate.textContent = 'Regenerar';
       regenerate.addEventListener('click', () => {
@@ -702,6 +752,7 @@
         } finally { reader.releaseLock(); }
         if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
         displayAssistantReply(pending, answer, streamSources);
+        if (voiceConversationToggle.checked) speakText(answer);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
       } catch (error) {

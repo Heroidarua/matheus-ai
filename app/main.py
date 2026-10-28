@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import ipaddress
 import asyncio
+import csv
+import json
 import base64
 import binascii
 import operator
@@ -46,7 +48,10 @@ APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+MAX_EXTRACTED_FILE_CHARS = 40000
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+APP_STARTED_AT = time.time()
+DIAGNOSTICS = {"requests": 0, "successes": 0, "errors": 0, "searches": 0, "search_successes": 0, "last_error": None, "last_search_provider": None}
 
 app = FastAPI(title="ADA-M", version="0.3.0")
 app.add_middleware(
@@ -108,6 +113,44 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
+
+
+@app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
+async def diagnostics() -> dict[str, Any]:
+    """Diagnóstico operacional sem revelar chaves, URLs privadas ou conteúdo do usuário."""
+    provider_configured = bool(MODEL_BASE_URL and MODEL_NAME and OPENAI_API_KEY)
+    probe = {"status": "não verificado", "latency_ms": None}
+    if provider_configured:
+        started = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(4.0, connect=2.0)) as client:
+                response = await client.get(
+                    f"{MODEL_BASE_URL}/models",
+                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                )
+            probe["latency_ms"] = round((time.perf_counter() - started) * 1000)
+            probe["status"] = "disponível" if response.is_success else f"HTTP {response.status_code}"
+        except httpx.TimeoutException:
+            probe["latency_ms"] = round((time.perf_counter() - started) * 1000)
+            probe["status"] = "tempo esgotado"
+        except httpx.HTTPError:
+            probe["latency_ms"] = round((time.perf_counter() - started) * 1000)
+            probe["status"] = "falha de conexão"
+    search_providers = {
+        "Google Grounding": bool(os.getenv("GOOGLE_GEMINI_API_KEY", "").strip() or os.getenv("GEMINI_API_KEY", "").strip()),
+        "Brave": bool(os.getenv("BRAVE_SEARCH_API_KEY", "").strip()),
+        "SearXNG": bool(os.getenv("SEARXNG_URL", "").strip()),
+        "Buscadores públicos de fallback": True,
+    }
+    return {
+        "app": "operacional",
+        "uptime_seconds": round(time.time() - APP_STARTED_AT),
+        "model": {"configured": provider_configured, **probe},
+        "search": {"providers": search_providers, "last_provider": DIAGNOSTICS["last_search_provider"]},
+        "metrics": {key: DIAGNOSTICS[key] for key in ("requests", "successes", "errors", "searches", "search_successes")},
+        "last_error": DIAGNOSTICS["last_error"],
+        "note": "Métricas em memória deste processo; podem reiniciar após novo deploy ou reinicialização.",
+    }
 
 
 @app.post("/api/edit-image", response_model=ImageEditResponse, dependencies=[Depends(require_app_key)])
@@ -410,6 +453,63 @@ def decode_attachment(part: dict[str, Any]) -> bytes:
     return raw
 
 
+def extract_document_text(name: str, mime_type: str, raw: bytes) -> str:
+    """Extrai texto de formatos suportados sem executar o conteúdo anexado."""
+    suffix = Path(name).suffix.lower()
+    if mime_type == "application/pdf" or suffix == ".pdf":
+        try:
+            reader = PdfReader(BytesIO(raw))
+            return "\n".join(page.extract_text() or "" for page in reader.pages)[:MAX_EXTRACTED_FILE_CHARS]
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Não foi possível ler o PDF {name}.")
+    if suffix == ".docx":
+        try:
+            from docx import Document
+            document = Document(BytesIO(raw))
+            lines = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+            for table in document.tables:
+                for row in table.rows:
+                    lines.append(" | ".join(cell.text.replace("\n", " ") for cell in row.cells))
+            return "\n".join(lines)[:MAX_EXTRACTED_FILE_CHARS]
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Não foi possível ler o documento Word {name}.")
+    if suffix in {".xlsx", ".xlsm"}:
+        try:
+            from openpyxl import load_workbook
+            workbook = load_workbook(BytesIO(raw), read_only=True, data_only=True)
+            lines = []
+            for sheet in workbook.worksheets:
+                lines.append(f"[Planilha: {sheet.title}]")
+                for row in sheet.iter_rows(values_only=True):
+                    values = [str(value) if value is not None else "" for value in row]
+                    if any(values):
+                        lines.append(" | ".join(values))
+                    if sum(len(line) for line in lines) >= MAX_EXTRACTED_FILE_CHARS:
+                        break
+                if sum(len(line) for line in lines) >= MAX_EXTRACTED_FILE_CHARS:
+                    break
+            workbook.close()
+            return "\n".join(lines)[:MAX_EXTRACTED_FILE_CHARS]
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Não foi possível ler a planilha {name}.")
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=415, detail=f"O arquivo {name} não é texto UTF-8, PDF, DOCX ou XLSX suportado.")
+    if suffix == ".json":
+        try:
+            text = json.dumps(json.loads(text), ensure_ascii=False, indent=2)
+        except ValueError:
+            pass
+    elif suffix == ".csv":
+        try:
+            rows = list(csv.reader(text.splitlines()))
+            text = "\n".join(" | ".join(row) for row in rows)
+        except csv.Error:
+            pass
+    return text[:MAX_EXTRACTED_FILE_CHARS]
+
+
 def provider_content(content: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
     if isinstance(content, str):
         return content
@@ -431,21 +531,10 @@ def provider_content(content: str | list[dict[str, Any]]) -> str | list[dict[str
             name = str(part.get("name", "arquivo"))[:120]
             mime_type = str(part.get("mime_type", "application/octet-stream")).lower()
             raw = decode_attachment(part)
-            if mime_type == "application/pdf" or name.lower().endswith(".pdf"):
-                try:
-                    reader = PdfReader(BytesIO(raw))
-                    extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
-                except Exception:
-                    raise HTTPException(status_code=400, detail=f"Não foi possível ler o PDF {name}.")
-                if not extracted.strip():
-                    extracted = "Não foi encontrado texto extraível neste PDF; pode ser um documento digitalizado."
-                parts.append({"type": "text", "text": f"[Conteúdo extraído do PDF: {name}]\n{extracted[:40000]}"})
-            else:
-                try:
-                    extracted = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    raise HTTPException(status_code=415, detail=f"O arquivo {name} não é texto UTF-8 nem PDF suportado.")
-                parts.append({"type": "text", "text": f"[Conteúdo do arquivo: {name}]\n{extracted[:30000]}"})
+            extracted = extract_document_text(name, mime_type, raw)
+            if not extracted.strip() and (mime_type == "application/pdf" or name.lower().endswith(".pdf")):
+                extracted = "Não foi encontrado texto extraível neste PDF; pode ser um documento digitalizado ou exigir OCR."
+            parts.append({"type": "text", "text": f"[Conteúdo extraído do arquivo: {name}]\n{extracted}"})
         else:
             raise HTTPException(status_code=400, detail="Tipo de anexo desconhecido.")
     return parts or "O usuário enviou uma mensagem vazia."
@@ -577,7 +666,8 @@ def _is_relevant_election_result(item: dict[str, str]) -> bool:
 
 
 async def search_web(query: str) -> list[dict[str, str]]:
-    """Busca notícias/web: Brave API quando configurada, com fallback a buscadores públicos."""
+    """Busca notícias/web: fontes verificáveis e fallback automático entre provedores."""
+    DIAGNOSTICS["searches"] += 1
     original_query = re.sub(r"\s+", " ", query).strip()[:400]
     if not original_query:
         return []
@@ -607,6 +697,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
             )
             if grounded_sources:
                 sources = grounded_sources
+                DIAGNOSTICS["last_search_provider"] = "Google Search Grounding"
                 if summary:
                     # Used for relevance ranking and in the model context; the UI still
                     # lists the individual citation excerpts and URLs.
@@ -643,6 +734,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 )
                 response.raise_for_status()
                 payload = response.json()
+                DIAGNOSTICS["last_search_provider"] = "Brave"
                 for item in (payload.get("web", {}).get("results") or [])[:6]:
                     url = str(item.get("url", "")).strip()
                     if _public_http_url(url):
@@ -664,6 +756,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                     params={"q": cleaned_query, "format": "json", "language": "pt-BR", "safesearch": 1},
                 )
                 response.raise_for_status()
+                DIAGNOSTICS["last_search_provider"] = "SearXNG"
                 for item in (response.json().get("results") or [])[:6]:
                     url = str(item.get("url", "")).strip()
                     if _public_http_url(url):
@@ -726,6 +819,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                         f"query_variant={'expanded' if search_query == cleaned_query else 'original'}"
                     )
                     if sources:
+                        DIAGNOSTICS["last_search_provider"] = urlparse(engine_url).netloc
                         break
                 except (httpx.HTTPError, ValueError, TypeError) as exc:
                     print(f"Search {urlparse(engine_url).netloc} failed ({type(exc).__name__}): {str(exc)[:160]}")
@@ -744,10 +838,26 @@ async def search_web(query: str) -> list[dict[str, str]]:
     for source in sources:
         if source.get("page_text"):
             source["snippet"] = (source.get("snippet", "") + "\nConteúdo extraído: " + source["page_text"][:1400]).strip()[:1900]
-    return sources[:6]
+    DIAGNOSTICS["search_successes"] += 1
+    # Remova URLs duplicadas e evite que um único domínio ocupe quase todas as fontes.
+    diverse: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    seen_domains: set[str] = set()
+    for source in sources:
+        url = source.get("url", "")
+        domain = (urlparse(url).hostname or "").lower().removeprefix("www.")
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        if domain in seen_domains and len(sources) > 2:
+            continue
+        seen_domains.add(domain)
+        diverse.append(source)
+    return diverse[:6]
 
 @app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
 async def chat(request: ChatRequest) -> ChatResponse:
+    DIAGNOSTICS["requests"] += 1
     last_user_message = next((content_as_text(m.content) for m in reversed(request.messages) if m.role == "user"), "")
     if not last_user_message and isinstance(request.messages[-1].content, str):
         raise HTTPException(status_code=400, detail="Envie uma mensagem ou anexe um arquivo.")
@@ -823,6 +933,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as stream_client:
                     async with stream_client.stream("POST", f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=stream_payload) as upstream:
                         if upstream.status_code >= 400:
+                            DIAGNOSTICS["errors"] += 1
+                            DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
                             body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
                             yield "event: error\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
                             return
@@ -842,10 +954,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
                                     yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
                             except (ValueError, TypeError, IndexError):
                                 continue
+                DIAGNOSTICS["successes"] += 1
+                DIAGNOSTICS["last_error"] = None
                 yield "event: done\ndata: " + json.dumps({"model": MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\n\n"
             except httpx.TimeoutException:
+                DIAGNOSTICS["errors"] += 1
+                DIAGNOSTICS["last_error"] = "Tempo esgotado no provedor do modelo (stream)"
                 yield "event: error\ndata: " + json.dumps({"detail": "O modelo demorou para responder. Tente novamente."}, ensure_ascii=False) + "\n\n"
             except httpx.HTTPError as exc:
+                DIAGNOSTICS["errors"] += 1
+                DIAGNOSTICS["last_error"] = f"Falha de conexão no stream: {type(exc).__name__}"
                 print(f"Streaming provider error ({type(exc).__name__}): {str(exc)[:200]}")
                 yield "event: error\ndata: " + json.dumps({"detail": "A conexão com o provedor do modelo falhou."}, ensure_ascii=False) + "\n\n"
         return StreamingResponse(stream_reply(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
@@ -938,15 +1056,21 @@ async def chat(request: ChatRequest) -> ChatResponse:
             finish_reason = continuation_choices[0].get("finish_reason")
 
         print(f"Model provider completed in {time.perf_counter() - started_at:.2f}s")
+        DIAGNOSTICS["successes"] += 1
+        DIAGNOSTICS["last_error"] = None
         return ChatResponse(reply=reply.strip(), model=str(data.get("model", MODEL_NAME)), sources=sources)
     except httpx.TimeoutException:
         elapsed = time.perf_counter() - started_at
+        DIAGNOSTICS["errors"] += 1
+        DIAGNOSTICS["last_error"] = "Tempo esgotado no provedor do modelo"
         print(f"Model provider timeout after {elapsed:.2f}s (model={MODEL_NAME})")
         raise HTTPException(status_code=504, detail="O modelo demorou mais de 45 segundos para responder. Tente novamente.")
     except httpx.HTTPStatusError as exc:
         # Registra a resposta do provedor para diagnóstico, sem registrar cabeçalhos
         # nem a chave de API. A resposta costuma explicar 401, 402, 403, 404 ou 5xx.
         status_code = exc.response.status_code
+        DIAGNOSTICS["errors"] += 1
+        DIAGNOSTICS["last_error"] = f"Erro HTTP {status_code} do provedor"
         response_text = exc.response.text[:1200]
         print(f"Model provider HTTP {status_code}: {response_text}")
 
@@ -979,6 +1103,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             detail=f"Provedor HTTP {status_code}: {detail[:400]}",
         )
     except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
+        DIAGNOSTICS["errors"] += 1
+        DIAGNOSTICS["last_error"] = f"Falha de conexão/resposta: {type(exc).__name__}"
         print(f"Model provider connection/response error ({type(exc).__name__}): {str(exc)[:500]}")
         raise HTTPException(
             status_code=502,
