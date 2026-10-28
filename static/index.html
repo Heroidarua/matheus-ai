@@ -93,7 +93,19 @@
     .settings-grid { display:grid;grid-template-columns:1fr 1fr;gap:9px;align-items:center; }
     .field-label { display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:12px; }
     .field-label select { width:100%;min-width:0;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;font:inherit;font-size:13px; }
-    .settings-grid .web-search-toggle,.settings-grid .free-mode-toggle { grid-column:1 / -1;margin:0; }
+    .settings-grid .web-search-toggle,.settings-grid .free-mode-toggle,.settings-grid .voice-conversation-toggle { grid-column:1 / -1;margin:0; }
+    .settings-grid .mode-toggle { display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;line-height:1.35; }
+    .settings-grid .mode-toggle input { flex:0 0 auto;margin:0;width:17px;height:17px; }
+    .drawer-row { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-top:10px;align-items:start; }
+    .settings-drawer { width:100%; }
+    .settings-drawer > summary { min-height:46px;padding:10px 12px;font-size:13px;font-weight:550;background:var(--panel); }
+    .settings-drawer[open] { border-radius:14px;overflow:hidden; }
+    .settings-grid { padding:10px;gap:10px; }
+    .drawer-content { padding:4px 10px 10px; }
+    .tools-drawer .tools { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+    .tools-drawer .tool-btn { min-height:40px;text-align:center;padding:9px 8px;overflow-wrap:anywhere; }
+    .voice-status { grid-column:1 / -1; }
+    .hint { margin-top:3px; }
     .settings-grid #theme-button { justify-self:start; }
     .primary-tools { margin-top:0; }
     .input-wrap { box-shadow:none; }
@@ -159,15 +171,24 @@
       .input-wrap{gap:5px;padding:6px;border-radius:18px;}
       #prompt{padding:10px 8px;font-size:16px;min-height:44px;}
       #send{padding:12px 15px;white-space:nowrap;}
-      .settings-drawer > summary{padding:7px 8px;font-size:11px;}
-      .drawer-row{gap:6px;}
-      .settings-grid,.drawer-content{padding:2px 10px 10px;}
+      .settings-drawer > summary{padding:10px 8px;font-size:12px;min-height:44px;}
+      .drawer-row{gap:8px;margin-top:9px;}
+      .settings-grid,.drawer-content{padding:9px;}
+      .settings-grid{grid-template-columns:1fr 1fr;gap:8px;}
+      .settings-grid .field-label{font-size:11px;}
+      .settings-grid .field-label select{padding:9px 7px;font-size:12px;}
+      .settings-grid .mode-toggle{font-size:12px;padding:9px;}
+      .tools-drawer .tools{grid-template-columns:1fr;gap:7px;}
+      .tools-drawer .tool-btn{width:100%;min-height:38px;}
       .tool-btn{padding:8px 10px;font-size:12px;}
       .tools{gap:6px;}
       .mode-toggle{font-size:12px;}
       .hint{font-size:10px;padding-top:5px;}
       .input-wrap{border-radius:16px;}
       .settings-drawer{margin-top:0;}
+      .settings-drawer[open]{grid-column:1 / -1;}
+      .drawer-row:has(.settings-drawer[open]){grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+      .hint{padding:8px 4px 0;font-size:11px;}
       .status{display:none;}
     }
   </style>
@@ -211,6 +232,7 @@
           </label>
           <label class="mode-toggle web-search-toggle"><input id="web-search-toggle" type="checkbox" checked> <span>Pesquisar na internet e citar fontes</span></label>
           <label class="mode-toggle free-mode-toggle"><input id="free-mode" type="checkbox"> <span>Modo livre</span></label>
+          <label class="mode-toggle voice-conversation-toggle"><input id="voice-conversation-toggle" type="checkbox"> <span>Ler respostas automaticamente em voz alta</span></label>
           <button class="tool-btn theme-button" type="button" id="theme-button">Tema claro</button>
         </div>
       </details>
@@ -228,7 +250,6 @@
         </div>
       </details>
       </div>
-      <label class="mode-toggle" style="margin-top:8px"><input id="voice-conversation-toggle" type="checkbox"> <span>Conversa por voz: ler respostas automaticamente</span></label>
       <div id="diagnostics-panel" class="web-sources" hidden aria-live="polite"></div>
       <div class="hint">Enter para enviar · Shift+Enter para nova linha</div>
     </form>
