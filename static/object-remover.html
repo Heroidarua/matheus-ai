@@ -1,42 +1,124 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#000000"><title>Remover objetos · Matheus AI</title>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#000000"><title>Remover objetos · Matheus AI</title>
 <style>
-:root{color-scheme:dark;--bg:#050606;--panel:#111514;--border:#2a3532;--text:#f3f8f6;--muted:#9eaca7;--accent:#70e1c1;--danger:#ff806e}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,sans-serif}.wrap{max-width:1100px;margin:auto;padding:20px}.top{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding-bottom:16px}.logo{background:var(--accent);color:#071411;border-radius:12px;padding:10px;font-weight:900}.muted{color:var(--muted)}h1{font-size:21px;margin:0}p{margin:5px 0}.layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;margin-top:18px}.panel,.stage-wrap{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px;min-width:0}.panel h2{font-size:15px;margin:0 0 12px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}button,.pick{border:1px solid var(--border);background:#1a2421;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit;cursor:pointer}button.primary{background:var(--accent);color:#081613;border-color:var(--accent);font-weight:750}button:disabled{opacity:.4;cursor:not-allowed}input[type=range]{width:100%;accent-color:var(--accent)}.canvas-shell{width:100%;min-height:280px;display:grid;place-items:center;overflow:auto;background:#080b0a;border-radius:12px;padding:8px}canvas{max-width:100%;height:auto;touch-action:none;cursor:crosshair}.status{font-size:13px;color:var(--muted);overflow-wrap:anywhere;margin-top:12px}.status.error{color:var(--danger)}.note{font-size:12px;color:var(--muted)}.download{display:inline-block;color:var(--accent);margin-top:8px}.hidden{display:none!important}@media(max-width:760px){.wrap{padding:12px}.layout{grid-template-columns:1fr}.canvas-shell{min-height:220px}.panel{order:2}.stage-wrap{order:1}}
-</style></head><body><main class="wrap"><header class="top"><div class="logo">AI</div><div><h1>Remover objetos</h1><p class="muted">Editor local do Matheus AI · LaMa + ONNX Runtime Web</p></div></header>
-<div class="layout"><aside class="panel"><h2>Imagem</h2><label class="pick" for="file">Escolher imagem</label><input id="file" class="hidden" type="file" accept="image/jpeg,image/png,image/webp"><p class="note">A foto e a máscara ficam neste dispositivo. O modelo de IA é baixado uma vez e pode ser armazenado no cache do navegador.</p>
-<h2 style="margin-top:20px">Pincel da máscara</h2><label for="brush">Tamanho do pincel</label><input id="brush" type="range" min="8" max="100" value="32"><p class="note"><span id="brushValue">32</span> px · Pinte em vermelho sobre o objeto.</p>
-<div class="actions"><button id="undo">Desfazer</button><button id="clear">Limpar máscara</button></div><button id="run" class="primary" disabled>Remover objeto</button><p id="status" class="status">Escolha uma foto ou abra esta ferramenta a partir de uma imagem anexada no chat.</p><div id="output" class="hidden"><a id="download" class="download" download="matheus-ai-editada.png">Baixar imagem editada (PNG)</a><div class="actions"><button id="useResult">Continuar editando resultado</button><button id="sendBack">Usar no chat</button></div></div><p class="note">Processamento local. A primeira carga do modelo pode demorar e consumir memória. Se falhar, tente uma imagem menor.</p></aside>
-<section class="stage-wrap"><div class="canvas-shell"><canvas id="canvas" width="640" height="420"></canvas></div><p class="note">Marque toda a área indesejada, incluindo uma pequena margem. O modelo reconstrói a região marcada.</p></section></div></main>
+:root{color-scheme:dark;--bg:#050606;--panel:#111514;--border:#2a3532;--text:#f3f8f6;--muted:#9eaca7;--accent:#70e1c1;--danger:#ff806e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,sans-serif}
+.wrap{max-width:1200px;margin:auto;padding:20px}.top{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding-bottom:16px}
+.logo{background:var(--accent);color:#071411;border-radius:12px;padding:10px;font-weight:900}.muted{color:var(--muted)}h1{font-size:21px;margin:0}p{margin:5px 0}
+.layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;margin-top:18px}.panel,.stage-wrap{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px;min-width:0}
+.panel h2{font-size:15px;margin:0 0 12px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+button,.pick{border:1px solid var(--border);background:#1a2421;color:var(--text);border-radius:10px;padding:10px 12px;font:inherit;cursor:pointer}
+button.primary{background:var(--accent);color:#081613;border-color:var(--accent);font-weight:750}button:disabled{opacity:.4;cursor:not-allowed}
+input[type=range]{width:100%;accent-color:var(--accent)}.canvas-shell{width:100%;min-height:280px;display:grid;place-items:center;overflow:auto;background:#080b0a;border-radius:12px;padding:8px}
+canvas{display:block;max-width:100%;height:auto;touch-action:none;cursor:crosshair}.status{font-size:13px;color:var(--muted);overflow-wrap:anywhere;margin-top:12px}
+.status.error{color:var(--danger)}.note{font-size:12px;color:var(--muted)}.download{display:inline-block;color:var(--accent);margin-top:8px}.hidden{display:none!important}
+@media(max-width:760px){.wrap{padding:12px}.layout{grid-template-columns:1fr}.canvas-shell{min-height:220px}.panel{order:2}.stage-wrap{order:1}}
+</style></head>
+<body><main class="wrap">
+<header class="top"><div class="logo">AI</div><div><h1>Remover objetos</h1><p class="muted">Matheus AI · MI-GAN + ONNX Runtime Web</p></div></header>
+<div class="layout">
+<aside class="panel">
+<h2>Imagem</h2><label class="pick" for="file">Escolher imagem</label><input id="file" class="hidden" type="file" accept="image/jpeg,image/png,image/webp">
+<p class="note">A foto é processada neste dispositivo. Na primeira utilização, o navegador baixa o modelo de IA (cerca de dezenas de MB).</p>
+<h2 style="margin-top:20px">Marque o objeto</h2><label for="brush">Tamanho do pincel</label><input id="brush" type="range" min="8" max="120" value="32"><p class="note"><span id="brushValue">32</span> px · Pinte em vermelho sobre tudo o que deseja remover.</p>
+<div class="actions"><button id="undo" disabled>Desfazer</button><button id="clear" disabled>Limpar máscara</button></div>
+<button id="run" class="primary" disabled>Remover objeto com IA</button>
+<p id="status" class="status">Escolha uma foto ou abra esta ferramenta a partir de uma imagem anexada no chat.</p>
+<div id="output" class="hidden"><a id="download" class="download" download="matheus-ai-sem-objetos.png">Baixar imagem editada (PNG)</a><div class="actions"><button id="useResult">Editar resultado</button><button id="sendBack">Usar no chat</button></div></div>
+<p class="note">Dica: pinte também uma pequena margem ao redor do objeto. Para áreas grandes, trabalhe em partes. Imagens muito grandes são reduzidas durante o processamento para proteger a memória do dispositivo.</p>
+</aside>
+<section class="stage-wrap"><div class="canvas-shell"><canvas id="canvas" width="640" height="420"></canvas></div><p class="note">A área vermelha é a máscara. A imagem original não é alterada até você usar ou baixar o resultado.</p></section>
+</div></main>
 <script type="module">
-const MODEL_URL='https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx';
+const MODEL_URL='https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx';
 const ORT_URL='https://esm.sh/onnxruntime-web@1.26.0/webgpu';
 const ORT_CDN='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/';
-const $=id=>document.getElementById(id), canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
-let img=null, sourceName='imagem', strokes=[], drawing=false, current=null, resultBlob=null, ortModule=null, sessionPromise=null, scale=1;
-function status(s,error=false){$('status').textContent=s;$('status').classList.toggle('error',error)}
-function setRun(){ $('run').disabled=!img || !strokes.length; $('undo').disabled=!strokes.length; }
-function fitImage(image){const maxW=Math.min(1000,document.querySelector('.canvas-shell').clientWidth-16||800), maxH=760;scale=Math.min(maxW/image.naturalWidth,maxH/image.naturalHeight,1);canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));draw();}
-function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);if(img)ctx.drawImage(img,0,0,canvas.width,canvas.height);ctx.save();ctx.lineCap='round';ctx.lineJoin='round';for(const s of strokes){if(s.points.length<2)continue;ctx.strokeStyle=s.mode==='erase'?'rgba(0,0,0,1)':'rgba(255,65,55,.78)';ctx.lineWidth=s.size;ctx.beginPath();ctx.moveTo(s.points[0],s.points[1]);for(let i=2;i<s.points.length;i+=2)ctx.lineTo(s.points[i],s.points[i+1]);ctx.stroke();}ctx.restore();setRun();}
-function pos(e){const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height]}
-canvas.addEventListener('pointerdown',e=>{if(!img)return;drawing=true;canvas.setPointerCapture(e.pointerId);const p=pos(e);current={size:Number($('brush').value),points:[...p,...p]};strokes.push(current);draw();});
-canvas.addEventListener('pointermove',e=>{if(!drawing||!current)return;current.points.push(...pos(e));draw()});
-function stop(){drawing=false;current=null}canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
-$('brush').addEventListener('input',()=> $('brushValue').textContent=$('brush').value);
+const $=id=>document.getElementById(id),canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
+let originalImage=null,displayImage=null,sourceName='imagem',strokes=[],drawing=false,currentStroke=null,displayScale=1,resultBlob=null,sessionPromise=null;
+const MAX_PROCESS_DIM=1536,MAX_FILE_SIZE=25*1024*1024;
+function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error)}
+function updateButtons(){$('run').disabled=!originalImage||!strokes.length;$('undo').disabled=!strokes.length;$('clear').disabled=!strokes.length}
+function draw(){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ if(displayImage)ctx.drawImage(displayImage,0,0,canvas.width,canvas.height);
+ ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+ for(const s of strokes){if(s.points.length<2)continue;ctx.strokeStyle='rgba(255,65,55,.78)';ctx.lineWidth=s.size;ctx.beginPath();ctx.moveTo(s.points[0],s.points[1]);for(let i=2;i<s.points.length;i+=2)ctx.lineTo(s.points[i],s.points[i+1]);ctx.stroke()}
+ ctx.restore();updateButtons();
+}
+function fitImage(image){const shell=document.querySelector('.canvas-shell');const maxW=Math.max(240,Math.min(1050,(shell.clientWidth||850)-16)),maxH=760;displayScale=Math.min(maxW/image.naturalWidth,maxH/image.naturalHeight,1);canvas.width=Math.max(1,Math.round(image.naturalWidth*displayScale));canvas.height=Math.max(1,Math.round(image.naturalHeight*displayScale));draw()}
+function pointerPos(e){const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height]}
+canvas.addEventListener('pointerdown',e=>{if(!displayImage)return;e.preventDefault();drawing=true;canvas.setPointerCapture(e.pointerId);const p=pointerPos(e);currentStroke={size:Number($('brush').value),points:[...p,...p]};strokes.push(currentStroke);draw()});
+canvas.addEventListener('pointermove',e=>{if(!drawing||!currentStroke)return;currentStroke.points.push(...pointerPos(e));draw()});
+function stopDrawing(){drawing=false;currentStroke=null}
+canvas.addEventListener('pointerup',stopDrawing);canvas.addEventListener('pointercancel',stopDrawing);
+$('brush').addEventListener('input',()=>$('brushValue').textContent=$('brush').value);
 $('undo').onclick=()=>{strokes.pop();draw()};$('clear').onclick=()=>{strokes=[];draw()};
-async function loadFile(file){if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type)){status('Escolha uma imagem JPG, PNG ou WEBP.',true);return}if(file.size>20*1024*1024){status('A imagem ultrapassa 20 MB. Escolha um arquivo menor.',true);return}
-const url=URL.createObjectURL(file);const image=new Image();image.onload=()=>{img=image;sourceName=file.name.replace(/\.[^.]+$/,'');strokes=[];resultBlob=null;$('output').classList.add('hidden');fitImage(image);URL.revokeObjectURL(url);status('Imagem carregada. Pinte o objeto que deseja remover. O modelo será carregado ao iniciar a remoção.');};image.onerror=()=>{URL.revokeObjectURL(url);status('Não foi possível abrir a imagem.',true)};image.src=url;}
-$('file').addEventListener('change',e=>loadFile(e.target.files[0]));
-window.addEventListener('message',e=>{if(e.origin!==location.origin||e.data?.type!=='matheus-ai-image'||!(e.data.file instanceof Blob))return;loadFile(e.data.file);});
-if(window.opener){window.opener.postMessage({type:'matheus-ai-object-remover-ready'},location.origin);}
-async function getSession(){if(sessionPromise)return sessionPromise;sessionPromise=(async()=>{status('Carregando o motor de IA…');ortModule=await import(ORT_URL);ortModule.env.logLevel='warning';ortModule.env.wasm.numThreads=1;ortModule.env.wasm.wasmPaths={mjs:ORT_CDN+'ort-wasm-simd-threaded.jsep.mjs',wasm:ORT_CDN+'ort-wasm-simd-threaded.jsep.wasm'};status('Baixando o modelo LaMa (pode levar um pouco na primeira vez)…');let response=await fetch(MODEL_URL);if(!response.ok)throw new Error('Falha ao baixar o modelo LaMa: HTTP '+response.status);const buffer=await response.arrayBuffer();status('Inicializando a IA local…');let provider='wasm';if(navigator.gpu?.requestAdapter){try{const s=await ortModule.InferenceSession.create(buffer,{executionProviders:['webgpu']});provider='webgpu';return {ort:ortModule,session:s,provider}}catch(e){console.warn('WebGPU indisponível; usando WASM',e)}}const s=await ortModule.InferenceSession.create(buffer,{executionProviders:['wasm']});return {ort:ortModule,session:s,provider};})();try{return await sessionPromise}catch(e){sessionPromise=null;throw e}}
-function canvasFor(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c}
-function drawLineMask(roi){const c=canvasFor(roi.width,roi.height),x=c.getContext('2d');x.strokeStyle='#fff';x.lineCap='round';x.lineJoin='round';for(const s of strokes){x.lineWidth=s.size/scale;x.beginPath();x.moveTo(s.points[0]/scale-roi.x,s.points[1]/scale-roi.y);for(let i=2;i<s.points.length;i+=2)x.lineTo(s.points[i]/scale-roi.x,s.points[i+1]/scale-roi.y);x.stroke()}return c}
-function tensorImage(c){const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,n=c.width*c.height,out=new Float32Array(n*3);for(let i=0;i<n;i++){out[i]=d[i*4]/255;out[n+i]=d[i*4+1]/255;out[2*n+i]=d[i*4+2]/255}return out}
-function tensorMask(c){const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,n=c.width*c.height,out=new Float32Array(n);for(let i=0;i<n;i++)out[i]=d[i*4+3]>0?1:0;return out}
-function resize(src,w,h,smooth=true){const c=canvasFor(w,h),x=c.getContext('2d');x.imageSmoothingEnabled=smooth;x.imageSmoothingQuality='high';x.drawImage(src,0,0,w,h);return c}
-function renderOutput(data,w,h){const c=canvasFor(w,h),x=c.getContext('2d'),im=x.createImageData(w,h),n=w*h;let max=0;for(let i=0;i<data.length;i++)max=Math.max(max,data[i]||0);const mul=max<=1.5?255:1;for(let i=0;i<n;i++){im.data[i*4]=Math.max(0,Math.min(255,Math.round((data[i]||0)*mul)));im.data[i*4+1]=Math.max(0,Math.min(255,Math.round((data[n+i]||0)*mul)));im.data[i*4+2]=Math.max(0,Math.min(255,Math.round((data[2*n+i]||0)*mul)));im.data[i*4+3]=255}x.putImageData(im,0,0);return c}
-$('run').onclick=async()=>{if(!img||!strokes.length)return;const button=$('run');button.disabled=true;try{status('Preparando a região marcada…');const sx=img.naturalWidth/canvas.width, all=[];for(const s of strokes){for(let i=0;i<s.points.length;i+=2)all.push({x:s.points[i]*sx,y:s.points[i+1]*sx,r:s.size*sx/2})}let minX=Math.min(...all.map(p=>p.x-p.r)),maxX=Math.max(...all.map(p=>p.x+p.r)),minY=Math.min(...all.map(p=>p.y-p.r)),maxY=Math.max(...all.map(p=>p.y+p.r));let side=Math.max(maxX-minX,maxY-minY)+144,cx=(minX+maxX)/2,cy=(minY+maxY)/2,w=Math.min(img.naturalWidth,Math.round(side)),h=Math.min(img.naturalHeight,Math.round(side)),x=Math.max(0,Math.min(img.naturalWidth-w,Math.round(cx-w/2))),y=Math.max(0,Math.min(img.naturalHeight-h,Math.round(cy-h/2))),roi={x,y,width:w,height:h};const mask=drawLineMask(roi),base=canvasFor(512,512),bc=base.getContext('2d');bc.fillStyle='#fff';bc.fillRect(0,0,512,512);bc.drawImage(img,x,y,w,h,0,0,512,512);const resizedMask=resize(mask,512,512,false);const {ort,session,provider}=await getSession();status('Executando remoção com '+provider.toUpperCase()+' no dispositivo…');const feeds={image:new ort.Tensor('float32',tensorImage(base),[1,3,512,512]),mask:new ort.Tensor('float32',tensorMask(resizedMask),[1,1,512,512])};const outputs=await session.run(feeds),first=Object.values(outputs)[0];if(!first)throw new Error('O modelo não retornou uma imagem.');const patch=resize(renderOutput(first.data,512,512),w,h),out=canvasFor(img.naturalWidth,img.naturalHeight),oc=out.getContext('2d');oc.drawImage(img,0,0);const feather=canvasFor(mask.width,mask.height),fc=feather.getContext('2d');fc.filter='blur(12px)';fc.drawImage(mask,0,0);const masked=canvasFor(w,h),mc=masked.getContext('2d');mc.drawImage(patch,0,0);mc.globalCompositeOperation='destination-in';mc.drawImage(feather,0,0);oc.drawImage(masked,x,y);resultBlob=await new Promise((resolve,reject)=>out.toBlob(b=>b?resolve(b):reject(new Error('Não foi possível gerar o PNG.')),'image/png'));const url=URL.createObjectURL(resultBlob);$('download').href=url;$('download').download=sourceName+'-sem-objetos.png';$('output').classList.remove('hidden');img=new Image();img.onload=()=>{fitImage(img);strokes=[];draw()};img.src=url;status('Concluído! A imagem foi processada localmente. Motor: '+provider.toUpperCase()+'.');}catch(e){console.error(e);status((e?.message||'Falha ao remover o objeto.')+' — verifique sua conexão e tente uma imagem menor.',true)}finally{button.disabled=false;setRun()}};
+function loadFile(file){
+ if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type)){status('Escolha uma imagem JPG, PNG ou WEBP.',true);return}
+ if(file.size>MAX_FILE_SIZE){status('A imagem ultrapassa 25 MB. Escolha um arquivo menor.',true);return}
+ const url=URL.createObjectURL(file),image=new Image();
+ image.onload=()=>{originalImage=image;displayImage=image;sourceName=file.name.replace(/\.[^.]+$/,'')||'imagem';strokes=[];resultBlob=null;$('output').classList.add('hidden');fitImage(image);URL.revokeObjectURL(url);status('Foto carregada. Pinte o objeto e toque em “Remover objeto com IA”.');};
+ image.onerror=()=>{URL.revokeObjectURL(url);status('Não foi possível abrir essa imagem.',true)};image.src=url;
+}
+$('file').addEventListener('change',e=>loadFile(e.target.files?.[0]));
+window.addEventListener('message',e=>{if(e.origin!==location.origin||e.data?.type!=='matheus-ai-image'||!(e.data.file instanceof Blob))return;loadFile(e.data.file)});
+if(window.opener)window.opener.postMessage({type:'matheus-ai-object-remover-ready'},location.origin);
+async function getSession(){
+ if(sessionPromise)return sessionPromise;
+ sessionPromise=(async()=>{
+  status('Carregando o motor de IA…');const ort=await import(ORT_URL);ort.env.logLevel='warning';ort.env.wasm.numThreads=1;
+  ort.env.wasm.wasmPaths={mjs:ORT_CDN+'ort-wasm-simd-threaded.jsep.mjs',wasm:ORT_CDN+'ort-wasm-simd-threaded.jsep.wasm'};
+  status('Baixando o modelo MI-GAN (somente na primeira utilização)…');
+  const response=await fetch(MODEL_URL);if(!response.ok)throw new Error('Não foi possível baixar o modelo MI-GAN (HTTP '+response.status+').');
+  const modelBuffer=await response.arrayBuffer();let session,provider='wasm';
+  if(navigator.gpu?.requestAdapter){try{session=await ort.InferenceSession.create(modelBuffer,{executionProviders:['webgpu']});provider='webgpu'}catch(err){console.warn('WebGPU indisponível; tentando WASM',err)}}
+  if(!session)session=await ort.InferenceSession.create(modelBuffer,{executionProviders:['wasm']});
+  return {ort,session,provider};
+ })();
+ try{return await sessionPromise}catch(err){sessionPromise=null;throw err}
+}
+function makeCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c}
+function imageTensor(c,ort){const d=c.getContext('2d',{willReadFrequently:true}).getImageData(0,0,c.width,c.height).data,n=c.width*c.height,out=new Uint8Array(n*3);for(let i=0;i<n;i++){out[i]=d[i*4];out[n+i]=d[i*4+1];out[2*n+i]=d[i*4+2]}return new ort.Tensor('uint8',out,[1,3,c.height,c.width])}
+function maskTensor(c,ort){const d=c.getContext('2d',{willReadFrequently:true}).getImageData(0,0,c.width,c.height).data,n=c.width*c.height,out=new Uint8Array(n);for(let i=0;i<n;i++)out[i]=d[i*4];return new ort.Tensor('uint8',out,[1,1,c.height,c.width])}
+function makeMask(width,height,scaleX,scaleY){
+ const c=makeCanvas(width,height),m=c.getContext('2d');m.fillStyle='white';m.fillRect(0,0,width,height);m.strokeStyle='black';m.lineCap='round';m.lineJoin='round';
+ for(const s of strokes){if(s.points.length<2)continue;m.lineWidth=s.size/ displayScale * ((scaleX+scaleY)/2);m.beginPath();m.moveTo(s.points[0]/displayScale*scaleX,s.points[1]/displayScale*scaleY);for(let i=2;i<s.points.length;i+=2)m.lineTo(s.points[i]/displayScale*scaleX,s.points[i+1]/displayScale*scaleY);m.stroke()}
+ return c;
+}
+function tensorToCanvas(data,w,h){const c=makeCanvas(w,h),x=c.getContext('2d'),im=x.createImageData(w,h),n=w*h;for(let i=0;i<n;i++){im.data[i*4]=data[i];im.data[i*4+1]=data[n+i];im.data[i*4+2]=data[2*n+i];im.data[i*4+3]=255}x.putImageData(im,0,0);return c}
+$('run').onclick=async()=>{
+ if(!originalImage||!strokes.length)return;
+ const button=$('run');button.disabled=true;
+ try{
+  const sourceW=originalImage.naturalWidth,sourceH=originalImage.naturalHeight,procScale=Math.min(1,MAX_PROCESS_DIM/Math.max(sourceW,sourceH)),w=Math.max(1,Math.round(sourceW*procScale)),h=Math.max(1,Math.round(sourceH*procScale));
+  status('Preparando a imagem e a máscara…');const source=makeCanvas(w,h);source.getContext('2d').drawImage(originalImage,0,0,w,h);
+  const mask=makeMask(w,h,w/sourceW,h/sourceH);
+  // MI-GAN ONNX pipeline expects RGB and mask as uint8 CHW; black (0) means erase, white (255) means preserve.
+  const {ort,session,provider}=await getSession();status('Removendo o objeto com MI-GAN ('+provider.toUpperCase()+')…');
+  const inputs=session.inputNames;const feeds={};
+  const imageName=inputs.find(n=>/image|input/i.test(n))||inputs[0],maskName=inputs.find(n=>/mask/i.test(n))||inputs[1];
+  feeds[imageName]=imageTensor(source,ort);feeds[maskName]=maskTensor(mask,ort);
+  const outputs=await session.run(feeds);const outName=session.outputNames.find(n=>/result|output|image/i.test(n))||session.outputNames[0],tensor=outputs[outName]||Object.values(outputs)[0];
+  if(!tensor?.data)throw new Error('O modelo não retornou uma imagem.');const dims=tensor.dims;const outH=dims[dims.length-2],outW=dims[dims.length-1];
+  if(!outW||!outH||tensor.data.length<outW*outH*3)throw new Error('Formato de saída inesperado do modelo MI-GAN.');
+  const processed=tensorToCanvas(tensor.data,outW,outH),finalCanvas=makeCanvas(sourceW,sourceH),finalCtx=finalCanvas.getContext('2d');
+  finalCtx.drawImage(processed,0,0,sourceW,sourceH);
+  resultBlob=await new Promise((resolve,reject)=>finalCanvas.toBlob(b=>b?resolve(b):reject(new Error('Não foi possível exportar a imagem.')),'image/png'));
+  const resultUrl=URL.createObjectURL(resultBlob);$('download').href=resultUrl;$('download').download=sourceName+'-sem-objetos.png';$('output').classList.remove('hidden');
+  displayImage=new Image();displayImage.onload=()=>{strokes=[];fitImage(displayImage)};displayImage.src=resultUrl;
+  status('Concluído! MI-GAN processou a foto localmente ('+provider.toUpperCase()+'). Você pode baixar o PNG ou devolvê-lo ao chat.');
+ }catch(err){console.error(err);status((err?.message||'Falha ao remover o objeto.')+' Verifique a conexão e tente novamente com uma imagem menor.',true)}
+ finally{button.disabled=false;updateButtons()}
+};
 $('useResult').onclick=()=>{if(resultBlob)loadFile(new File([resultBlob],sourceName+'-editada.png',{type:'image/png'}))};
-$('sendBack').onclick=()=>{if(!resultBlob){status('Gere uma imagem antes de enviá-la ao chat.',true);return}if(window.opener){window.opener.postMessage({type:'matheus-ai-edited-image',file:new File([resultBlob],sourceName+'-sem-objetos.png',{type:'image/png'})},location.origin);status('Imagem enviada de volta ao chat. Você pode fechar esta janela.')}else{const a=document.createElement('a');a.href=URL.createObjectURL(resultBlob);a.download=sourceName+'-sem-objetos.png';a.click();status('Baixando a imagem editada. Abra o chat para anexá-la.')}}
-window.addEventListener('resize',()=>{if(img)fitImage(img)});
+$('sendBack').onclick=()=>{
+ if(!resultBlob){status('Gere uma imagem antes de enviá-la ao chat.',true);return}
+ const file=new File([resultBlob],sourceName+'-sem-objetos.png',{type:'image/png'});
+ if(window.opener){window.opener.postMessage({type:'matheus-ai-edited-image',file},location.origin);status('Imagem editada enviada de volta ao chat. Você já pode fechar esta janela.')}
+ else{const a=document.createElement('a');a.href=URL.createObjectURL(resultBlob);a.download=file.name;a.click()}
+};
+window.addEventListener('resize',()=>{if(displayImage)fitImage(displayImage)});
 </script></body></html>
