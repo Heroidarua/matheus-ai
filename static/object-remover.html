@@ -76,7 +76,7 @@ async function getSegmenter(){
  if(segmenterPromise)return segmenterPromise;
  segmenterPromise=(async()=>{
   status('Carregando o detector de pessoa…');
-  const vision=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22');
+  const vision=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');
   const files=await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');
   return vision.ImageSegmenter.createFromOptions(files,{
    baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite'},
