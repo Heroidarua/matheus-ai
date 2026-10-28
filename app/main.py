@@ -933,6 +933,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as stream_client:
                     async with stream_client.stream("POST", f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=stream_payload) as upstream:
                         if upstream.status_code >= 400:
+                            DIAGNOSTICS["errors"] += 1
+                            DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
                             body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
                             yield "event: error\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
                             return
@@ -952,10 +954,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
                                     yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
                             except (ValueError, TypeError, IndexError):
                                 continue
+                DIAGNOSTICS["successes"] += 1
+                DIAGNOSTICS["last_error"] = None
                 yield "event: done\ndata: " + json.dumps({"model": MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\n\n"
             except httpx.TimeoutException:
+                DIAGNOSTICS["errors"] += 1
+                DIAGNOSTICS["last_error"] = "Tempo esgotado no provedor do modelo (stream)"
                 yield "event: error\ndata: " + json.dumps({"detail": "O modelo demorou para responder. Tente novamente."}, ensure_ascii=False) + "\n\n"
             except httpx.HTTPError as exc:
+                DIAGNOSTICS["errors"] += 1
+                DIAGNOSTICS["last_error"] = f"Falha de conexão no stream: {type(exc).__name__}"
                 print(f"Streaming provider error ({type(exc).__name__}): {str(exc)[:200]}")
                 yield "event: error\ndata: " + json.dumps({"detail": "A conexão com o provedor do modelo falhou."}, ensure_ascii=False) + "\n\n"
         return StreamingResponse(stream_reply(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
