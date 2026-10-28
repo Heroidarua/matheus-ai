@@ -275,7 +275,7 @@ def test_news_search_accepts_relevant_ai_headlines_with_synonyms():
 
 
 def test_extract_document_text_formats_csv_and_json():
-    csv_text = main.extract_document_text("dados.csv", "text/csv", b"nome,valor\\nAna,10\\n")
+    csv_text = main.extract_document_text("dados.csv", "text/csv", b"nome,valor\nAna,10\n")
     assert "nome | valor" in csv_text
     assert "Ana | 10" in csv_text
 
