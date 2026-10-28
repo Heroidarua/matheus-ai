@@ -222,7 +222,6 @@
             <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
             <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
             <button class="tool-btn" type="button" id="export-button">Exportar conversa</button>
-            <button class="tool-btn" type="button" id="diagnostics-button">Saúde e diagnóstico</button>
             <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
             <span id="voice-status" class="voice-status" aria-live="polite"></span>
           </div>
@@ -302,7 +301,6 @@
     });
     document.getElementById('export-button').addEventListener('click', exportConversation);
     document.getElementById('voice-button').addEventListener('click', toggleVoiceInput);
-    document.getElementById('diagnostics-button').addEventListener('click', loadDiagnostics);
     const voiceConversationToggle = document.getElementById('voice-conversation-toggle');
 
     function speakText(text) {
