@@ -406,6 +406,32 @@
       renderSelectedFiles();
     }
 
+    let objectRemoverWindow = null;
+    let pendingObjectRemoverFile = null;
+    function openObjectRemover(file) {
+      pendingObjectRemoverFile = file;
+      objectRemoverWindow = window.open('/object-remover.html', 'matheusAiObjectRemover', 'popup,width=1100,height=850');
+      if (!objectRemoverWindow) {
+        voiceStatus.textContent = 'O navegador bloqueou a janela. Permita pop-ups para abrir o editor.';
+        return;
+      }
+      voiceStatus.textContent = 'Editor de remoção de objetos aberto. A imagem será enviada diretamente ao editor local.';
+    }
+    window.addEventListener('message', event => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'matheus-ai-object-remover-ready' && pendingObjectRemoverFile && objectRemoverWindow && !objectRemoverWindow.closed) {
+        objectRemoverWindow.postMessage({ type: 'matheus-ai-image', file: pendingObjectRemoverFile }, window.location.origin);
+        pendingObjectRemoverFile = null;
+      }
+      if (event.data?.type === 'matheus-ai-edited-image' && event.data.file instanceof Blob) {
+        const edited = event.data.file instanceof File ? event.data.file : new File([event.data.file], 'matheus-ai-sem-objetos.png', { type: 'image/png' });
+        selectedFiles = selectedFiles.filter(file => !file.name.startsWith('matheus-ai-sem-objetos'));
+        selectedFiles.push(edited);
+        renderSelectedFiles();
+        voiceStatus.textContent = 'Imagem editada anexada ao chat. Envie uma mensagem para usá-la na conversa.';
+      }
+    });
+
     function renderSelectedFiles() {
       selectedFilesEl.replaceChildren();
       selectedFiles.forEach((file, index) => {
@@ -419,7 +445,18 @@
         remove.setAttribute('aria-label', 'Remover ' + file.name);
         remove.textContent = '×';
         remove.addEventListener('click', () => { selectedFiles.splice(index, 1); renderSelectedFiles(); });
-        chip.append(label, remove);
+        chip.append(label);
+        if (file.type.startsWith('image/')) {
+          const editImage = document.createElement('button');
+          editImage.type = 'button';
+          editImage.className = 'remove-file';
+          editImage.title = 'Remover objetos desta imagem';
+          editImage.setAttribute('aria-label', 'Remover objetos de ' + file.name);
+          editImage.textContent = '✦';
+          editImage.addEventListener('click', () => openObjectRemover(file));
+          chip.appendChild(editImage);
+        }
+        chip.append(remove);
         selectedFilesEl.appendChild(chip);
       });
     }
