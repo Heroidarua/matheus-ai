@@ -441,7 +441,7 @@
       if (!('speechSynthesis' in window)) { voiceStatus.textContent = 'Leitura de voz não suportada neste navegador.'; return; }
       window.speechSynthesis.cancel();
       const cleanText = String(text)
-        .replace(/```[\\s\\S]*?```/g, ' bloco de código omitido ')
+        .replace(/```[\s\S]*?```/g, ' bloco de código omitido ')
         .replace(/https?:\/\/\S+/g, ' link ')
         .replace(/[\*_#>~|]/g, ' ')
         .replace(/\s+/g, ' ')
