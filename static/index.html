@@ -441,10 +441,10 @@
       if (!('speechSynthesis' in window)) { voiceStatus.textContent = 'Leitura de voz não suportada neste navegador.'; return; }
       window.speechSynthesis.cancel();
       const cleanText = String(text)
-        .replace(/\u0060{3}[\\s\\S]*?\u0060{3}/g, ' bloco de código omitido ')
-        .replace(/https?:\\/\\/\\S+/g, ' link ')
-        .replace(/[\\*_#>~|]/g, ' ')
-        .replace(/\\s+/g, ' ')
+        .replace(/```[\\s\\S]*?```/g, ' bloco de código omitido ')
+        .replace(/https?:\/\/\S+/g, ' link ')
+        .replace(/[\*_#>~|]/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
       if (!cleanText) return;
       const utterance = new SpeechSynthesisUtterance(cleanText);
