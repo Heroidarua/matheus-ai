@@ -576,9 +576,9 @@
       while (walker.nextNode()) {
         const node = walker.currentNode;
         if (node.parentElement?.closest('a, code, pre, script, style')) continue;
-        if (/\\[\\d+(?:\\s*,\\s*\\d+)*\\]/.test(node.nodeValue || '')) textNodes.push(node);
+        if (/\[\d+(?:\s*,\s*\d+)*\]/.test(node.nodeValue || '')) textNodes.push(node);
       }
-      const citationPattern = /\\[(\\d+(?:\\s*,\\s*\\d+)*)\\]/g;
+      const citationPattern = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
       for (const textNode of textNodes) {
         const value = textNode.nodeValue || '';
         const fragment = document.createDocumentFragment();
@@ -590,13 +590,13 @@
           numbers.forEach((number, index) => {
             if (index) fragment.appendChild(document.createTextNode(', '));
             const source = sources[number - 1];
-            if (source && typeof source.url === 'string' && /^https?:\\/\\//i.test(source.url)) {
+            if (source && typeof source.url === 'string' && /^https?:\/\//i.test(source.url)) {
               const link = document.createElement('a');
               link.href = source.url;
               link.target = '_blank';
               link.rel = 'noopener noreferrer';
               let fallbackTitle = source.url;
-              try { fallbackTitle = new URL(source.url).hostname.replace(/^www\\./i, ''); } catch {}
+              try { fallbackTitle = new URL(source.url).hostname.replace(/^www\./i, ''); } catch {}
               link.textContent = source.title || fallbackTitle;
               link.title = source.title ? source.title + ' — ' + source.url : source.url;
               link.setAttribute('aria-label', 'Abrir fonte: ' + (source.title || fallbackTitle));
