@@ -191,6 +191,27 @@
       .hint{padding:8px 4px 0;font-size:11px;}
       .status{display:none;}
     }
+
+    /* Menu + no compositor, reunindo ferramentas e preferências. */
+    .input-wrap{position:relative;}
+    .plus-button{width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0;background:var(--panel2);color:var(--text);border:1px solid var(--border);font-size:27px;line-height:1;font-weight:400;}
+    .plus-button:hover,.plus-button[aria-expanded="true"]{background:#454545;}
+    body.light-theme .plus-button:hover,body.light-theme .plus-button[aria-expanded="true"]{background:#dedede;}
+    .plus-menu{position:absolute;z-index:20;left:0;bottom:calc(100% + 10px);width:min(440px,calc(100vw - 28px));max-height:min(70vh,560px);overflow:auto;padding:12px;background:var(--panel);border:1px solid var(--border);border-radius:18px;box-shadow:0 12px 38px rgba(0,0,0,.35);}
+    .plus-menu[hidden]{display:none!important;}
+    .plus-menu-heading{font-size:13px;font-weight:600;color:var(--muted);padding:2px 4px 10px;}
+    .plus-menu .drawer-row{display:flex;flex-direction:column;gap:8px;margin:0;}
+    .plus-menu .settings-drawer{width:100%;flex:none;}
+    .plus-menu .settings-drawer>summary{justify-content:flex-start;background:transparent;border:0;border-radius:10px;padding:10px 9px;min-height:40px;color:var(--text);}
+    .plus-menu .settings-drawer>summary:hover{background:var(--panel2);}
+    .plus-menu .settings-drawer[open]{border:1px solid var(--border);background:transparent;}
+    .plus-menu .settings-drawer[open]>summary{border-bottom:1px solid var(--border);border-radius:0;}
+    .plus-menu .tools-drawer .tools{grid-template-columns:1fr 1fr;margin:0;padding:8px;}
+    .plus-menu .tools-drawer .tool-btn{text-align:left;justify-content:flex-start;min-height:42px;border-radius:10px;background:var(--panel2);}
+    .plus-menu .settings-grid{grid-template-columns:1fr 1fr;padding:10px;}
+    .plus-menu .settings-grid .mode-toggle{grid-column:1/-1;}
+    .plus-menu .settings-grid #theme-button{grid-column:1/-1;}
+    @media(max-width:520px){.plus-menu{width:min(420px,calc(100vw - 24px));bottom:calc(100% + 8px);padding:9px;}.plus-menu .tools-drawer .tools{grid-template-columns:1fr 1fr;}.plus-button{width:38px;min-width:38px;height:38px;}}
   </style>
 </head>
 <body>
@@ -207,48 +228,52 @@
       <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden aria-label="Selecionar fotos">
       <input id="file-input" type="file" accept=".pdf,.docx,.xlsx,.xlsm,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yml,.yaml,.log,.sh,.toml,.ini,.sql,.java,.c,.cpp,.h,.go,.rs" multiple hidden aria-label="Selecionar arquivos">
       <div class="input-wrap">
+        <button class="plus-button" type="button" id="plus-button" aria-label="Abrir ferramentas e preferências" aria-expanded="false" aria-controls="plus-menu" title="Ferramentas e preferências">+</button>
         <textarea id="prompt" rows="1" maxlength="12000" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
         <button class="tool-btn" type="button" id="voice-button" aria-label="Iniciar voz" title="Iniciar voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0" ><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
         <button id="send" type="submit">Enviar</button>
       </div>
-      <div class="drawer-row">
-      <details class="settings-drawer">
-        <summary>Preferências</summary>
-        <div class="settings-grid">
-          <label class="field-label" for="response-mode">Modo de resposta
-            <select id="response-mode" aria-label="Modo de resposta">
-              <option value="normal">Geral</option>
-              <option value="programador">Programador</option>
-              <option value="estudo">Estudo</option>
-              <option value="criativo">Criativo</option>
-            </select>
-          </label>
-          <label class="field-label" for="response-length">Tamanho da resposta
-            <select id="response-length" aria-label="Tamanho da resposta">
-              <option value="curta">Curta</option>
-              <option value="normal">Normal</option>
-              <option value="detalhada" selected>Detalhada</option>
-            </select>
-          </label>
-          <label class="mode-toggle web-search-toggle"><input id="web-search-toggle" type="checkbox" checked> <span>Pesquisar na internet e citar fontes</span></label>
-          <label class="mode-toggle free-mode-toggle"><input id="free-mode" type="checkbox"> <span>Modo livre</span></label>
-          <label class="mode-toggle voice-conversation-toggle"><input id="voice-conversation-toggle" type="checkbox"> <span>Ler respostas automaticamente em voz alta</span></label>
-          <button class="tool-btn theme-button" type="button" id="theme-button">Tema claro</button>
+      <div class="plus-menu" id="plus-menu" hidden>
+        <div class="plus-menu-heading">Ferramentas e preferências</div>
+        <div class="drawer-row">
+          <details class="settings-drawer tools-drawer">
+            <summary>Ferramentas</summary>
+            <div class="drawer-content">
+              <div class="tools primary-tools">
+                <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
+                <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
+                <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
+                <button class="tool-btn" type="button" id="export-button">Exportar conversa</button>
+                <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
+                <span id="voice-status" class="voice-status" aria-live="polite"></span>
+              </div>
+            </div>
+          </details>
+          <details class="settings-drawer">
+            <summary>Preferências</summary>
+            <div class="settings-grid">
+              <label class="field-label" for="response-mode">Modo de resposta
+                <select id="response-mode" aria-label="Modo de resposta">
+                  <option value="normal">Geral</option>
+                  <option value="programador">Programador</option>
+                  <option value="estudo">Estudo</option>
+                  <option value="criativo">Criativo</option>
+                </select>
+              </label>
+              <label class="field-label" for="response-length">Tamanho da resposta
+                <select id="response-length" aria-label="Tamanho da resposta">
+                  <option value="curta">Curta</option>
+                  <option value="normal">Normal</option>
+                  <option value="detalhada" selected>Detalhada</option>
+                </select>
+              </label>
+              <label class="mode-toggle web-search-toggle"><input id="web-search-toggle" type="checkbox" checked> <span>Pesquisar na internet e citar fontes</span></label>
+              <label class="mode-toggle free-mode-toggle"><input id="free-mode" type="checkbox"> <span>Modo livre</span></label>
+              <label class="mode-toggle voice-conversation-toggle"><input id="voice-conversation-toggle" type="checkbox"> <span>Ler respostas automaticamente em voz alta</span></label>
+              <button class="tool-btn theme-button" type="button" id="theme-button">Tema claro</button>
+            </div>
+          </details>
         </div>
-      </details>
-      <details class="settings-drawer tools-drawer">
-        <summary>Ferramentas</summary>
-        <div class="drawer-content">
-          <div class="tools primary-tools">
-            <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
-            <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
-            <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
-            <button class="tool-btn" type="button" id="export-button">Exportar conversa</button>
-            <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
-            <span id="voice-status" class="voice-status" aria-live="polite"></span>
-          </div>
-        </div>
-      </details>
       </div>
       <div id="diagnostics-panel" class="web-sources" hidden aria-live="polite"></div>
       <div class="hint">Enter para enviar · Shift+Enter para nova linha</div>
@@ -323,6 +348,27 @@
     document.getElementById('export-button').addEventListener('click', exportConversation);
     document.getElementById('voice-button').addEventListener('click', toggleVoiceInput);
     const voiceConversationToggle = document.getElementById('voice-conversation-toggle');
+    const plusButton = document.getElementById('plus-button');
+    const plusMenu = document.getElementById('plus-menu');
+    plusButton.addEventListener('click', () => {
+      const willOpen = plusMenu.hidden;
+      plusMenu.hidden = !willOpen;
+      plusButton.setAttribute('aria-expanded', String(willOpen));
+    });
+    document.addEventListener('pointerdown', event => {
+      if (!plusMenu.hidden && !plusMenu.contains(event.target) && !plusButton.contains(event.target)) {
+        plusMenu.hidden = true;
+        plusButton.setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !plusMenu.hidden) {
+        plusMenu.hidden = true;
+        plusButton.setAttribute('aria-expanded', 'false');
+        plusButton.focus();
+      }
+    });
+
 
     function speakText(text) {
       if (!('speechSynthesis' in window)) { voiceStatus.textContent = 'Leitura de voz não suportada neste navegador.'; return; }
