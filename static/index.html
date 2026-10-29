@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#000000">
   <meta name="description" content="ADA-M — assistente pessoal para programação, Linux, Termux e arquivos.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/ada-m-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/ada-m-icon.svg">
   <title>ADA-M</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -280,6 +283,7 @@
         <span class="header-divider"></span>
         <span class="header-edition">SEU ASSISTENTE</span>
       </div>
+      <button id="install-app" class="install-app-button" type="button" aria-label="Instalar ADA-M" title="Instalar ADA-M">Instalar</button>
     </header>
     <section id="messages" aria-live="polite">
     </section>
@@ -910,6 +914,46 @@
         promptEl.focus();
       }
     });
+  </script>
+  <script>
+    (() => {
+      const installButton = document.getElementById('install-app');
+      let installPrompt = null;
+
+      window.addEventListener('beforeinstallprompt', event => {
+        event.preventDefault();
+        installPrompt = event;
+        installButton.hidden = false;
+        installButton.textContent = 'Instalar';
+      });
+
+      window.addEventListener('appinstalled', () => {
+        installPrompt = null;
+        installButton.textContent = 'Instalado';
+        installButton.disabled = true;
+      });
+
+      installButton.addEventListener('click', async () => {
+        if (!installPrompt) {
+          const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+          alert(isIOS
+            ? 'Para instalar: toque em Compartilhar e escolha “Adicionar à Tela de Início”.'
+            : 'Para instalar o ADA-M, abra o menu ⋮ do Chrome e escolha “Instalar app” ou “Adicionar à tela inicial”.');
+          return;
+        }
+        installPrompt.prompt();
+        await installPrompt.userChoice;
+        installPrompt = null;
+      });
+
+      if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(error => {
+            console.warn('Não foi possível ativar o modo PWA:', error);
+          });
+        });
+      }
+    })();
   </script>
 </body>
 </html>
