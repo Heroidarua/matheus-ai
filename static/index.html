@@ -417,11 +417,46 @@
     });
 
 
+    let preferredPortugueseVoice = null;
+
+    function choosePortugueseVoice() {
+      if (!('speechSynthesis' in window)) return null;
+      const voices = window.speechSynthesis.getVoices();
+      const portuguese = voices.filter(voice => /^pt[-_]br$/i.test(voice.lang));
+      const pool = portuguese.length ? portuguese : voices.filter(voice => /^pt([-_]|$)/i.test(voice.lang));
+      const naturalVoiceHints = /google|natural|neural|francisca|luciana|antonio|antônio|brasil/i;
+      preferredPortugueseVoice =
+        pool.find(voice => naturalVoiceHints.test(voice.name) && !/compact|espeak|festival/i.test(voice.name)) ||
+        pool.find(voice => !/compact|espeak|festival|robot/i.test(voice.name)) ||
+        pool[0] || null;
+      return preferredPortugueseVoice;
+    }
+
+    if ('speechSynthesis' in window) {
+      choosePortugueseVoice();
+      window.speechSynthesis.addEventListener('voiceschanged', choosePortugueseVoice);
+    }
+
     function speakText(text) {
       if (!('speechSynthesis' in window)) { voiceStatus.textContent = 'Leitura de voz não suportada neste navegador.'; return; }
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
+      const cleanText = String(text)
+        .replace(/\u0060{3}[\\s\\S]*?\u0060{3}/g, ' bloco de código omitido ')
+        .replace(/https?:\\/\\/\\S+/g, ' link ')
+        .replace(/[\\*_#>~|]/g, ' ')
+        .replace(/\\s+/g, ' ')
+        .trim();
+      if (!cleanText) return;
+      const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'pt-BR';
+      utterance.rate = 0.96;
+      utterance.pitch = 1.02;
+      utterance.volume = 1;
+      const voice = preferredPortugueseVoice || choosePortugueseVoice();
+      if (voice) utterance.voice = voice;
+      utterance.onstart = () => { voiceStatus.textContent = voice ? `Lendo com a voz ${voice.name}.` : 'Lendo com a voz disponível no dispositivo.'; };
+      utterance.onend = () => { voiceStatus.textContent = ''; };
+      utterance.onerror = () => { voiceStatus.textContent = 'Não foi possível reproduzir a voz.'; };
       window.speechSynthesis.speak(utterance);
     }
 
