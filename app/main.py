@@ -24,7 +24,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
 from starlette.middleware.sessions import SessionMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
@@ -45,6 +45,10 @@ MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
 MAX_KNOWLEDGE_FILES = 100
 MAX_RETRIEVED_CHUNKS = 4
 APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
+TTS_API_BASE_URL = os.getenv("TTS_API_BASE_URL", "").strip().rstrip("/")
+TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
+TTS_MODEL = os.getenv("TTS_MODEL", "kokoro").strip()
+TTS_VOICE = os.getenv("TTS_VOICE", "pm_alex").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
@@ -122,6 +126,53 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
+
+class SpeechRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+
+
+@app.post("/api/tts")
+async def generate_speech(request: SpeechRequest) -> Response:
+    """Gera fala natural via um servidor TTS OpenAI-compatible configurado por variável de ambiente."""
+    if not TTS_API_BASE_URL:
+        raise HTTPException(
+            status_code=503,
+            detail="A voz neural ainda não foi configurada. Defina TTS_API_BASE_URL no ambiente do servidor.",
+        )
+    headers = {"Accept": "audio/mpeg", "Content-Type": "application/json"}
+    if TTS_API_KEY:
+        headers["Authorization"] = f"Bearer {TTS_API_KEY}"
+    payload = {
+        "model": TTS_MODEL,
+        "input": request.text,
+        "voice": TTS_VOICE,
+        "response_format": "mp3",
+        "speed": 0.96,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as client:
+            response = await client.post(
+                f"{TTS_API_BASE_URL}/audio/speech",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+        content_type = response.headers.get("content-type", "audio/mpeg").split(";")[0]
+        if not content_type.startswith("audio/"):
+            raise HTTPException(status_code=502, detail="O serviço de voz não retornou um arquivo de áudio válido.")
+        return Response(
+            content=response.content,
+            media_type=content_type,
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="A geração da voz demorou demais. Tente novamente.")
+    except httpx.HTTPStatusError as exc:
+        print(f"TTS provider HTTP {exc.response.status_code}: {exc.response.text[:300]}")
+        raise HTTPException(status_code=502, detail="O serviço de voz neural retornou um erro.")
+    except httpx.HTTPError as exc:
+        print(f"TTS provider connection error: {type(exc).__name__}")
+        raise HTTPException(status_code=502, detail="Não foi possível conectar ao serviço de voz neural.")
 
 
 @app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
