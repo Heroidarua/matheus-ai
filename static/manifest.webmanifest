@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "ADA-M — Assistente Pessoal",
+  "short_name": "ADA-M",
+  "description": "Assistente pessoal para programação, Linux, Termux, arquivos e pesquisa.",
+  "lang": "pt-BR",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#212121",
+  "theme_color": "#212121",
+  "icons": [
+    {
+      "src": "/static/ada-m-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/ada-m-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
