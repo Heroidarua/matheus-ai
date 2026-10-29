@@ -220,14 +220,36 @@
     .plus-menu .settings-grid .mode-toggle{grid-column:1/-1;}
     .plus-menu .settings-grid #theme-button{grid-column:1/-1;}
     @media(max-width:520px){.plus-menu{width:min(420px,calc(100vw - 24px));bottom:calc(100% + 8px);padding:9px;}.plus-menu .tools-drawer .tools{grid-template-columns:1fr 1fr;}.plus-button{width:38px;min-width:38px;height:38px;}}
+  
+    /* Cabeçalho ADA-M: minimalista, nítido e responsivo. */
+    .app-header{display:flex;align-items:center;gap:12px;padding:10px 2px 18px;border-bottom:1px solid var(--border);margin-bottom:2px;}
+    .brand-mark{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;color:var(--text);}
+    .brand-mark svg{display:block;width:100%;height:100%;}
+    .brand-copy{display:flex;flex-direction:column;gap:1px;min-width:0;}
+    .brand-copy h1{font-size:18px;font-weight:650;letter-spacing:-.55px;line-height:1.25;}
+    .brand-caption{font-size:11px;line-height:1.4;color:var(--muted);letter-spacing:.01em;}
+    .app-header .status{margin-left:auto;display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--muted);font-size:11px;white-space:nowrap;}
+    .status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent);}
+    @media(max-width:520px){.app-header{gap:10px;padding:6px 1px 14px;}.brand-mark{width:40px;height:40px;flex-basis:40px;}.brand-copy h1{font-size:18px;}.brand-caption{font-size:10px;}.app-header .status{padding:6px 8px;font-size:0;gap:0;}.app-header .status-dot{width:8px;height:8px;}}
+
   </style>
 </head>
 <body>
   <main class="app">
-    <header>
-      <div class="logo" aria-hidden="true">M</div>
-      <div><h1>ADA-M</h1></div>
-      <div class="status">● pronto para conversar</div>
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1" y="1" width="38" height="38" rx="13" fill="currentColor" fill-opacity=".10"/>
+          <path d="M11 27.5 18.1 12.5h3.8L29 27.5h-4.2l-1.4-3.2h-7l-1.4 3.2H11Z" fill="currentColor"/>
+          <path d="M18 20.9h4" stroke="#212121" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="29" cy="11" r="3" fill="var(--accent)"/>
+        </svg>
+      </div>
+      <div class="brand-copy">
+        <h1>ADA-M</h1>
+        <div class="brand-caption">Seu espaço de inteligência</div>
+      </div>
+      <div class="status"><span class="status-dot"></span><span>Pronto para conversar</span></div>
     </header>
     <section id="messages" aria-live="polite">
     </section>
