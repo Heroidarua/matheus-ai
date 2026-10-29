@@ -105,6 +105,15 @@ def require_app_key(x_app_key: str | None = Header(default=None)) -> None:
         raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
 
 
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/")
 async def home() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
