@@ -283,7 +283,6 @@
         <span class="header-divider"></span>
         <span class="header-edition">SEU ASSISTENTE</span>
       </div>
-      <button id="install-app" class="install-app-button" type="button" aria-label="Instalar ADA-M" title="Instalar ADA-M">Instalar</button>
     </header>
     <section id="messages" aria-live="polite">
     </section>
@@ -917,34 +916,7 @@
   </script>
   <script>
     (() => {
-      const installButton = document.getElementById('install-app');
-      let installPrompt = null;
 
-      window.addEventListener('beforeinstallprompt', event => {
-        event.preventDefault();
-        installPrompt = event;
-        installButton.hidden = false;
-        installButton.textContent = 'Instalar';
-      });
-
-      window.addEventListener('appinstalled', () => {
-        installPrompt = null;
-        installButton.textContent = 'Instalado';
-        installButton.disabled = true;
-      });
-
-      installButton.addEventListener('click', async () => {
-        if (!installPrompt) {
-          const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-          alert(isIOS
-            ? 'Para instalar: toque em Compartilhar e escolha “Adicionar à Tela de Início”.'
-            : 'Para instalar o ADA-M, abra o menu ⋮ do Chrome e escolha “Instalar app” ou “Adicionar à tela inicial”.');
-          return;
-        }
-        installPrompt.prompt();
-        await installPrompt.userChoice;
-        installPrompt = null;
-      });
 
       if ('serviceWorker' in navigator && location.protocol === 'https:') {
         window.addEventListener('load', () => {
