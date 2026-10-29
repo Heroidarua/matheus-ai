@@ -148,6 +148,12 @@
     .tool-btn,.quick button { border-radius:18px; }
     .assistant-content { line-height:1.75; letter-spacing:0; }
     .assistant-content pre { background:#171717; border-radius:12px; }
+    .code-block{position:relative;margin:12px 0;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#171717;}
+    body.light-theme .code-block{background:#f4f4f4;}
+    .code-block pre{margin:0;border:0;border-radius:0;padding:42px 14px 14px;}
+    .code-copy-button{position:absolute;top:7px;right:7px;z-index:1;display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:500;}
+    .code-copy-button:hover{background:#454545;}
+    body.light-theme .code-copy-button:hover{background:#dedede;}
     .hint { font-size:11px; }
     body.light-theme .assistant-content pre { background:#f4f4f4; }
     @media(max-width:520px) {
@@ -598,8 +604,34 @@
       }
     }
 
+    function addCodeCopyButtons(root) {
+      root.querySelectorAll('pre').forEach(pre => {
+        if (pre.parentElement?.classList.contains('code-block')) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block';
+        const copyButton = document.createElement('button');
+        copyButton.type = 'button';
+        copyButton.className = 'code-copy-button';
+        copyButton.textContent = 'Copiar código';
+        copyButton.setAttribute('aria-label', 'Copiar código');
+        copyButton.addEventListener('click', async () => {
+          const code = pre.querySelector('code')?.textContent || pre.textContent || '';
+          try {
+            await navigator.clipboard.writeText(code);
+            copyButton.textContent = 'Copiado!';
+            copyButton.setAttribute('aria-label', 'Código copiado');
+          } catch {
+            copyButton.textContent = 'Falha ao copiar';
+          }
+        });
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.append(copyButton, pre);
+      });
+    }
+
     function displayAssistantReply(bubble, text, sources = []) {
       const rendered = renderMarkdown(text);
+      addCodeCopyButtons(rendered);
       linkCitationReferences(rendered, sources);
       bubble.replaceChildren(rendered);
       const actions = document.createElement('div');
