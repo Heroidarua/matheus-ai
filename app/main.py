@@ -921,7 +921,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         "messages": messages,
         "temperature": 0.6,
         "reasoning_effort": "low",
-        "max_tokens": 2400,
+        "max_tokens": 8192,
     }
 
     if request.stream:
@@ -1025,10 +1025,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # algumas vezes e concatene o texto, sem descartar o conteúdo já gerado.
         finish_reason = choices[0].get("finish_reason")
         continuations = 0
-        while finish_reason == "length" and continuations < 2:
+        while finish_reason == "length" and continuations < 5:
             continuations += 1
             continuation_payload = dict(payload)
-            continuation_payload["max_tokens"] = 1400
+            continuation_payload["max_tokens"] = 8192
             continuation_payload["messages"] = messages + [
                 {"role": "assistant", "content": reply},
                 {"role": "user", "content": "Continue exatamente de onde parou. Não repita o que já escreveu e conclua a resposta."},
