@@ -21,6 +21,7 @@
     .web-sources ol { padding-left:22px;margin:7px 0 0; }
     .web-sources li { margin:8px 0; }
     .web-sources a { color:var(--accent);overflow-wrap:anywhere; }
+    .inline-source-link { font-weight:600;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px; }
     .web-sources p { margin:3px 0 0;color:var(--muted);font-size:12px; }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; justify-content:center; }
@@ -566,8 +567,8 @@
       parent.appendChild(document.createTextNode(text.slice(cursor)));
     }
 
-    // Converte referências numéricas como [1] ou [1, 2] em links para as fontes
-    // correspondentes, sem interpretar HTML fornecido pelo modelo.
+    // Troca marcadores [1] ou [1, 2] pelos nomes reais das fontes, com links diretos.
+    // Ex.: [1] vira o título da página de origem, clicável no próprio texto.
     function linkCitationReferences(root, sources = []) {
       if (!Array.isArray(sources) || !sources.length) return;
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -575,9 +576,9 @@
       while (walker.nextNode()) {
         const node = walker.currentNode;
         if (node.parentElement?.closest('a, code, pre, script, style')) continue;
-        if (/\[\d+(?:\s*,\s*\d+)*\]/.test(node.nodeValue || '')) textNodes.push(node);
+        if (/\\[\\d+(?:\\s*,\\s*\\d+)*\\]/.test(node.nodeValue || '')) textNodes.push(node);
       }
-      const citationPattern = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+      const citationPattern = /\\[(\\d+(?:\\s*,\\s*\\d+)*)\\]/g;
       for (const textNode of textNodes) {
         const value = textNode.nodeValue || '';
         const fragment = document.createDocumentFragment();
@@ -586,22 +587,23 @@
         while ((match = citationPattern.exec(value)) !== null) {
           fragment.appendChild(document.createTextNode(value.slice(cursor, match.index)));
           const numbers = match[1].split(',').map(number => Number(number.trim()));
-          let linkedAny = false;
           numbers.forEach((number, index) => {
             if (index) fragment.appendChild(document.createTextNode(', '));
             const source = sources[number - 1];
-            if (source && typeof source.url === 'string' && /^https?:\/\//i.test(source.url)) {
+            if (source && typeof source.url === 'string' && /^https?:\\/\\//i.test(source.url)) {
               const link = document.createElement('a');
               link.href = source.url;
               link.target = '_blank';
               link.rel = 'noopener noreferrer';
-              link.textContent = '[' + number + ']';
-              link.title = source.title || source.url;
-              link.setAttribute('aria-label', 'Abrir fonte ' + number + ': ' + (source.title || source.url));
+              let fallbackTitle = source.url;
+              try { fallbackTitle = new URL(source.url).hostname.replace(/^www\\./i, ''); } catch {}
+              link.textContent = source.title || fallbackTitle;
+              link.title = source.title ? source.title + ' — ' + source.url : source.url;
+              link.setAttribute('aria-label', 'Abrir fonte: ' + (source.title || fallbackTitle));
+              link.className = 'inline-source-link';
               fragment.appendChild(link);
-              linkedAny = true;
             } else {
-              fragment.appendChild(document.createTextNode('[' + number + ']'));
+              fragment.appendChild(document.createTextNode('referência ' + number));
             }
           });
           cursor = match.index + match[0].length;
