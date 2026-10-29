@@ -437,24 +437,70 @@
       window.speechSynthesis.addEventListener('voiceschanged', choosePortugueseVoice);
     }
 
-    function speakText(text) {
-      if (!('speechSynthesis' in window)) { voiceStatus.textContent = 'Leitura de voz não suportada neste navegador.'; return; }
-      window.speechSynthesis.cancel();
+    let activeNeuralAudio = null;
+    let activeNeuralAudioUrl = null;
+
+    async function speakText(text) {
       const cleanText = String(text)
-        .replace(/```[\s\S]*?```/g, ' bloco de código omitido ')
-        .replace(/https?:\/\/\S+/g, ' link ')
-        .replace(/[\*_#>~|]/g, ' ')
-        .replace(/\s+/g, ' ')
+        .replace(/```[\\s\\S]*?```/g, ' bloco de código omitido ')
+        .replace(/https?:\\/\\/\\S+/g, ' link ')
+        .replace(/[\\*_#>~|]/g, ' ')
+        .replace(/\\s+/g, ' ')
         .trim();
       if (!cleanText) return;
+
+      if (activeNeuralAudio) {
+        activeNeuralAudio.pause();
+        activeNeuralAudio = null;
+      }
+      if (activeNeuralAudioUrl) {
+        URL.revokeObjectURL(activeNeuralAudioUrl);
+        activeNeuralAudioUrl = null;
+      }
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+
+      try {
+        voiceStatus.textContent = 'Preparando voz neural…';
+        const response = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+          body: JSON.stringify({ text: cleanText })
+        });
+        if (!response.ok) throw new Error('Neural TTS indisponível');
+        const audioBlob = await response.blob();
+        if (!audioBlob.size) throw new Error('Áudio vazio');
+        activeNeuralAudioUrl = URL.createObjectURL(audioBlob);
+        activeNeuralAudio = new Audio(activeNeuralAudioUrl);
+        activeNeuralAudio.onended = () => {
+          voiceStatus.textContent = '';
+          if (activeNeuralAudioUrl) URL.revokeObjectURL(activeNeuralAudioUrl);
+          activeNeuralAudio = null;
+          activeNeuralAudioUrl = null;
+        };
+        activeNeuralAudio.onerror = () => {
+          voiceStatus.textContent = 'Não foi possível reproduzir o áudio.';
+        };
+        voiceStatus.textContent = 'Lendo com voz neural…';
+        await activeNeuralAudio.play();
+        return;
+      } catch (error) {
+        if (activeNeuralAudioUrl) URL.revokeObjectURL(activeNeuralAudioUrl);
+        activeNeuralAudio = null;
+        activeNeuralAudioUrl = null;
+      }
+
+      if (!('speechSynthesis' in window)) {
+        voiceStatus.textContent = 'Configure o serviço de voz neural no servidor para ouvir as respostas.';
+        return;
+      }
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'pt-BR';
-      utterance.rate = 0.96;
-      utterance.pitch = 1.02;
+      utterance.rate = 0.94;
+      utterance.pitch = 0.98;
       utterance.volume = 1;
       const voice = preferredPortugueseVoice || choosePortugueseVoice();
       if (voice) utterance.voice = voice;
-      utterance.onstart = () => { voiceStatus.textContent = voice ? `Lendo com a voz ${voice.name}.` : 'Lendo com a voz disponível no dispositivo.'; };
+      utterance.onstart = () => { voiceStatus.textContent = 'Lendo com a voz do dispositivo (fallback).'; };
       utterance.onend = () => { voiceStatus.textContent = ''; };
       utterance.onerror = () => { voiceStatus.textContent = 'Não foi possível reproduzir a voz.'; };
       window.speechSynthesis.speak(utterance);
