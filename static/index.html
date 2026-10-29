@@ -220,7 +220,7 @@
   <main class="app">
     <header>
       <div class="logo" aria-hidden="true">M</div>
-      <div><h1>ADA-M <span id="mode-badge" class="mode-badge">Modo normal</span></h1></div>
+      <div><h1>ADA-M <span id="mode-badge" class="mode-badge">Modo Livre</span></h1></div>
       <div class="status">● pronto para conversar</div>
     </header>
     <section id="messages" aria-live="polite">
@@ -255,14 +255,6 @@
           <details class="settings-drawer">
             <summary>Preferências</summary>
             <div class="settings-grid">
-              <label class="field-label" for="response-mode">Modo de resposta
-                <select id="response-mode" aria-label="Modo de resposta">
-                  <option value="normal">Geral</option>
-                  <option value="programador">Programador</option>
-                  <option value="estudo">Estudo</option>
-                  <option value="criativo">Criativo</option>
-                </select>
-              </label>
               <label class="field-label" for="response-length">Tamanho da resposta
                 <select id="response-length" aria-label="Tamanho da resposta">
                   <option value="curta">Curta</option>
@@ -271,7 +263,6 @@
                 </select>
               </label>
               <label class="mode-toggle web-search-toggle"><input id="web-search-toggle" type="checkbox" checked> <span>Pesquisar na internet e citar fontes</span></label>
-              <label class="mode-toggle free-mode-toggle"><input id="free-mode" type="checkbox"> <span>Modo livre</span></label>
               <label class="mode-toggle voice-conversation-toggle"><input id="voice-conversation-toggle" type="checkbox"> <span>Ler respostas automaticamente em voz alta</span></label>
               <button class="tool-btn theme-button" type="button" id="theme-button">Tema claro</button>
             </div>
@@ -291,20 +282,13 @@
     const photoInput = document.getElementById('photo-input');
     const fileInput = document.getElementById('file-input');
     const selectedFilesEl = document.getElementById('selected-files');
-    const freeModeToggle = document.getElementById('free-mode');
     const modeBadge = document.getElementById('mode-badge');
-    const responseMode = document.getElementById('response-mode');
+    modeBadge.textContent = 'Modo Livre';
     const responseLength = document.getElementById('response-length');
     const webSearchToggle = document.getElementById('web-search-toggle');
     const stopButton = document.getElementById('stop-button');
     const voiceStatus = document.getElementById('voice-status');
     let activeController = null;
-    function updateModeBadge() {
-      modeBadge.textContent = freeModeToggle.checked ? 'Modo Livre' :
-        ({normal:'Modo geral',programador:'Programador',estudo:'Estudo',criativo:'Criativo'}[responseMode.value] || 'Modo geral');
-    }
-    freeModeToggle.addEventListener('change', updateModeBadge);
-    responseMode.addEventListener('change', updateModeBadge);
     document.getElementById('theme-button').addEventListener('click', () => {
       document.body.classList.toggle('light-theme');
       const light = document.body.classList.contains('light-theme');
@@ -780,7 +764,7 @@
           method: 'POST',
           signal: activeController.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, mode: freeModeToggle.checked ? "livre" : responseMode.value, response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true })
+          body: JSON.stringify({ messages: history, mode: "livre", response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true })
         });
         if (!response.ok) {
           const failureText = await response.text();
