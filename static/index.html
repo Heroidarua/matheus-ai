@@ -384,9 +384,11 @@
     });
     document.getElementById('stop-button').addEventListener('click', () => {
       if (activeController) activeController.abort();
+      stopNeuralSpeech();
     });
     document.getElementById('new-chat-button').addEventListener('click', () => {
       if (activeController) activeController.abort();
+      stopNeuralSpeech();
       history.splice(0, history.length);
       messagesEl.replaceChildren();
       promptEl.value = '';
@@ -421,6 +423,7 @@
     let speechRequestId = 0;
     let speechQueue = Promise.resolve();
     let speechBuffer = '';
+    let activeSpeechController = null;
     let nextAudioTime = 0;
     const scheduledSpeechSources = new Set();
 
@@ -434,6 +437,7 @@
       speechRequestId += 1;
       speechBuffer = '';
       speechQueue = Promise.resolve();
+      if (activeSpeechController) { activeSpeechController.abort(); activeSpeechController = null; }
       for (const source of scheduledSpeechSources) { try { source.stop(); } catch {} }
       scheduledSpeechSources.clear();
       if (audioContext) nextAudioTime = audioContext.currentTime;
@@ -455,10 +459,13 @@
 
     async function playSpeechStream(text, requestId) {
       const ctx = getAudioContext();
+      const controller = new AbortController();
+      activeSpeechController = controller;
       const response = await fetch('/api/tts/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
         body: JSON.stringify({ text }),
+        signal: controller.signal,
         cache: 'no-store'
       });
       if (!response.ok || !response.body) {
@@ -501,7 +508,10 @@
         }
         buffer += decoder.decode();
         if (buffer.trim() && requestId === speechRequestId) await playEvent(buffer);
-      } finally { reader.releaseLock(); }
+      } finally {
+        reader.releaseLock();
+        if (activeSpeechController === controller) activeSpeechController = null;
+      }
     }
 
     function feedSpeechToken(token) {
