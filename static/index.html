@@ -634,7 +634,9 @@
           continue;
         }
         if (codeLines !== null) { codeLines.push(line); continue; }
-        if (!line.trim()) { flushParagraph(); flushList(); continue; }
+        // Linhas em branco não encerram a lista: itens numerados separados
+        // por espaçamento continuam na mesma <ol>, mantendo a numeração.
+        if (!line.trim()) { flushParagraph(); continue; }
         const heading = line.match(/^(#{1,3})\s+(.+)$/);
         if (heading) {
           flushParagraph(); flushList();
