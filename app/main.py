@@ -45,10 +45,6 @@ MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
 MAX_KNOWLEDGE_FILES = 100
 MAX_RETRIEVED_CHUNKS = 4
 APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
-TTS_API_BASE_URL = os.getenv("TTS_API_BASE_URL", "https://matheus-kokoro-tts.onrender.com/v1").strip().rstrip("/")
-TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
-TTS_MODEL = os.getenv("TTS_MODEL", "kokoro").strip()
-TTS_VOICE = os.getenv("TTS_VOICE", "pm_alex").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
@@ -126,123 +122,6 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
-
-class SpeechRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=5000)
-
-
-@app.post("/api/tts")
-async def generate_speech(request: SpeechRequest) -> Response:
-    """Gera fala natural via um servidor TTS OpenAI-compatible configurado por variável de ambiente."""
-    if not TTS_API_BASE_URL:
-        raise HTTPException(
-            status_code=503,
-            detail="A voz neural ainda não foi configurada. Defina TTS_API_BASE_URL no ambiente do servidor.",
-        )
-    headers = {"Accept": "audio/wav", "Content-Type": "application/json"}
-    if TTS_API_KEY:
-        headers["Authorization"] = f"Bearer {TTS_API_KEY}"
-    payload = {
-        "model": TTS_MODEL,
-        "input": request.text,
-        "voice": TTS_VOICE,
-        "response_format": "wav",
-        "speed": 0.96,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as client:
-            response = await client.post(
-                f"{TTS_API_BASE_URL}/audio/speech",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-        content_type = response.headers.get("content-type", "audio/mpeg").split(";")[0]
-        if not content_type.startswith("audio/"):
-            raise HTTPException(status_code=502, detail="O serviço de voz não retornou um arquivo de áudio válido.")
-        return Response(
-            content=response.content,
-            media_type=content_type,
-            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
-        )
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="A geração da voz demorou demais. Tente novamente.")
-    except httpx.HTTPStatusError as exc:
-        print(f"TTS provider HTTP {exc.response.status_code}: {exc.response.text[:300]}")
-        raise HTTPException(status_code=502, detail="O serviço de voz neural retornou um erro.")
-    except httpx.HTTPError as exc:
-        print(f"TTS provider connection error: {type(exc).__name__}")
-        raise HTTPException(status_code=502, detail="Não foi possível conectar ao serviço de voz neural.")
-
-
-@app.post("/api/tts/stream")
-async def stream_speech(request: SpeechRequest):
-    """Encaminha os eventos de áudio Kokoro sem esperar o WAV completo."""
-    if not TTS_API_BASE_URL:
-        raise HTTPException(status_code=503, detail="Serviço de voz neural não configurado.")
-    headers = {"Accept": "text/event-stream", "Content-Type": "application/json"}
-    if TTS_API_KEY:
-        headers["Authorization"] = f"Bearer {TTS_API_KEY}"
-    payload = {
-        "model": TTS_MODEL,
-        "input": request.text,
-        "voice": TTS_VOICE,
-        "response_format": "wav",
-        "speed": 0.96,
-    }
-
-    async def relay_audio():
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=8.0)) as client:
-                async with client.stream(
-                    "POST",
-                    f"{TTS_API_BASE_URL}/audio/speech/stream",
-                    headers=headers,
-                    json=payload,
-                ) as upstream:
-                    if upstream.status_code >= 400:
-                        body = (await upstream.aread()).decode("utf-8", errors="replace")[:300]
-                        yield "event: error\ndata: " + json.dumps({"detail": f"Serviço TTS HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
-                        return
-                    async for line in upstream.aiter_lines():
-                        if line.startswith("data:") or line.startswith("event:"):
-                            yield line + "\n"
-                        elif not line:
-                            yield "\n"
-        except httpx.TimeoutException:
-            yield "event: error\ndata: " + json.dumps({"detail": "A geração de voz excedeu o tempo limite."}, ensure_ascii=False) + "\n\n"
-        except httpx.HTTPError:
-            yield "event: error\ndata: " + json.dumps({"detail": "Não foi possível conectar ao serviço de voz."}, ensure_ascii=False) + "\n\n"
-
-    return StreamingResponse(
-        relay_audio(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.get("/api/tts/warmup")
-async def warmup_tts() -> dict[str, str]:
-    """Acorda o serviço neural configurado e confirma a voz ativa."""
-    if not TTS_API_BASE_URL:
-        raise HTTPException(status_code=503, detail="Serviço TTS não configurado.")
-    health_base = TTS_API_BASE_URL[:-3] if TTS_API_BASE_URL.endswith("/v1") else TTS_API_BASE_URL
-    health_url = health_base.rstrip("/") + "/health"
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=8.0)) as client:
-            response = await client.get(health_url, headers={"Accept": "application/json"})
-            response.raise_for_status()
-            health = response.json()
-        if health.get("status") != "ok":
-            raise HTTPException(status_code=503, detail="O serviço neural ainda está inicializando.")
-        return {"status": "ready", "service": health.get("engine", TTS_MODEL), "voice": health.get("voice", TTS_VOICE), "language": health.get("language", "pt-BR")}
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="O serviço neural ainda está acordando.")
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"Serviço neural respondeu HTTP {exc.response.status_code}.")
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Não foi possível alcançar o serviço neural.")
-
 
 @app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
 async def diagnostics() -> dict[str, Any]:
