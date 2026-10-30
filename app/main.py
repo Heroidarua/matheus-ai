@@ -45,10 +45,10 @@ MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
 MAX_KNOWLEDGE_FILES = 100
 MAX_RETRIEVED_CHUNKS = 4
 APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
-TTS_API_BASE_URL = os.getenv("TTS_API_BASE_URL", "").strip().rstrip("/")
+TTS_API_BASE_URL = os.getenv("TTS_API_BASE_URL", "https://matheus-kokoro-tts.onrender.com/v1").strip().rstrip("/")
 TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
-TTS_MODEL = os.getenv("TTS_MODEL", "tts-1").strip()
-TTS_VOICE = os.getenv("TTS_VOICE", "pm_alex").strip()
+TTS_MODEL = os.getenv("TTS_MODEL", "piper").strip()
+TTS_VOICE = os.getenv("TTS_VOICE", "pt_BR-faber-medium").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
@@ -139,14 +139,14 @@ async def generate_speech(request: SpeechRequest) -> Response:
             status_code=503,
             detail="A voz neural ainda não foi configurada. Defina TTS_API_BASE_URL no ambiente do servidor.",
         )
-    headers = {"Accept": "audio/mpeg", "Content-Type": "application/json"}
+    headers = {"Accept": "audio/wav", "Content-Type": "application/json"}
     if TTS_API_KEY:
         headers["Authorization"] = f"Bearer {TTS_API_KEY}"
     payload = {
         "model": TTS_MODEL,
         "input": request.text,
         "voice": TTS_VOICE,
-        "response_format": "mp3",
+        "response_format": "wav",
         "speed": 0.96,
     }
     try:
