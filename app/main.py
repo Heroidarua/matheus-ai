@@ -924,12 +924,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
         messages.append({"role": message.role, "content": provider_content(message.content)})
 
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    # Limites adaptativos reduzem a geração excessiva e aceleram respostas longas.
+    max_output_tokens = {"curta": 512, "normal": 1536, "detalhada": 3072}.get(request.response_length, 1536)
     payload: dict[str, Any] = {
         "model": MODEL_NAME,
         "messages": messages,
         "temperature": 0.6,
         "reasoning_effort": "low",
-        "max_tokens": 8192,
+        "max_tokens": max_output_tokens,
     }
 
     if request.stream:
