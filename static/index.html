@@ -419,82 +419,93 @@
 
     let preferredPortugueseVoice = null;
 
-    function choosePortugueseVoice() {
-      if (!('speechSynthesis' in window)) return null;
-      const voices = window.speechSynthesis.getVoices();
-      const portuguese = voices.filter(voice => /^pt[-_]br$/i.test(voice.lang));
-      const pool = portuguese.length ? portuguese : voices.filter(voice => /^pt([-_]|$)/i.test(voice.lang));
-      const naturalVoiceHints = /google|natural|neural|francisca|luciana|antonio|antônio|brasil/i;
-      preferredPortugueseVoice =
-        pool.find(voice => naturalVoiceHints.test(voice.name) && !/compact|espeak|festival/i.test(voice.name)) ||
-        pool.find(voice => !/compact|espeak|festival|robot/i.test(voice.name)) ||
-        pool[0] || null;
-      return preferredPortugueseVoice;
-    }
-
-    if ('speechSynthesis' in window) {
-      choosePortugueseVoice();
-      window.speechSynthesis.addEventListener('voiceschanged', choosePortugueseVoice);
-    }
-
     let activeNeuralAudio = null;
     let activeNeuralAudioUrl = null;
 
-    function speakText(text) {
-      const cleanText = String(text)
-        .replace(/```[\s\S]*?```/g, ' bloco de código omitido ')
-        .replace(/https?:\/\/\S+/g, ' link ')
-        .replace(/[*_#>~|]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+    let speechRequestId = 0;
 
-      if (!cleanText) {
-        voiceStatus.textContent = 'Não há texto para ler.';
-        return;
+    function splitSpeechText(text, maxLength = 2600) {
+      const chunks = [];
+      let remaining = text.trim();
+      while (remaining.length > maxLength) {
+        let cut = remaining.lastIndexOf('. ', maxLength);
+        if (cut < maxLength * 0.55) cut = remaining.lastIndexOf('! ', maxLength);
+        if (cut < maxLength * 0.55) cut = remaining.lastIndexOf('? ', maxLength);
+        if (cut < maxLength * 0.55) cut = remaining.lastIndexOf(' ', maxLength);
+        if (cut < 1) cut = maxLength;
+        else if (remaining[cut] === '.' || remaining[cut] === '!' || remaining[cut] === '?') cut += 1;
+        chunks.push(remaining.slice(0, cut).trim());
+        remaining = remaining.slice(cut).trim();
       }
+      if (remaining) chunks.push(remaining);
+      return chunks.filter(Boolean);
+    }
 
-      // A leitura começa localmente no navegador: não espera Render, Piper,
-      // geração do WAV ou download do áudio.
-      if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
-        voiceStatus.textContent = 'Este navegador não oferece leitura em voz alta.';
-        return;
-      }
-
+    function stopNeuralSpeech() {
+      speechRequestId += 1;
       if (activeNeuralAudio) {
         activeNeuralAudio.pause();
+        activeNeuralAudio.removeAttribute('src');
+        activeNeuralAudio.load();
         activeNeuralAudio = null;
       }
       if (activeNeuralAudioUrl) {
         URL.revokeObjectURL(activeNeuralAudioUrl);
         activeNeuralAudioUrl = null;
       }
+    }
 
-      const synth = window.speechSynthesis;
-      synth.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'pt-BR';
-      utterance.rate = 0.96;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-
-      const voice = preferredPortugueseVoice || choosePortugueseVoice();
-      if (voice) utterance.voice = voice;
-
-      utterance.onstart = () => {
-        voiceStatus.textContent = 'Lendo em voz alta…';
-      };
-      utterance.onend = () => {
-        voiceStatus.textContent = '';
-      };
-      utterance.onerror = event => {
-        voiceStatus.textContent = 'Falha ao iniciar a leitura: ' + (event.error || 'erro desconhecido');
-      };
-
-      // Chamada síncrona no clique para respeitar a ativação do usuário.
-      synth.speak(utterance);
-      if (synth.paused) synth.resume();
-      voiceStatus.textContent = 'Iniciando leitura…';
+    async function speakText(text) {
+      const cleanText = String(text)
+        .replace(/\`\`\`[\s\S]*?\`\`\`/g, ' bloco de código omitido ')
+        .replace(/https?:\/\/\S+/g, ' link ')
+        .replace(/[*_#>~|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!cleanText) { voiceStatus.textContent = 'Não há texto para ler.'; return; }
+      stopNeuralSpeech();
+      const requestId = speechRequestId;
+      const chunks = splitSpeechText(cleanText);
+      voiceStatus.textContent = 'Preparando voz neural masculina…';
+      try {
+        for (let index = 0; index < chunks.length; index += 1) {
+          if (requestId !== speechRequestId) return;
+          const response = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'audio/wav' },
+            body: JSON.stringify({ text: chunks[index] }),
+            cache: 'no-store'
+          });
+          if (!response.ok) {
+            const detail = await response.json().catch(() => ({}));
+            throw new Error(detail.detail || 'Não foi possível gerar o áudio neural.');
+          }
+          const audioBlob = await response.blob();
+          if (!audioBlob.size || requestId !== speechRequestId) return;
+          const audioUrl = URL.createObjectURL(audioBlob);
+          activeNeuralAudioUrl = audioUrl;
+          const audio = new Audio(audioUrl);
+          activeNeuralAudio = audio;
+          voiceStatus.textContent = chunks.length > 1 ? 'Reproduzindo voz neural… (' + (index + 1) + '/' + chunks.length + ')' : 'Reproduzindo voz neural…';
+          await new Promise((resolve, reject) => {
+            audio.onended = resolve;
+            audio.onerror = () => reject(new Error('O navegador não conseguiu reproduzir o áudio recebido.'));
+            audio.play().catch(reject);
+          });
+          if (requestId !== speechRequestId) return;
+          audio.removeAttribute('src');
+          audio.load();
+          URL.revokeObjectURL(audioUrl);
+          if (activeNeuralAudioUrl === audioUrl) activeNeuralAudioUrl = null;
+          if (activeNeuralAudio === audio) activeNeuralAudio = null;
+        }
+        if (requestId === speechRequestId) voiceStatus.textContent = '';
+      } catch (error) {
+        if (requestId !== speechRequestId) return;
+        stopNeuralSpeech();
+        voiceStatus.textContent = 'Voz neural indisponível: ' + (error?.message || 'falha na reprodução');
+        console.error('[ADA-M] Falha na voz neural:', error);
+      }
     }
 
     let ttsWarmupInFlight = false;
@@ -509,18 +520,18 @@
         });
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
-          console.info('[Matheus AI] Piper ainda inicializando:', detail.detail || response.status);
+          console.info('[Matheus AI] Kokoro ainda inicializando:', detail.detail || response.status);
         } else {
-          console.info('[Matheus AI] Serviço Piper aquecido e pronto.');
+          console.info('[Matheus AI] Serviço Kokoro aquecido e pronto.');
         }
       } catch (error) {
-        console.info('[Matheus AI] Aquecimento do Piper será tentado novamente:', error?.message || error);
+        console.info('[Matheus AI] Aquecimento do Kokoro será tentado novamente:', error?.message || error);
       } finally {
         ttsWarmupInFlight = false;
       }
     }
 
-    // Acorda o Piper ao abrir a ADA-M, antes de o usuário pedir a leitura.
+    // Acorda o Kokoro ao abrir a ADA-M, antes de o usuário pedir a leitura.
     void warmupTTS();
     // Mantém o serviço ativo enquanto a página estiver aberta.
     setInterval(() => { if (!document.hidden) void warmupTTS(); }, 10 * 60 * 1000);
