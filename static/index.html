@@ -463,7 +463,7 @@
         voiceStatus.textContent = 'Preparando voz neural…';
         const response = await fetch('/api/tts', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'audio/wav' },
           body: JSON.stringify({ text: cleanText })
         });
         if (!response.ok) throw new Error('Neural TTS indisponível');
