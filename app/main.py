@@ -202,17 +202,17 @@ async def stream_speech(request: SpeechRequest):
                 ) as upstream:
                     if upstream.status_code >= 400:
                         body = (await upstream.aread()).decode("utf-8", errors="replace")[:300]
-                        yield "event: error\\ndata: " + json.dumps({"detail": f"Serviço TTS HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                        yield "event: error\ndata: " + json.dumps({"detail": f"Serviço TTS HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
                         return
                     async for line in upstream.aiter_lines():
                         if line.startswith("data:") or line.startswith("event:"):
-                            yield line + "\\n"
+                            yield line + "\n"
                         elif not line:
-                            yield "\\n"
+                            yield "\n"
         except httpx.TimeoutException:
-            yield "event: error\\ndata: " + json.dumps({"detail": "A geração de voz excedeu o tempo limite."}, ensure_ascii=False) + "\\n\\n"
+            yield "event: error\ndata: " + json.dumps({"detail": "A geração de voz excedeu o tempo limite."}, ensure_ascii=False) + "\n\n"
         except httpx.HTTPError:
-            yield "event: error\\ndata: " + json.dumps({"detail": "Não foi possível conectar ao serviço de voz."}, ensure_ascii=False) + "\\n\\n"
+            yield "event: error\ndata: " + json.dumps({"detail": "Não foi possível conectar ao serviço de voz."}, ensure_ascii=False) + "\n\n"
 
     return StreamingResponse(
         relay_audio(),
