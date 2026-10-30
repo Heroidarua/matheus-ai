@@ -442,10 +442,10 @@
 
     function speakText(text) {
       const cleanText = String(text)
-        .replace(/```[\\s\\S]*?```/g, ' bloco de código omitido ')
-        .replace(/https?:\\/\\/\\S+/g, ' link ')
+        .replace(/```[\s\S]*?```/g, ' bloco de código omitido ')
+        .replace(/https?:\/\/\S+/g, ' link ')
         .replace(/[*_#>~|]/g, ' ')
-        .replace(/\\s+/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
 
       if (!cleanText) {
