@@ -546,6 +546,38 @@
       }
     }
 
+
+    let ttsWarmupInFlight = false;
+    async function warmupTTS() {
+      if (ttsWarmupInFlight || document.hidden) return;
+      ttsWarmupInFlight = true;
+      try {
+        const response = await fetch('/api/tts/warmup', {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
+        });
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          console.info('[Matheus AI] Piper ainda inicializando:', detail.detail || response.status);
+        } else {
+          console.info('[Matheus AI] Serviço Piper aquecido e pronto.');
+        }
+      } catch (error) {
+        console.info('[Matheus AI] Aquecimento do Piper será tentado novamente:', error?.message || error);
+      } finally {
+        ttsWarmupInFlight = false;
+      }
+    }
+
+    // Acorda o Piper ao abrir a ADA-M, antes de o usuário pedir a leitura.
+    void warmupTTS();
+    // Mantém o serviço ativo enquanto a página estiver aberta.
+    setInterval(() => { if (!document.hidden) void warmupTTS(); }, 10 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) void warmupTTS();
+    });
+
     async function loadDiagnostics() {
       const panel = document.getElementById('diagnostics-panel');
       panel.hidden = false;
