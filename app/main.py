@@ -175,6 +175,52 @@ async def generate_speech(request: SpeechRequest) -> Response:
         raise HTTPException(status_code=502, detail="Não foi possível conectar ao serviço de voz neural.")
 
 
+@app.post("/api/tts/stream")
+async def stream_speech(request: SpeechRequest):
+    """Encaminha os eventos de áudio Kokoro sem esperar o WAV completo."""
+    if not TTS_API_BASE_URL:
+        raise HTTPException(status_code=503, detail="Serviço de voz neural não configurado.")
+    headers = {"Accept": "text/event-stream", "Content-Type": "application/json"}
+    if TTS_API_KEY:
+        headers["Authorization"] = f"Bearer {TTS_API_KEY}"
+    payload = {
+        "model": TTS_MODEL,
+        "input": request.text,
+        "voice": TTS_VOICE,
+        "response_format": "wav",
+        "speed": 0.96,
+    }
+
+    async def relay_audio():
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=8.0)) as client:
+                async with client.stream(
+                    "POST",
+                    f"{TTS_API_BASE_URL}/audio/speech/stream",
+                    headers=headers,
+                    json=payload,
+                ) as upstream:
+                    if upstream.status_code >= 400:
+                        body = (await upstream.aread()).decode("utf-8", errors="replace")[:300]
+                        yield "event: error\\ndata: " + json.dumps({"detail": f"Serviço TTS HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                        return
+                    async for line in upstream.aiter_lines():
+                        if line.startswith("data:") or line.startswith("event:"):
+                            yield line + "\\n"
+                        elif not line:
+                            yield "\\n"
+        except httpx.TimeoutException:
+            yield "event: error\\ndata: " + json.dumps({"detail": "A geração de voz excedeu o tempo limite."}, ensure_ascii=False) + "\\n\\n"
+        except httpx.HTTPError:
+            yield "event: error\\ndata: " + json.dumps({"detail": "Não foi possível conectar ao serviço de voz."}, ensure_ascii=False) + "\\n\\n"
+
+    return StreamingResponse(
+        relay_audio(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.get("/api/tts/warmup")
 async def warmup_tts() -> dict[str, str]:
     """Acorda o serviço neural configurado e confirma a voz ativa."""
