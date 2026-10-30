@@ -384,11 +384,11 @@
     });
     document.getElementById('stop-button').addEventListener('click', () => {
       if (activeController) activeController.abort();
-      stopNeuralSpeech();
+      stopBrowserSpeech();
     });
     document.getElementById('new-chat-button').addEventListener('click', () => {
       if (activeController) activeController.abort();
-      stopNeuralSpeech();
+      stopBrowserSpeech();
       history.splice(0, history.length);
       messagesEl.replaceChildren();
       promptEl.value = '';
@@ -419,114 +419,54 @@
     });
 
 
-    let audioContext = null;
-    let audioUnlockPromise = Promise.resolve();
-    let speechRequestId = 0;
-    let speechQueue = Promise.resolve();
+    // Leitura de respostas usando exclusivamente a voz nativa do navegador.
     let speechBuffer = '';
-    let activeSpeechController = null;
-    let nextAudioTime = 0;
-    const scheduledSpeechSources = new Set();
 
-    function getAudioContext() {
-      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      // Chame esta função diretamente no clique do usuário para respeitar a política
-      // de autoplay do navegador antes de iniciar qualquer fila assíncrona.
-      if (audioContext.state === 'suspended') {
-        audioUnlockPromise = audioContext.resume().catch(error => {
-          console.warn('[ADA-M] O navegador não liberou o áudio:', error);
-          throw error;
-        });
-      }
-      return audioContext;
-    }
-
-    function stopNeuralSpeech() {
-      speechRequestId += 1;
+    function stopBrowserSpeech() {
       speechBuffer = '';
-      speechQueue = Promise.resolve();
-      if (activeSpeechController) { activeSpeechController.abort(); activeSpeechController = null; }
-      for (const source of scheduledSpeechSources) { try { source.stop(); } catch {} }
-      scheduledSpeechSources.clear();
-      if (audioContext) nextAudioTime = audioContext.currentTime;
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     }
 
-    function queueSpeech(text, requestId = speechRequestId) {
-      const clean = String(text).replace(/```[\s\S]*?```/g, ' código omitido ').replace(/https?:\/\/\S+/g, ' link ').replace(/[*_#>~|]/g, ' ').replace(/\s+/g, ' ').trim();
+    function queueBrowserSpeech(text) {
+      const clean = String(text)
+        .replace(/```[\s\S]*?```/g, ' código omitido ')
+        .replace(/https?:\/\/\S+/g, ' link ')
+        .replace(/[*_#>~|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
       if (!clean) return;
-      speechQueue = speechQueue.then(() => {
-        if (requestId !== speechRequestId) return;
-        return playSpeechStream(clean, requestId);
-      }).catch(error => {
-        if (requestId === speechRequestId) {
-          voiceStatus.textContent = 'Voz neural indisponível: ' + (error?.message || 'falha na reprodução');
-          console.error('[ADA-M] Falha no streaming de voz:', error);
-        }
-      });
-    }
+      if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+        voiceStatus.textContent = 'Leitura em voz alta não é suportada neste navegador.';
+        return;
+      }
 
-    async function playSpeechStream(text, requestId) {
-      const ctx = getAudioContext();
-      await audioUnlockPromise;
-      const controller = new AbortController();
-      activeSpeechController = controller;
-      const response = await fetch('/api/tts/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-        body: JSON.stringify({ text }),
-        signal: controller.signal,
-        cache: 'no-store'
-      });
-      if (!response.ok || !response.body) {
-        const detail = await response.json().catch(() => ({}));
-        throw new Error(detail.detail || 'O serviço não iniciou o áudio em fluxo.');
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      const playEvent = async eventText => {
-        let dataLine = '';
-        for (const line of eventText.split('\n')) if (line.startsWith('data:')) dataLine += line.slice(5).trim();
-        if (!dataLine) return;
-        const payload = JSON.parse(dataLine);
-        if (payload.detail) throw new Error(payload.detail);
-        if (!payload.audio || requestId !== speechRequestId) return;
-        const binary = atob(payload.audio);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-        const audioBuffer = await ctx.decodeAudioData(bytes.buffer);
-        if (requestId !== speechRequestId) return;
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(ctx.destination);
-        const startAt = Math.max(ctx.currentTime + 0.035, nextAudioTime);
-        nextAudioTime = startAt + audioBuffer.duration;
-        scheduledSpeechSources.add(source);
-        source.onended = () => scheduledSpeechSources.delete(source);
-        source.start(startAt);
-        voiceStatus.textContent = 'ADA-M falando…';
-      };
-      try {
-        while (requestId === speechRequestId) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const events = buffer.split('\n\n');
-          buffer = events.pop() || '';
-          for (const eventText of events) await playEvent(eventText);
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = 'pt-BR';
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      const voices = window.speechSynthesis.getVoices();
+      const brazilianVoice = voices.find(voice => /^pt-BR$/i.test(voice.lang))
+        || voices.find(voice => /^pt/i.test(voice.lang));
+      if (brazilianVoice) utterance.voice = brazilianVoice;
+
+      utterance.onstart = () => { voiceStatus.textContent = 'ADA-M falando…'; };
+      utterance.onend = () => {
+        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+          voiceStatus.textContent = 'Leitura concluída.';
         }
-        buffer += decoder.decode();
-        if (buffer.trim() && requestId === speechRequestId) await playEvent(buffer);
-      } finally {
-        reader.releaseLock();
-        if (activeSpeechController === controller) activeSpeechController = null;
-      }
+      };
+      utterance.onerror = event => {
+        if (event.error !== 'canceled' && event.error !== 'interrupted') {
+          voiceStatus.textContent = 'O navegador não conseguiu reproduzir a voz.';
+        }
+      };
+      window.speechSynthesis.speak(utterance);
     }
 
     function feedSpeechToken(token) {
       speechBuffer += token;
       let boundary = -1;
-      const punctuation = /[.!?…](?:[\"'”’)]*)\s+/g;
+      const punctuation = /[.!?…](?:["'”’)]*)\s+/g;
       let match;
       while ((match = punctuation.exec(speechBuffer)) !== null) boundary = match.index + match[0].length;
       if (boundary < 0 && speechBuffer.length > 180) {
@@ -535,63 +475,25 @@
       if (boundary > 0) {
         const sentence = speechBuffer.slice(0, boundary).trim();
         speechBuffer = speechBuffer.slice(boundary);
-        queueSpeech(sentence);
+        queueBrowserSpeech(sentence);
       }
     }
 
     function flushSpeechBuffer() {
       const remaining = speechBuffer.trim();
       speechBuffer = '';
-      if (remaining) queueSpeech(remaining);
+      if (remaining) queueBrowserSpeech(remaining);
     }
 
     function speakText(text) {
-      stopNeuralSpeech();
-      // Desbloqueia o AudioContext dentro do gesto real do clique, não dentro
-      // do Promise da fila (onde alguns navegadores bloqueiam a reprodução).
-      try {
-        getAudioContext();
-      } catch (error) {
-        voiceStatus.textContent = 'Não foi possível ativar o áudio neste navegador.';
-        console.error('[ADA-M] Falha ao ativar áudio:', error);
+      stopBrowserSpeech();
+      if (!('speechSynthesis' in window)) {
+        voiceStatus.textContent = 'Leitura em voz alta não é suportada neste navegador.';
         return;
       }
-      const requestId = speechRequestId;
-      voiceStatus.textContent = 'Preparando voz neural…';
       const pieces = String(text).match(/[^.!?…]+[.!?…]*|[.!?…]+/g) || [String(text)];
-      for (const piece of pieces) queueSpeech(piece, requestId);
+      for (const piece of pieces) queueBrowserSpeech(piece);
     }
-
-    let ttsWarmupInFlight = false;
-    async function warmupTTS() {
-      if (ttsWarmupInFlight || document.hidden) return;
-      ttsWarmupInFlight = true;
-      try {
-        const response = await fetch('/api/tts/warmup', {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-          cache: 'no-store'
-        });
-        if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          console.info('[Matheus AI] Kokoro ainda inicializando:', detail.detail || response.status);
-        } else {
-          console.info('[Matheus AI] Serviço Kokoro aquecido e pronto.');
-        }
-      } catch (error) {
-        console.info('[Matheus AI] Aquecimento do Kokoro será tentado novamente:', error?.message || error);
-      } finally {
-        ttsWarmupInFlight = false;
-      }
-    }
-
-    // Acorda o Kokoro ao abrir a ADA-M, antes de o usuário pedir a leitura.
-    void warmupTTS();
-    // Mantém o serviço ativo enquanto a página estiver aberta.
-    setInterval(() => { if (!document.hidden) void warmupTTS(); }, 10 * 60 * 1000);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) void warmupTTS();
-    });
 
     async function loadDiagnostics() {
       const panel = document.getElementById('diagnostics-panel');
@@ -1012,8 +914,7 @@
       stopButton.hidden = false;
       activeController = new AbortController();
       if (voiceConversationToggle.checked) {
-        stopNeuralSpeech();
-        try { getAudioContext(); } catch (error) { console.warn('[ADA-M] Áudio indisponível:', error); }
+        stopBrowserSpeech();
       }
       const pending = addBubble('Analisando...', 'assistant');
       try {
