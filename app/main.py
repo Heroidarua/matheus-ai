@@ -175,6 +175,29 @@ async def generate_speech(request: SpeechRequest) -> Response:
         raise HTTPException(status_code=502, detail="Não foi possível conectar ao serviço de voz neural.")
 
 
+@app.get("/api/tts/warmup")
+async def warmup_tts() -> dict[str, str]:
+    """Acorda o serviço Piper em segundo plano para reduzir a espera no primeiro áudio."""
+    if not TTS_API_BASE_URL:
+        raise HTTPException(status_code=503, detail="Serviço TTS não configurado.")
+    health_base = TTS_API_BASE_URL[:-3] if TTS_API_BASE_URL.endswith("/v1") else TTS_API_BASE_URL
+    health_url = health_base.rstrip("/") + "/health"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=8.0)) as client:
+            response = await client.get(health_url, headers={"Accept": "application/json"})
+            response.raise_for_status()
+            health = response.json()
+        if health.get("status") != "ok":
+            raise HTTPException(status_code=503, detail="O serviço Piper ainda está inicializando.")
+        return {"status": "ready", "service": "piper"}
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="O serviço Piper ainda está acordando.")
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Serviço Piper respondeu HTTP {exc.response.status_code}.")
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Não foi possível alcançar o serviço Piper.")
+
+
 @app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
 async def diagnostics() -> dict[str, Any]:
     """Diagnóstico operacional sem revelar chaves, URLs privadas ou conteúdo do usuário."""
