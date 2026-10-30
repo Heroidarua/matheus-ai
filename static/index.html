@@ -417,95 +417,121 @@
     });
 
 
-    let preferredPortugueseVoice = null;
-
-    let activeNeuralAudio = null;
-    let activeNeuralAudioUrl = null;
-
+    let audioContext = null;
     let speechRequestId = 0;
+    let speechQueue = Promise.resolve();
+    let speechBuffer = '';
+    let nextAudioTime = 0;
+    const scheduledSpeechSources = new Set();
 
-    function splitSpeechText(text, maxLength = 2600) {
-      const chunks = [];
-      let remaining = text.trim();
-      while (remaining.length > maxLength) {
-        let cut = remaining.lastIndexOf('. ', maxLength);
-        if (cut < maxLength * 0.55) cut = remaining.lastIndexOf('! ', maxLength);
-        if (cut < maxLength * 0.55) cut = remaining.lastIndexOf('? ', maxLength);
-        if (cut < maxLength * 0.55) cut = remaining.lastIndexOf(' ', maxLength);
-        if (cut < 1) cut = maxLength;
-        else if (remaining[cut] === '.' || remaining[cut] === '!' || remaining[cut] === '?') cut += 1;
-        chunks.push(remaining.slice(0, cut).trim());
-        remaining = remaining.slice(cut).trim();
-      }
-      if (remaining) chunks.push(remaining);
-      return chunks.filter(Boolean);
+    function getAudioContext() {
+      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioContext.state === 'suspended') void audioContext.resume();
+      return audioContext;
     }
 
     function stopNeuralSpeech() {
       speechRequestId += 1;
-      if (activeNeuralAudio) {
-        activeNeuralAudio.pause();
-        activeNeuralAudio.removeAttribute('src');
-        activeNeuralAudio.load();
-        activeNeuralAudio = null;
+      speechBuffer = '';
+      speechQueue = Promise.resolve();
+      for (const source of scheduledSpeechSources) { try { source.stop(); } catch {} }
+      scheduledSpeechSources.clear();
+      if (audioContext) nextAudioTime = audioContext.currentTime;
+    }
+
+    function queueSpeech(text, requestId = speechRequestId) {
+      const clean = String(text).replace(/```[\s\S]*?```/g, ' código omitido ').replace(/https?:\/\/\S+/g, ' link ').replace(/[*_#>~|]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!clean) return;
+      speechQueue = speechQueue.then(() => {
+        if (requestId !== speechRequestId) return;
+        return playSpeechStream(clean, requestId);
+      }).catch(error => {
+        if (requestId === speechRequestId) {
+          voiceStatus.textContent = 'Voz neural indisponível: ' + (error?.message || 'falha na reprodução');
+          console.error('[ADA-M] Falha no streaming de voz:', error);
+        }
+      });
+    }
+
+    async function playSpeechStream(text, requestId) {
+      const ctx = getAudioContext();
+      const response = await fetch('/api/tts/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+        body: JSON.stringify({ text }),
+        cache: 'no-store'
+      });
+      if (!response.ok || !response.body) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || 'O serviço não iniciou o áudio em fluxo.');
       }
-      if (activeNeuralAudioUrl) {
-        URL.revokeObjectURL(activeNeuralAudioUrl);
-        activeNeuralAudioUrl = null;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const playEvent = async eventText => {
+        let dataLine = '';
+        for (const line of eventText.split('\n')) if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+        if (!dataLine) return;
+        const payload = JSON.parse(dataLine);
+        if (payload.detail) throw new Error(payload.detail);
+        if (!payload.audio || requestId !== speechRequestId) return;
+        const binary = atob(payload.audio);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        const audioBuffer = await ctx.decodeAudioData(bytes.buffer);
+        if (requestId !== speechRequestId) return;
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        const startAt = Math.max(ctx.currentTime + 0.035, nextAudioTime);
+        nextAudioTime = startAt + audioBuffer.duration;
+        scheduledSpeechSources.add(source);
+        source.onended = () => scheduledSpeechSources.delete(source);
+        source.start(startAt);
+        voiceStatus.textContent = 'ADA-M falando…';
+      };
+      try {
+        while (requestId === speechRequestId) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
+          for (const eventText of events) await playEvent(eventText);
+        }
+        buffer += decoder.decode();
+        if (buffer.trim() && requestId === speechRequestId) await playEvent(buffer);
+      } finally { reader.releaseLock(); }
+    }
+
+    function feedSpeechToken(token) {
+      speechBuffer += token;
+      let boundary = -1;
+      const punctuation = /[.!?…](?:[\"'”’)]*)\s+/g;
+      let match;
+      while ((match = punctuation.exec(speechBuffer)) !== null) boundary = match.index + match[0].length;
+      if (boundary < 0 && speechBuffer.length > 180) {
+        boundary = speechBuffer.lastIndexOf(' ', 180);
+      }
+      if (boundary > 0) {
+        const sentence = speechBuffer.slice(0, boundary).trim();
+        speechBuffer = speechBuffer.slice(boundary);
+        queueSpeech(sentence);
       }
     }
 
-    async function speakText(text) {
-      const cleanText = String(text)
-        .replace(/\`\`\`[\s\S]*?\`\`\`/g, ' bloco de código omitido ')
-        .replace(/https?:\/\/\S+/g, ' link ')
-        .replace(/[*_#>~|]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (!cleanText) { voiceStatus.textContent = 'Não há texto para ler.'; return; }
+    function flushSpeechBuffer() {
+      const remaining = speechBuffer.trim();
+      speechBuffer = '';
+      if (remaining) queueSpeech(remaining);
+    }
+
+    function speakText(text) {
       stopNeuralSpeech();
       const requestId = speechRequestId;
-      const chunks = splitSpeechText(cleanText);
-      voiceStatus.textContent = 'Preparando voz neural masculina…';
-      try {
-        for (let index = 0; index < chunks.length; index += 1) {
-          if (requestId !== speechRequestId) return;
-          const response = await fetch('/api/tts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'audio/wav' },
-            body: JSON.stringify({ text: chunks[index] }),
-            cache: 'no-store'
-          });
-          if (!response.ok) {
-            const detail = await response.json().catch(() => ({}));
-            throw new Error(detail.detail || 'Não foi possível gerar o áudio neural.');
-          }
-          const audioBlob = await response.blob();
-          if (!audioBlob.size || requestId !== speechRequestId) return;
-          const audioUrl = URL.createObjectURL(audioBlob);
-          activeNeuralAudioUrl = audioUrl;
-          const audio = new Audio(audioUrl);
-          activeNeuralAudio = audio;
-          voiceStatus.textContent = chunks.length > 1 ? 'Reproduzindo voz neural… (' + (index + 1) + '/' + chunks.length + ')' : 'Reproduzindo voz neural…';
-          await new Promise((resolve, reject) => {
-            audio.onended = resolve;
-            audio.onerror = () => reject(new Error('O navegador não conseguiu reproduzir o áudio recebido.'));
-            audio.play().catch(reject);
-          });
-          if (requestId !== speechRequestId) return;
-          audio.removeAttribute('src');
-          audio.load();
-          URL.revokeObjectURL(audioUrl);
-          if (activeNeuralAudioUrl === audioUrl) activeNeuralAudioUrl = null;
-          if (activeNeuralAudio === audio) activeNeuralAudio = null;
-        }
-        if (requestId === speechRequestId) voiceStatus.textContent = '';
-      } catch (error) {
-        if (requestId !== speechRequestId) return;
-        stopNeuralSpeech();
-        voiceStatus.textContent = 'Voz neural indisponível: ' + (error?.message || 'falha na reprodução');
-        console.error('[ADA-M] Falha na voz neural:', error);
-      }
+      voiceStatus.textContent = 'Preparando voz neural…';
+      const pieces = String(text).match(/[^.!?…]+[.!?…]*|[.!?…]+/g) || [String(text)];
+      for (const piece of pieces) queueSpeech(piece, requestId);
     }
 
     let ttsWarmupInFlight = false;
@@ -957,6 +983,10 @@
       sendBtn.textContent = '...';
       stopButton.hidden = false;
       activeController = new AbortController();
+      if (voiceConversationToggle.checked) {
+        stopNeuralSpeech();
+        try { getAudioContext(); } catch (error) { console.warn('[ADA-M] Áudio indisponível:', error); }
+      }
       const pending = addBubble('Analisando...', 'assistant');
       try {
         const response = await fetch('/api/chat', {
@@ -988,6 +1018,7 @@
           if (eventName === 'done') { streamSources = Array.isArray(payload.sources) ? payload.sources : []; return; }
           if (typeof payload.token === 'string') {
             answer += payload.token;
+            if (voiceConversationToggle.checked) feedSpeechToken(payload.token);
             pending.replaceChildren(renderMarkdown(answer));
             pending.scrollIntoView({ behavior: 'smooth', block: 'end' });
           }
@@ -1006,7 +1037,7 @@
         } finally { reader.releaseLock(); }
         if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
         displayAssistantReply(pending, answer, streamSources);
-        if (voiceConversationToggle.checked) speakText(answer);
+        if (voiceConversationToggle.checked) flushSpeechBuffer();
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
       } catch (error) {
