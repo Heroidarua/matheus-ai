@@ -420,6 +420,7 @@
 
 
     let audioContext = null;
+    let audioUnlockPromise = Promise.resolve();
     let speechRequestId = 0;
     let speechQueue = Promise.resolve();
     let speechBuffer = '';
@@ -429,7 +430,14 @@
 
     function getAudioContext() {
       if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioContext.state === 'suspended') void audioContext.resume();
+      // Chame esta função diretamente no clique do usuário para respeitar a política
+      // de autoplay do navegador antes de iniciar qualquer fila assíncrona.
+      if (audioContext.state === 'suspended') {
+        audioUnlockPromise = audioContext.resume().catch(error => {
+          console.warn('[ADA-M] O navegador não liberou o áudio:', error);
+          throw error;
+        });
+      }
       return audioContext;
     }
 
@@ -459,6 +467,7 @@
 
     async function playSpeechStream(text, requestId) {
       const ctx = getAudioContext();
+      await audioUnlockPromise;
       const controller = new AbortController();
       activeSpeechController = controller;
       const response = await fetch('/api/tts/stream', {
@@ -538,6 +547,15 @@
 
     function speakText(text) {
       stopNeuralSpeech();
+      // Desbloqueia o AudioContext dentro do gesto real do clique, não dentro
+      // do Promise da fila (onde alguns navegadores bloqueiam a reprodução).
+      try {
+        getAudioContext();
+      } catch (error) {
+        voiceStatus.textContent = 'Não foi possível ativar o áudio neste navegador.';
+        console.error('[ADA-M] Falha ao ativar áudio:', error);
+        return;
+      }
       const requestId = speechRequestId;
       voiceStatus.textContent = 'Preparando voz neural…';
       const pieces = String(text).match(/[^.!?…]+[.!?…]*|[.!?…]+/g) || [String(text)];
