@@ -47,8 +47,8 @@ MAX_RETRIEVED_CHUNKS = 4
 APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
 TTS_API_BASE_URL = os.getenv("TTS_API_BASE_URL", "https://matheus-kokoro-tts.onrender.com/v1").strip().rstrip("/")
 TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
-TTS_MODEL = os.getenv("TTS_MODEL", "piper").strip()
-TTS_VOICE = os.getenv("TTS_VOICE", "pt_BR-faber-medium").strip()
+TTS_MODEL = os.getenv("TTS_MODEL", "kokoro").strip()
+TTS_VOICE = os.getenv("TTS_VOICE", "pm_alex").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
@@ -177,7 +177,7 @@ async def generate_speech(request: SpeechRequest) -> Response:
 
 @app.get("/api/tts/warmup")
 async def warmup_tts() -> dict[str, str]:
-    """Acorda o serviço Piper em segundo plano para reduzir a espera no primeiro áudio."""
+    """Acorda o serviço neural configurado e confirma a voz ativa."""
     if not TTS_API_BASE_URL:
         raise HTTPException(status_code=503, detail="Serviço TTS não configurado.")
     health_base = TTS_API_BASE_URL[:-3] if TTS_API_BASE_URL.endswith("/v1") else TTS_API_BASE_URL
@@ -188,14 +188,14 @@ async def warmup_tts() -> dict[str, str]:
             response.raise_for_status()
             health = response.json()
         if health.get("status") != "ok":
-            raise HTTPException(status_code=503, detail="O serviço Piper ainda está inicializando.")
-        return {"status": "ready", "service": "piper"}
+            raise HTTPException(status_code=503, detail="O serviço neural ainda está inicializando.")
+        return {"status": "ready", "service": health.get("engine", TTS_MODEL), "voice": health.get("voice", TTS_VOICE), "language": health.get("language", "pt-BR")}
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="O serviço Piper ainda está acordando.")
+        raise HTTPException(status_code=504, detail="O serviço neural ainda está acordando.")
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"Serviço Piper respondeu HTTP {exc.response.status_code}.")
+        raise HTTPException(status_code=502, detail=f"Serviço neural respondeu HTTP {exc.response.status_code}.")
     except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Não foi possível alcançar o serviço Piper.")
+        raise HTTPException(status_code=502, detail="Não foi possível alcançar o serviço neural.")
 
 
 @app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
