@@ -204,3 +204,21 @@ O painel **Ferramentas → GitHub** usa um GitHub App instalado nos repositório
 8. Faça deploy e abra **Ferramentas → GitHub → Conectar GitHub**.
 
 O endpoint de instalação cria tokens temporários limitados ao repositório selecionado e à permissão Contents necessária. As alterações são gravadas numa branch separada. Revise o diff e abra um pull request manualmente no GitHub antes de mesclar. A sessão de conexão é mantida em cookie assinado, HttpOnly e SameSite=Lax; use HTTPS em produção. Não compartilhe a chave privada do App nem a inclua no repositório.
+
+## Criação de imagens com IA
+
+A ADA-M inclui um Estúdio de Imagens integrado ao menu **+ → Ferramentas → Criar imagem com IA**. A geração usa o modelo `@cf/black-forest-labs/flux-1-schnell` via Cloudflare Workers AI. A imagem aparece na conversa e pode ser salva pelo usuário.
+
+### Configuração no Render
+
+Configure estas variáveis privadas no serviço:
+
+- `CLOUDFLARE_ACCOUNT_ID`: ID da conta Cloudflare.
+- `CLOUDFLARE_API_TOKEN`: token de API com permissão Workers AI (Read e Write, conforme a configuração da conta).
+- `IMAGE_GENERATION_MODEL`: opcional; padrão `@cf/black-forest-labs/flux-1-schnell`.
+
+Crie o token no painel da Cloudflare, mantenha-o somente nas variáveis do Render e nunca o coloque no frontend ou no GitHub. O endpoint usa limite básico de três gerações por minuto por IP/processo e aceita descrições de até 1.800 caracteres.
+
+A Cloudflare informa uma franquia de 10.000 Neurons por dia no Workers AI Free; o consumo varia conforme o modelo e a execução. Ao exceder a franquia diária, novas gerações podem falhar até a renovação do limite. Consulte a página oficial de [preços do Workers AI](https://developers.cloudflare.com/workers-ai/platform/pricing/) e o painel de uso antes de ampliar o uso.
+
+A integração não altera o modelo principal de conversa, a leitura em voz alta, a biblioteca de arquivos nem as demais ferramentas. A criação de imagens fica indisponível até que as duas variáveis obrigatórias sejam configuradas.
