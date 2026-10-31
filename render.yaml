@@ -31,6 +31,8 @@ services:
         sync: false
       - key: IMAGE_GENERATION_MODEL
         value: "@cf/black-forest-labs/flux-1-schnell"
+      - key: IMAGE_EDIT_MODEL
+        value: "@cf/black-forest-labs/flux-2-klein-9b"
       - key: APP_API_KEY
         sync: false
       - key: SEARXNG_URL
