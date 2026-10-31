@@ -50,7 +50,8 @@ TTS_VOICE = os.getenv("TTS_VOICE", "pf_dora").strip() or "pf_dora"
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
 MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:11434/v1").rstrip("/")
-MODEL_NAME = os.getenv("MODEL_NAME", "qwen2.5:3b")
+# ADA-M usa exclusivamente Gemma 4 como modelo de conversa principal.
+MODEL_NAME = "gemma4:31b"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
