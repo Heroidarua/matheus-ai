@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ada-m-pwa-v1';
+const CACHE_NAME = 'ada-m-pwa-v2-gemma-voice';
 const APP_SHELL = [
   '/',
   '/static/manifest.webmanifest',
