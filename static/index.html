@@ -479,7 +479,7 @@
       }
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.lang = 'pt-BR';
-      utterance.rate = 1.20;
+      utterance.rate = 1.21;
       utterance.pitch = 1.02;
       utterance.volume = 1;
       const voice = selectedSpeechVoice();
@@ -906,7 +906,7 @@
     let bargeInRecognition = null;
     let bargeInRestartTimer = null;
     let bargeInHandled = false;
-    const interruptionPattern = /\\b(pare|para|parar|pare de falar|interrompa|interromper|cala|calma|espera|espere|um momento|só um minuto|outra pergunta|quero perguntar|deixa eu falar|na verdade)\\b/i;
+    const interruptionPattern = /\b(pare\s+de\s+falar|deixa\s+eu\s+falar|quero\s+perguntar|outra\s+pergunta|s[oó]\s+um\s+minuto|um\s+momento|interrompa|interromper|parar|pare|para|espera|espere|cala|calma|na\s+verdade)\b/i;
 
     function stopBargeInRecognition() {
       clearTimeout(bargeInRestartTimer);
@@ -926,11 +926,10 @@
       instance.interimResults = true;
       instance.maxAlternatives = 1;
       instance.onresult = event => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0]?.transcript || '';
-        }
-        transcript = transcript.trim();
+        const transcript = Array.from(event.results)
+          .map(result => result[0]?.transcript || '')
+          .join(' ')
+          .trim();
         if (!transcript || !interruptionPattern.test(transcript)) return;
         bargeInHandled = true;
         stopBargeInRecognition();
