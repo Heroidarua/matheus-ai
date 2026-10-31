@@ -258,6 +258,29 @@ def requires_live_search(message: str) -> bool:
     return any(re.search(pattern, text) for pattern in current_topic_patterns)
 
 
+def is_deep_research_request(message: str) -> bool:
+    """Detecta pedidos explícitos de investigação/pesquisa aprofundada."""
+    text = re.sub(r"\\s+", " ", message.casefold()).strip()
+    patterns = (
+        r"\\bpesquisa\\s+(?:bem\\s+)?profunda\\b",
+        r"\\bpesquise\\s+a\\s+fundo\\b",
+        r"\\binvestiga(?:r|ção|cao)\\b",
+        r"\\bdossi[eê]\\b",
+        r"\\blevantamento\\s+completo\\b",
+        r"\\bdeep\\s+research\\b",
+    )
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def requests_private_identifier_lookup(message: str) -> bool:
+    """Identifica tentativas de descobrir identificadores pessoais de terceiros."""
+    text = re.sub(r"\\s+", " ", message.casefold()).strip()
+    identifier = r"\\b(?:cpf|rg|registro\\s+geral|n[uú]mero\\s+do\\s+documento|documento\\s+pessoal)\\b"
+    discovery = r"\\b(?:descubra|descobrir|encontre|encontrar|localize|localizar|puxe|consultar|consulta|pesquise|pesquisar|procure|procurar|ache|achar|rastreie|rastrear)\\b"
+    possession = r"\\b(?:meu|minha|pr[oó]prio|pr[oó]pria|sou\\s+eu|titular)\\b"
+    return bool(re.search(identifier, text) and re.search(discovery, text) and not re.search(possession, text))
+
+
 def current_local_date() -> str:
     """Data atual do servidor no fuso de Manaus, com fallback para UTC."""
     try:
@@ -886,7 +909,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
     search_unavailable = False
     sources: list[dict[str, str]] = []
     automatic_search = requires_live_search(last_user_message)
-    should_search = request.web_search or automatic_search
+    deep_research = is_deep_research_request(last_user_message)
+    should_search = request.web_search or automatic_search or deep_research
+    if requests_private_identifier_lookup(last_user_message):
+        safe_reply = (
+            "Não posso localizar ou revelar CPF, RG ou outros identificadores pessoais de terceiros. "
+            "Posso ajudar a pesquisar informações profissionais e institucionais publicamente disponíveis, "
+            "ou orientar o titular a consultar seus próprios documentos por canais oficiais e seguros."
+        )
+        return ChatResponse(reply=safe_reply, model="ferramenta-de-privacidade")
     explicit_external_search = bool(re.search(
         r"\b(?:procura(?:r)?|pesquisa(?:r)?|busca(?:r)?|encontra(?:r)?|localiza(?:r)?)\b.{0,100}\b(?:github|git\s*hub|reposit[oó]rios?|c[oó]digo|site|link|p[aá]gina|internet|web)\b",
         last_user_message.casefold(),
@@ -902,6 +933,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
             print(f"Web search unavailable (HTTP {exc.status_code}): {str(exc.detail)[:250]}")
 
     system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
+    if deep_research:
+        system_prompt += (
+            "\\n\\nMODO DE PESQUISA APROFUNDADA: trate o pedido como uma investigação documental. "
+            "Compare fontes independentes, priorize registros oficiais e fontes primárias, verifique datas, autoria e contexto, "
+            "identifique divergências e lacunas. Organize a resposta em resumo executivo, escopo, fatos confirmados, "
+            "evidências por fonte, divergências e limitações, conclusão e links. "
+            "Não invente etapas, fontes ou consultas que não foram realizadas. Se houver poucas fontes, "
+            "deixe isso explícito e não apresente a pesquisa como exaustiva."
+        )
     system_prompt += f"\n\nDATA ATUAL DO SISTEMA (fuso de Manaus): {current_local_date()}. Use esta data como referência; não diga que um evento ainda vai acontecer sem conferir as fontes atuais."
     if explicit_external_search and not sources:
         system_prompt += (
