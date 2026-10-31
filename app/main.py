@@ -846,7 +846,12 @@ async def search_web(query: str) -> list[dict[str, str]]:
             else:
                 print("Google Search Grounding returned no citations; using existing search fallbacks")
         except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
-            print(f"Google Search Grounding failed ({type(exc).__name__}): {str(exc)[:180]}")
+            # Never log exception text: Gemini includes the API key in the request URL.
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            print(
+                f"Google Search Grounding failed "
+                f"(status={status or 'n/a'}, error={type(exc).__name__})"
+            )
 
     recent_terms = ("hoje", "atual", "últimas", "ultimas", "notícias", "noticias", "agora", "esta semana", "ontem", "recente", "latest", "today")
     is_recent_query = any(term in original_query.casefold() for term in recent_terms)
@@ -861,7 +866,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                     "q": cleaned_query,
                     "count": 6,
                     "country": "BR",
-                    "search_lang": "pt",
+                    "search_lang": "pt-br",
                 }
                 if is_recent_query:
                     brave_params["freshness"] = "pd"
