@@ -3,9 +3,11 @@
   const status = document.getElementById('voice-status');
   const messages = document.getElementById('messages');
   if (!button || !status || !messages) return;
+  const MAX_SESSION_MS = 5 * 60 * 1000;
+  const IDLE_TIMEOUT_MS = 90 * 1000;
   let peer = null, channel = null, microphone = null, audioOutput = null;
   let active = false, connecting = false, transcriptSegments = [], lastConsumedEnd = 0;
-  let liveHistory = [], delegationCounter = 0;
+  let liveHistory = [], delegationCounter = 0, maxTimer = null, idleTimer = null;
   const setStatus = value => { status.textContent = value; };
   const setButton = () => {
     button.classList.toggle('voice-active', active || connecting);
@@ -30,7 +32,13 @@
     });
   }
   function sendEvent(event) { if (channel?.readyState === 'open') channel.send(JSON.stringify(event)); }
+  function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    if (active) idleTimer = setTimeout(() => stop('Live encerrado por 90 segundos sem fala para evitar uso contínuo.'), IDLE_TIMEOUT_MS);
+  }
+  function clearSafetyTimers() { clearTimeout(maxTimer); clearTimeout(idleTimer); maxTimer = null; idleTimer = null; }
   async function processDelegation(delegationId, offsetMs) {
+    resetIdleTimer();
     const eligible = transcriptSegments.filter(s => s.endMs > lastConsumedEnd && s.endMs <= (Number(offsetMs) || Infinity) + 1500);
     const selected = eligible.length ? eligible : transcriptSegments.filter(s => s.endMs > lastConsumedEnd);
     const utterance = selected.map(s => s.text).join('').trim();
@@ -51,9 +59,10 @@
       const answer = String(data.reply || '').trim(); if (!answer) throw new Error('O backend não retornou uma resposta.');
       liveHistory.push({ role: 'assistant', content: answer }); liveHistory = liveHistory.slice(-12);
       addBubble(answer, 'assistant');
-      const spokenResult = answer.length > 1700 ? answer.slice(0, 1690).replace(/\s+\S*$/, '') + '…' : answer;
+      const spokenResult = answer.length > 1700 ? answer.slice(0, 1690).replace(/\\s+\\S*$/, '') + '…' : answer;
       sendEvent({ type: 'session.commentary.append', event_id: 'live_result_' + (++delegationCounter), delegation_id: delegationId, content: spokenResult });
       setStatus('Conversa ao vivo · pode continuar falando');
+      resetIdleTimer();
     } catch (error) {
       addBubble('Não consegui concluir: ' + (error.message || 'Falha no backend.'), 'assistant', true);
       sendEvent({ type: 'session.commentary.append', event_id: 'live_error_' + (++delegationCounter), delegation_id: delegationId, content: 'Tive um problema ao consultar o sistema principal. Informe isso ao usuário sem inventar uma resposta.' });
@@ -62,10 +71,11 @@
   }
   function handleServerEvent(event) {
     if (!event || typeof event.type !== 'string') return;
-    if (event.type === 'session.started') { active = true; connecting = false; setButton(); setStatus('GPT-Live conectado · pode falar'); }
+    if (event.type === 'session.started') { active = true; connecting = false; setButton(); setStatus('GPT-Live conectado · limite de 5 minutos'); resetIdleTimer(); }
     else if (event.type === 'session.input_transcript.delta') {
       const text = String(event.delta || '');
       if (text) {
+        resetIdleTimer();
         const startMs = Number(event.start_ms) || 0, endMs = Number(event.end_ms) || startMs;
         const previous = transcriptSegments[transcriptSegments.length - 1];
         if (previous && previous.startMs === startMs) { previous.text += text; previous.endMs = Math.max(previous.endMs, endMs); }
@@ -73,9 +83,12 @@
       }
     } else if (event.type === 'session.delegation.created' && event.delegation?.target === 'client') {
       processDelegation(event.delegation.id, event.offset_ms);
+    } else if (event.type === 'session.usage.updated') {
+      const seconds = Number(event.usage?.seconds);
+      if (Number.isFinite(seconds) && seconds >= 300) stop('Live encerrado ao atingir o limite de 5 minutos.');
     } else if (event.type === 'error') {
       setStatus('GPT-Live: ' + (event.error?.message || event.message || 'erro na sessão'));
-    } else if (event.type === 'session.closed') stop('Sessão encerrada.');
+    } else if (event.type === 'session.closed') stop('Sessão encerrada.', false);
   }
   async function start() {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) throw new Error('GPT-Live precisa de HTTPS e de um navegador com suporte a microfone/WebRTC.');
@@ -91,11 +104,20 @@
     setStatus('Conectando ao GPT-Live…');
     const response = await fetch('/api/live/session', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ sdp: peer.localDescription?.sdp || offer.sdp }) });
     const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.detail || 'Não foi possível iniciar o GPT-Live.');
-    await peer.setRemoteDescription({ type: 'answer', sdp: data.sdp }); active = true; connecting = false; setButton(); setStatus('Finalizando conexão de áudio…');
+    await peer.setRemoteDescription({ type: 'answer', sdp: data.sdp });
+    active = true; connecting = false; setButton();
+    maxTimer = setTimeout(() => stop('Live encerrado ao atingir o limite de 5 minutos.'), MAX_SESSION_MS);
+    setStatus('Finalizando conexão de áudio…');
   }
-  function stop(message = 'Conversa GPT-Live encerrada.') {
-    active = false; connecting = false; if (channel) { try { channel.close(); } catch {} }
-    if (peer) { try { peer.close(); } catch {} } if (microphone) microphone.getTracks().forEach(track => track.stop());
+  function stop(message = 'Conversa GPT-Live encerrada.', notifyServer = true) {
+    clearSafetyTimers();
+    if (notifyServer && channel?.readyState === 'open') {
+      try { sendEvent({ type: 'session.close' }); } catch {}
+    }
+    active = false; connecting = false;
+    if (channel) { try { channel.close(); } catch {} }
+    if (peer) { try { peer.close(); } catch {} }
+    if (microphone) microphone.getTracks().forEach(track => track.stop());
     if (audioOutput) { audioOutput.pause(); audioOutput.srcObject = null; }
     peer = null; channel = null; microphone = null; audioOutput = null; transcriptSegments = []; lastConsumedEnd = 0;
     setButton(); setStatus(message);
