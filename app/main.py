@@ -935,7 +935,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
     if deep_research:
         system_prompt += (
-            "\\n\\nMODO DE PESQUISA APROFUNDADA: trate o pedido como uma investigação documental. "
+            "\n\nMODO DE PESQUISA APROFUNDADA: trate o pedido como uma investigação documental. "
             "Compare fontes independentes, priorize registros oficiais e fontes primárias, verifique datas, autoria e contexto, "
             "identifique divergências e lacunas. Organize a resposta em resumo executivo, escopo, fatos confirmados, "
             "evidências por fonte, divergências e limitações, conclusão e links. "
