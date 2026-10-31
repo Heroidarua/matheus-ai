@@ -702,6 +702,7 @@
       }
       const pieces = normalized.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [normalized];
       for (const piece of pieces) queueBrowserSpeech(piece.trim());
+      return serverTtsQueue;
     }
 
     speechTestButton.addEventListener('click', () => {
@@ -1499,7 +1500,7 @@
         } finally { reader.releaseLock(); }
         if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
         displayAssistantReply(pending, answer, streamSources);
-        if (voiceConversationToggle.checked) speakText(answer);
+        if (voiceConversationToggle.checked) await speakText(answer);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
       } catch (error) {
