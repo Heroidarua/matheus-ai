@@ -203,12 +203,15 @@ def search_library(query: str, limit: int = 4) -> list[dict[str, Any]]:
     candidates = []
     for file_id, name, content in docs:
         paragraphs = [p.strip() for p in re.split(r"\n\s*\n", content) if p.strip()]
+        chunks = []
         for paragraph in paragraphs:
-            pterms = set(re.findall(r"[^\W_]+", paragraph.casefold(), flags=re.UNICODE))
+            chunks.extend(paragraph[i:i + 1600] for i in range(0, len(paragraph), 1400))
+        for chunk in chunks:
+            pterms = set(re.findall(r"[^\W_]+", chunk.casefold(), flags=re.UNICODE))
             overlap = terms & pterms
             if overlap:
                 score = len(overlap) / max(1, len(pterms) ** 0.35)
-                candidates.append((score, file_id, name, paragraph[:1800]))
+                candidates.append((score, file_id, name, chunk[:1800]))
     candidates.sort(key=lambda x: x[0], reverse=True)
     output, seen = [], set()
     for score, file_id, name, excerpt in candidates:
