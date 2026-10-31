@@ -43,6 +43,14 @@ Limites atuais: até 100 arquivos elegíveis, cada um com até 1 MB; até quatro
 - Endpoint `/api/knowledge/status` para métricas da base, sem expor documentos.
 - Preparado para deploy web no Render.
 
+## Biblioteca persistente de arquivos
+
+Além dos guias versionados em `data/knowledge/`, a ADA-M oferece uma biblioteca privada de documentos com PostgreSQL. O usuário pode enviar PDF, DOCX, XLSX/XLSM, TXT, MD, CSV e JSON pela opção **+ → Ferramentas → Biblioteca de arquivos**. A interface permite listar, pesquisar e excluir documentos.
+
+O backend extrai texto sem executar arquivos, calcula SHA-256 para evitar duplicatas e guarda texto/metadados em uma tabela própria. Durante as conversas, trechos relevantes do acervo são recuperados e combinados com a base curada. A busca atual é lexical, não vetorial; os documentos não treinam nem alteram os pesos do modelo.
+
+**Configuração obrigatória:** configure `DATABASE_URL` no Render apontando para um PostgreSQL persistente. O blueprint declara a variável, mas não cria o banco. Sem ela, a biblioteca fica indisponível e o restante do chat/pesquisa continua operando. Configure também `APP_API_KEY` para proteger as APIs. Veja [docs/biblioteca-de-arquivos.md](docs/biblioteca-de-arquivos.md) para formatos, limites, endpoints e privacidade. PDFs digitalizados ainda precisam de OCR.
+
 ## Isso é um modelo treinado?
 
 Ainda não. RAG fornece documentos relevantes ao modelo durante a conversa, mas não altera os pesos nem cria conhecimento permanente dentro do próprio modelo. Para um ajuste fino (fine-tuning) real, será necessário preparar exemplos de treinamento de qualidade, escolher uma licença/modelo compatível e executar o treinamento em hardware ou serviço adequado. A pasta `data/training/` descreve o formato inicial esperado; nenhum treinamento é executado automaticamente pelo Render.
