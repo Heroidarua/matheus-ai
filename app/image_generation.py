@@ -117,10 +117,16 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
    image_bytes = prepared.getvalue()
  except (UnidentifiedImageError, OSError, ValueError):
   raise HTTPException(status_code=400, detail="Não foi possível processar essa foto. Envie JPG, PNG ou WebP.")
- prompt = payload.prompt.strip() + ". Use the uploaded photo as the identity and composition reference. Preserve the person's recognizable facial features, hairstyle, skin tone, pose and clothing where possible; change the visual style as requested, do not replace the subject with a different person."
+ prompt = (
+  "Create a new transformed image using input_image_0 as the reference photo. "
+  "Apply the requested visual style clearly; do not reproduce the original image unchanged. "
+  "Preserve the subject's recognizable facial features and hairstyle while redrawing the subject in the requested style. "
+  + payload.prompt.strip()
+  + ". The result must visibly reflect the requested transformation."
+ )
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
-   response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"}, data={"prompt": prompt[:2200], "width": "1024", "height": "1024"}, files={"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
+   response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"}, data={"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "4"}, files={"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
   cloudflare_error(response)
   return decode_image_result(response, IMAGE_EDIT_MODEL)
  except HTTPException: raise
