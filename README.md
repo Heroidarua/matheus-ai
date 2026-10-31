@@ -49,7 +49,7 @@ Além dos guias versionados em `data/knowledge/`, a ADA-M oferece uma biblioteca
 
 O backend extrai texto sem executar arquivos, calcula SHA-256 para evitar duplicatas e guarda texto/metadados em uma tabela própria. Durante as conversas, trechos relevantes do acervo são recuperados e combinados com a base curada. A busca atual é lexical, não vetorial; os documentos não treinam nem alteram os pesos do modelo.
 
-**Configuração obrigatória:** configure `DATABASE_URL` no Render apontando para um PostgreSQL persistente. O blueprint declara a variável, mas não cria o banco. Sem ela, a biblioteca fica indisponível e o restante do chat/pesquisa continua operando. Configure também `APP_API_KEY` para proteger as APIs. Veja [docs/biblioteca-de-arquivos.md](docs/biblioteca-de-arquivos.md) para formatos, limites, endpoints e privacidade. PDFs digitalizados ainda precisam de OCR.
+**Configuração obrigatória:** configure `DATABASE_URL` no Render apontando para um PostgreSQL persistente. O blueprint declara a variável, mas não cria o banco. Sem ela, a biblioteca fica indisponível e o restante do chat/pesquisa continua operando. Consulte [docs/biblioteca-de-arquivos.md](docs/biblioteca-de-arquivos.md) para formatos, limites, endpoints e requisitos de acesso seguro. PDFs digitalizados ainda precisam de OCR.
 
 ## Isso é um modelo treinado?
 
