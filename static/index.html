@@ -51,6 +51,7 @@
     button { border:0;border-radius:12px;background:var(--accent);color:#071b18;font-weight:750;padding:13px 17px;cursor:pointer; }
     #voice-button { background:transparent;border:0;color:#ececec; }
     #voice-button:hover { background:#414141; }
+    #voice-button.voice-active { color:#ff7777;background:rgba(255,90,90,.13);box-shadow:0 0 0 2px rgba(255,90,90,.16); }
     #send { width:38px;height:38px;min-width:38px;padding:0;border-radius:50%;background:#f3f3f3;color:#202020;display:grid;place-items:center;flex-shrink:0; }
     #send::after { content:"↑";font-size:23px;line-height:1;font-weight:500; }
     #send { font-size:0; }
@@ -485,10 +486,16 @@
       if (voice) { utterance.voice = voice; utterance.lang = voice.lang || 'pt-BR'; }
       utterance.onstart = () => { voiceStatus.textContent = 'ADA-M falando…'; };
       utterance.onend = () => {
-        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) voiceStatus.textContent = 'Leitura concluída.';
+        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+          voiceStatus.textContent = voiceSessionActive ? 'Sua vez. Estou ouvindo…' : 'Leitura concluída.';
+          if (voiceSessionActive) startVoiceRecognition();
+        }
       };
       utterance.onerror = event => {
-        if (event.error !== 'canceled' && event.error !== 'interrupted') voiceStatus.textContent = 'O navegador não conseguiu reproduzir a voz.';
+        if (event.error !== 'canceled' && event.error !== 'interrupted') {
+          voiceStatus.textContent = 'O navegador não conseguiu reproduzir a voz.';
+          if (voiceSessionActive) startVoiceRecognition();
+        }
       };
       window.speechSynthesis.speak(utterance);
     }
@@ -886,17 +893,96 @@
     }
 
     let recognition = null;
-    function toggleVoiceInput() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) { voiceStatus.textContent = 'Reconhecimento de voz não suportado neste navegador.'; return; }
-      if (recognition) { recognition.stop(); recognition = null; voiceStatus.textContent = ''; return; }
-      recognition = new SpeechRecognition();
-      recognition.lang = 'pt-BR'; recognition.interimResults = false; recognition.maxAlternatives = 1;
-      recognition.onresult = event => { promptEl.value = event.results[0][0].transcript; promptEl.focus(); voiceStatus.textContent = 'Voz convertida em texto.'; };
-      recognition.onerror = () => { voiceStatus.textContent = 'Não foi possível reconhecer a voz.'; recognition = null; };
-      recognition.onend = () => { recognition = null; };
-      voiceStatus.textContent = 'Ouvindo…'; recognition.start();
+    let voiceSessionActive = false;
+    let recognitionRestartTimer = null;
+    const voiceButton = document.getElementById('voice-button');
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    function updateVoiceButton() {
+      voiceButton.classList.toggle('voice-active', voiceSessionActive);
+      voiceButton.setAttribute('aria-pressed', String(voiceSessionActive));
+      voiceButton.setAttribute('aria-label', voiceSessionActive ? 'Encerrar conversa por voz' : 'Iniciar conversa por voz');
+      voiceButton.title = voiceSessionActive ? 'Encerrar conversa por voz' : 'Iniciar conversa por voz';
     }
+
+    function stopVoiceRecognition() {
+      clearTimeout(recognitionRestartTimer);
+      if (recognition) {
+        const current = recognition;
+        recognition = null;
+        try { current.stop(); } catch {}
+      }
+    }
+
+    function startVoiceRecognition() {
+      if (!voiceSessionActive || !SpeechRecognitionAPI || sendBtn.disabled ||
+          (window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) return;
+      stopVoiceRecognition();
+      const instance = new SpeechRecognitionAPI();
+      recognition = instance;
+      instance.lang = 'pt-BR';
+      instance.continuous = false;
+      instance.interimResults = false;
+      instance.maxAlternatives = 1;
+      instance.onstart = () => { voiceStatus.textContent = 'Ouvindo você…'; };
+      instance.onresult = event => {
+        const transcript = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
+        if (!transcript || !voiceSessionActive) return;
+        promptEl.value = transcript;
+        voiceStatus.textContent = 'Entendi: ' + transcript;
+        stopVoiceRecognition();
+        form.requestSubmit();
+      };
+      instance.onerror = event => {
+        if (!voiceSessionActive) return;
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          voiceStatus.textContent = 'Permita o acesso ao microfone para conversar por voz.';
+          voiceSessionActive = false;
+          updateVoiceButton();
+        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          voiceStatus.textContent = 'Falha no reconhecimento de voz. Tentando novamente…';
+        }
+      };
+      instance.onend = () => {
+        if (recognition === instance) recognition = null;
+        if (voiceSessionActive && !sendBtn.disabled &&
+            !(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) {
+          recognitionRestartTimer = setTimeout(startVoiceRecognition, 350);
+        }
+      };
+      try { instance.start(); }
+      catch {
+        if (recognition === instance) recognition = null;
+        if (voiceSessionActive) recognitionRestartTimer = setTimeout(startVoiceRecognition, 700);
+      }
+    }
+
+    function endVoiceSession(message = 'Conversa por voz encerrada.') {
+      voiceSessionActive = false;
+      voiceConversationToggle.checked = false;
+      stopVoiceRecognition();
+      stopBrowserSpeech();
+      updateVoiceButton();
+      voiceStatus.textContent = message;
+    }
+
+    function toggleVoiceInput() {
+      if (!SpeechRecognitionAPI) {
+        voiceStatus.textContent = 'Seu navegador não oferece reconhecimento de voz. Tente usar o Chrome e permitir o microfone.';
+        return;
+      }
+      if (voiceSessionActive) {
+        endVoiceSession();
+        return;
+      }
+      voiceSessionActive = true;
+      voiceConversationToggle.checked = true;
+      updateVoiceButton();
+      voiceStatus.textContent = 'Preparando o microfone…';
+      startVoiceRecognition();
+    }
+
+    updateVoiceButton();
 
     function addBubble(text, role, extraClass='', files=[]) {
       document.getElementById('welcome')?.remove();
@@ -959,6 +1045,7 @@
       activeController = new AbortController();
       if (voiceConversationToggle.checked) {
         stopBrowserSpeech();
+        stopVoiceRecognition();
       }
       const pending = addBubble('Analisando...', 'assistant');
       try {
@@ -1028,7 +1115,16 @@
         sendBtn.textContent = 'Enviar';
         stopButton.hidden = true;
         activeController = null;
-        promptEl.focus();
+        if (voiceSessionActive) {
+          if (window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+            voiceStatus.textContent = 'ADA-M está respondendo…';
+          } else {
+            voiceStatus.textContent = 'Sua vez. Estou ouvindo…';
+            startVoiceRecognition();
+          }
+        } else {
+          promptEl.focus();
+        }
       }
     });
   </script>
