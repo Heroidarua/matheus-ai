@@ -19,6 +19,12 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: TTS_API_URL
+        sync: false
+      - key: TTS_API_KEY
+        sync: false
+      - key: TTS_VOICE
+        value: pf_dora
       - key: GOOGLE_TOKEN_ENCRYPTION_KEY
         sync: false
       - key: KNOWLEDGE_DIR
