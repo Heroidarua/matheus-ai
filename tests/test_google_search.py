@@ -139,3 +139,43 @@ async def test_google_grounded_search_falls_back_when_configured_model_is_invali
     assert "gemini-2.5-flash:generateContent" in calls[1]
     assert summary == "Found it."
     assert len(sources) == 1
+
+
+@pytest.mark.asyncio
+async def test_google_grounded_search_does_not_retry_other_model_on_429(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self):
+            self.request = httpx.Request(
+                "POST", "https://generativelanguage.googleapis.com/test"
+            )
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError(
+                "quota exceeded",
+                request=self.request,
+                response=httpx.Response(429, request=self.request),
+            )
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, **kwargs):
+            calls.append(url)
+            return FakeResponse()
+
+    monkeypatch.setattr("app.google_search.httpx.AsyncClient", FakeClient)
+    with pytest.raises(httpx.HTTPStatusError):
+        await google_grounded_search(
+            "notícias atuais", api_key="test-key", model="gemini-3.8-flash"
+        )
+    assert len(calls) == 1
+    assert "gemini-3.8-flash:generateContent" in calls[0]
