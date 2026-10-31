@@ -222,3 +222,8 @@ Crie o token no painel da Cloudflare, mantenha-o somente nas variáveis do Rende
 A Cloudflare informa uma franquia de 10.000 Neurons por dia no Workers AI Free; o consumo varia conforme o modelo e a execução. Ao exceder a franquia diária, novas gerações podem falhar até a renovação do limite. Consulte a página oficial de [preços do Workers AI](https://developers.cloudflare.com/workers-ai/platform/pricing/) e o painel de uso antes de ampliar o uso.
 
 A integração não altera o modelo principal de conversa, a leitura em voz alta, a biblioteca de arquivos nem as demais ferramentas. A criação de imagens fica indisponível até que as duas variáveis obrigatórias sejam configuradas.
+
+
+## Personalidade e estado afetivo simulado
+
+A camada `app/companion.py` adiciona identidade conversacional consistente e sinais afetivos contextuais (alegria, serenidade, curiosidade, empatia, confiança, frustração e surpresa). O estado é isolado por sessão e pode ser persistido no PostgreSQL já configurado em `DATABASE_URL`. A camada não altera os pesos do modelo e não afirma consciência ou sentimentos subjetivos. Sem PostgreSQL, o fallback é temporário em memória. O endpoint `GET /api/companion/state` informa os valores da sessão sem expor mensagens. Consulte [docs/personalidade-e-emocoes.md](docs/personalidade-e-emocoes.md) para detalhes e limitações.
