@@ -59,7 +59,7 @@
       const answer = String(data.reply || '').trim(); if (!answer) throw new Error('O backend não retornou uma resposta.');
       liveHistory.push({ role: 'assistant', content: answer }); liveHistory = liveHistory.slice(-12);
       addBubble(answer, 'assistant');
-      const spokenResult = answer.length > 1700 ? answer.slice(0, 1690).replace(/\\s+\\S*$/, '') + '…' : answer;
+      const spokenResult = answer.length > 1700 ? answer.slice(0, 1690).replace(/\s+\S*$/, '') + '…' : answer;
       sendEvent({ type: 'session.commentary.append', event_id: 'live_result_' + (++delegationCounter), delegation_id: delegationId, content: spokenResult });
       setStatus('Conversa ao vivo · pode continuar falando');
       resetIdleTimer();
