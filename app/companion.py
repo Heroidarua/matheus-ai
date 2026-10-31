@@ -145,7 +145,18 @@ def get_companion_state(session_id: str) -> dict[str, float]:
 
 
 def companion_storage_status() -> str:
-    return "postgresql configurado" if _database_url() else "temporário: DATABASE_URL não configurado"
+    """Verifica conectividade real sem expor a URL ou credenciais."""
+    database_url = _database_url()
+    if not database_url:
+        return "não configurado: estado temporário neste processo"
+    try:
+        with psycopg.connect(database_url, connect_timeout=3) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        return "PostgreSQL conectado"
+    except Exception as exc:
+        return f"DATABASE_URL configurado, mas conexão falhou ({type(exc).__name__})"
 
 
 def build_companion_prompt(state: dict[str, float]) -> str:
