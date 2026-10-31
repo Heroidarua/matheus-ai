@@ -16,8 +16,7 @@ Os documentos enviados são convertidos em texto e metadados e armazenados em Po
 
 1. No Render, crie ou reutilize um PostgreSQL persistente para o serviço.
 2. Configure `DATABASE_URL` com a URL privada/interna do banco.
-3. Configure `APP_API_KEY` no Render para proteger os endpoints da aplicação.
-4. Faça deploy e abra **+ → Ferramentas → Biblioteca de arquivos**.
+3. Faça deploy e abra **+ → Ferramentas → Biblioteca de arquivos**.
 
 O `render.yaml` já declara `DATABASE_URL` como variável externa, mas não cria um banco automaticamente. Sem essa variável, a biblioteca informa que está indisponível; a pesquisa web e a base curada continuam funcionando.
 
@@ -33,4 +32,4 @@ A interface web já fornece upload, listagem, pesquisa e exclusão. O chat consu
 
 ## Privacidade
 
-A biblioteca é compartilhada pela instância da aplicação, não por usuário individual. Não envie documentos de identidade, dados financeiros, credenciais, prontuários ou documentos de terceiros sem autorização e necessidade legítima. Os trechos recuperados podem ser enviados ao provedor de modelo configurado para produzir a resposta. Configure autenticação e limite o acesso ao serviço.
+A biblioteca é compartilhada pela instância da aplicação, não por usuário individual. Os endpoints seguem a proteção opcional `APP_API_KEY` do backend; a interface atual não envia essa chave, portanto não ative essa variável sem antes integrar autenticação no frontend ou em um proxy, pois isso também bloquearia as chamadas do chat. Restrinja o acesso ao serviço por uma camada de autenticação antes de armazenar documentos privados. Não envie documentos de identidade, dados financeiros, credenciais, prontuários ou documentos de terceiros sem autorização e necessidade legítima. Os trechos recuperados podem ser enviados ao provedor de modelo configurado para produzir a resposta.
