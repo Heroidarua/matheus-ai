@@ -888,7 +888,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     automatic_search = requires_live_search(last_user_message)
     should_search = request.web_search or automatic_search
     explicit_external_search = bool(re.search(
-        r"\\b(?:procura(?:r)?|pesquisa(?:r)?|busca(?:r)?|encontra(?:r)?|localiza(?:r)?)\\b.{0,100}\\b(?:github|git\\s*hub|reposit[oó]rios?|c[oó]digo|site|link|p[aá]gina|internet|web)\\b",
+        r"\b(?:procura(?:r)?|pesquisa(?:r)?|busca(?:r)?|encontra(?:r)?|localiza(?:r)?)\b.{0,100}\b(?:github|git\s*hub|reposit[oó]rios?|c[oó]digo|site|link|p[aá]gina|internet|web)\b",
         last_user_message.casefold(),
     ))
     if should_search:
@@ -905,7 +905,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     system_prompt += f"\n\nDATA ATUAL DO SISTEMA (fuso de Manaus): {current_local_date()}. Use esta data como referência; não diga que um evento ainda vai acontecer sem conferir as fontes atuais."
     if explicit_external_search and not sources:
         system_prompt += (
-            "\\n\\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
+            "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
         )
     if search_unavailable:
         system_prompt += (
