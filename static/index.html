@@ -562,19 +562,45 @@
       if (remaining) queueBrowserSpeech(remaining);
     }
 
+    function prepareSpeechText(text) {
+      let value = String(text || '').replace(/\r/g, '');
+
+      // Remove blocos de fontes/referências no fim da resposta: não fazem
+      // parte do conteúdo que deve ser narrado.
+      value = value.replace(/\n{1,2}#{1,3}\s*(?:fontes|sources|referências|referencias|bibliografia)\s*:?\s*[\s\S]*$/i, '');
+      value = value.replace(/(?:^|\n)\s*(?:fontes|sources|referências|referencias|bibliografia)\s*:\s*[\s\S]*$/i, '');
+
+      // Código é omitido na leitura; links Markdown mantêm somente o rótulo.
+      value = value.replace(/```[\s\S]*?```/g, ' código omitido ');
+      value = value.replace(/!?\[([^\]]*)\]\(https?:\/\/[^\s)]+(?:\s+[^)]*)?\)/g, '$1');
+      value = value.replace(/https?:\/\/[^\s)]+/g, ' ');
+      // Remove apenas marcadores numéricos de citação, sem apagar números
+      // que façam parte do texto comum.
+      value = value.replace(/\[(?:\d+\s*(?:,\s*\d+\s*)*)\]/g, ' ');
+      value = value.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+      value = value.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/gm, '');
+      value = value.replace(/[*_#>~|]/g, ' ');
+
+      // Pausas naturais: parágrafos viram pausa longa; quebras simples,
+      // pausa curta. A pontuação original é mantida.
+      value = value.replace(/\n\s*\n+/g, '. ');
+      value = value.replace(/\n/g, ', ');
+      return value.replace(/[ \t]+/g, ' ').replace(/\s+([,.;:!?])/g, '$1').trim();
+    }
+
     function speakText(text) {
       stopBrowserSpeech();
       if (!('speechSynthesis' in window)) {
         voiceStatus.textContent = 'Leitura em voz alta não é suportada neste navegador.';
         return;
       }
-      const normalized = String(text).replace(/\r/g, '')
-        .replace(/\n{2,}/g, '. ')
-        .replace(/\n/g, ', ')
-        .replace(/^\s*[-*+]\s+/gm, '')
-        .replace(/^\s*\d+[.)]\s+/gm, '');
-      const pieces = normalized.match(/[^.!?…]+[.!?…]*|[.!?…]+/g) || [normalized];
-      for (const piece of pieces) queueBrowserSpeech(piece);
+      const normalized = prepareSpeechText(text);
+      if (!normalized) {
+        voiceStatus.textContent = 'Não há texto para leitura.';
+        return;
+      }
+      const pieces = normalized.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [normalized];
+      for (const piece of pieces) queueBrowserSpeech(piece.trim());
     }
 
     speechTestButton.addEventListener('click', () => {
@@ -1277,7 +1303,7 @@
           if (eventName === 'done') { streamSources = Array.isArray(payload.sources) ? payload.sources : []; return; }
           if (typeof payload.token === 'string') {
             answer += payload.token;
-            if (voiceConversationToggle.checked) feedSpeechToken(payload.token);
+
             pending.replaceChildren(renderMarkdown(answer));
             pending.scrollIntoView({ behavior: 'smooth', block: 'end' });
           }
@@ -1296,7 +1322,7 @@
         } finally { reader.releaseLock(); }
         if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
         displayAssistantReply(pending, answer, streamSources);
-        if (voiceConversationToggle.checked) flushSpeechBuffer();
+        if (voiceConversationToggle.checked) speakText(answer);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
       } catch (error) {
