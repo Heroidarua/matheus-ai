@@ -8,6 +8,17 @@ O projeto agora suporta **RAG (busca e recuperação de conhecimento)**: antes d
 
 Isso personaliza as respostas com informações do projeto sem retreinar os pesos do modelo. O sistema de busca é lexical e leve, feito com a biblioteca padrão do Python; não precisa de banco vetorial nem de outra API. A qualidade depende do modelo configurado e de como os documentos são escritos.
 
+### Conteúdo especializado disponível
+
+A base inicial inclui guias curados para:
+- Python, engenharia de software e testes.
+- Linux, Android, Termux e PRoot.
+- Desenvolvimento web, APIs e segurança defensiva.
+- Pesquisa, avaliação de evidências e verificação de fontes.
+- Automação, integrações, deploy e observabilidade.
+
+Consulte `data/knowledge/indice-e-curadoria.md` para o catálogo, critérios de qualidade e limitações. Os documentos registram links de fontes primárias e uma data de revisão. O mecanismo atual continua sendo RAG lexical: ele recupera trechos por palavras relacionadas, mas não faz fine-tuning nem valida automaticamente se uma fonte mudou.
+
 ### Como adicionar conhecimento
 
 1. Crie um arquivo `.md` ou `.txt` dentro de `data/knowledge/`.
