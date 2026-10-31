@@ -17,11 +17,17 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
-router = APIRouter(tags=["biblioteca de arquivos"])
+def require_library_key(x_app_key: str | None = Header(default=None)) -> None:
+    expected = os.getenv("APP_API_KEY", "").strip()
+    if expected and x_app_key != expected:
+        raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
+
+
+router = APIRouter(tags=["biblioteca de arquivos"], dependencies=[Depends(require_library_key)])
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_TEXT_CHARS = 250_000
 MAX_LIBRARY_DOCS = 500
