@@ -492,6 +492,11 @@
 
     // Leitura com síntese nativa do navegador, sem serviços externos.
     let speechBuffer = '';
+    let serverTtsAbortController = null;
+    let serverTtsAudio = null;
+    let serverTtsObjectUrl = null;
+    let serverTtsGeneration = 0;
+    let serverTtsQueue = Promise.resolve();
     const speechVoiceSelect = document.getElementById('speech-voice');
     const speechTestButton = document.getElementById('test-speech-voice');
     let availableSpeechVoices = [];
@@ -517,6 +522,19 @@
 
     function stopBrowserSpeech() {
       speechBuffer = '';
+      serverTtsGeneration++;
+      if (serverTtsAbortController) {
+        try { serverTtsAbortController.abort(); } catch {}
+        serverTtsAbortController = null;
+      }
+      if (serverTtsAudio) {
+        try { serverTtsAudio.pause(); serverTtsAudio.removeAttribute('src'); serverTtsAudio.load(); } catch {}
+        serverTtsAudio = null;
+      }
+      if (serverTtsObjectUrl) {
+        try { URL.revokeObjectURL(serverTtsObjectUrl); } catch {}
+        serverTtsObjectUrl = null;
+      }
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     }
 
@@ -529,7 +547,7 @@
         || null;
     }
 
-    function queueBrowserSpeech(text) {
+    function queueNativeBrowserSpeech(text) {
       const clean = String(text)
         .replace(/\x60{3}[\s\S]*?\x60{3}/g, ' trecho de código omitido ')
         .replace(/https?:\/\/\S+/g, ' link ')
@@ -569,6 +587,55 @@
         }
       };
       window.speechSynthesis.speak(utterance);
+    }
+
+    function queueBrowserSpeech(text) {
+      const clean = prepareSpeechText(text);
+      if (!clean) return;
+      const generation = serverTtsGeneration;
+      serverTtsQueue = serverTtsQueue.then(async () => {
+        if (generation !== serverTtsGeneration) return;
+        const controller = new AbortController();
+        serverTtsAbortController = controller;
+        try {
+          const response = await fetch('/api/tts/speech', {
+            method: 'POST',
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json', 'Accept': 'audio/wav' },
+            body: JSON.stringify({ text: clean, speed: 1.0 })
+          });
+          if (!response.ok) throw new Error('TTS indisponível');
+          const blob = await response.blob();
+          if (!blob.size || generation !== serverTtsGeneration) return;
+          const objectUrl = URL.createObjectURL(blob);
+          serverTtsObjectUrl = objectUrl;
+          const audio = new Audio(objectUrl);
+          serverTtsAudio = audio;
+          audio.onplay = () => {
+            voiceStatus.textContent = 'ADA-M falando com voz natural…';
+            startBargeInRecognition();
+          };
+          await new Promise((resolve, reject) => {
+            audio.onended = resolve;
+            audio.onerror = () => reject(new Error('Falha ao reproduzir o áudio.'));
+            audio.play().catch(reject);
+          });
+          stopBargeInRecognition();
+        } catch (error) {
+          if (error.name !== 'AbortError' && generation === serverTtsGeneration) {
+            queueNativeBrowserSpeech(clean);
+          }
+        } finally {
+          if (generation === serverTtsGeneration) {
+            serverTtsAbortController = null;
+            if (serverTtsAudio) serverTtsAudio = null;
+            if (serverTtsObjectUrl) {
+              URL.revokeObjectURL(serverTtsObjectUrl);
+              serverTtsObjectUrl = null;
+            }
+          }
+        }
+      });
     }
 
     function feedSpeechToken(token) {
@@ -635,6 +702,7 @@
       }
       const pieces = normalized.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [normalized];
       for (const piece of pieces) queueBrowserSpeech(piece.trim());
+      return serverTtsQueue;
     }
 
     speechTestButton.addEventListener('click', () => {
@@ -1128,7 +1196,7 @@
         if (!transcript || !interruptionPattern.test(transcript)) return;
         bargeInHandled = true;
         stopBargeInRecognition();
-        window.speechSynthesis.cancel();
+        stopBrowserSpeech();
         stopVoiceRecognition();
         const question = transcript.replace(interruptionPattern, '').replace(/^[,.:;\\s-]+/, '').trim();
         voiceStatus.textContent = question ? 'Interrompendo. Vou ouvir sua pergunta…' : 'Interrompida. Pode continuar falando…';
@@ -1145,7 +1213,7 @@
       };
       instance.onend = () => {
         if (bargeInRecognition === instance) bargeInRecognition = null;
-        if (voiceSessionActive && window.speechSynthesis?.speaking && !bargeInHandled) {
+        if (voiceSessionActive && (window.speechSynthesis?.speaking || (serverTtsAudio && !serverTtsAudio.paused && !serverTtsAudio.ended)) && !bargeInHandled) {
           bargeInRestartTimer = setTimeout(startBargeInRecognition, 450);
         }
       };
@@ -1432,7 +1500,7 @@
         } finally { reader.releaseLock(); }
         if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
         displayAssistantReply(pending, answer, streamSources);
-        if (voiceConversationToggle.checked) speakText(answer);
+        if (voiceConversationToggle.checked) await speakText(answer);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
       } catch (error) {

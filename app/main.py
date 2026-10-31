@@ -43,6 +43,10 @@ from app.companion import (
 
 load_dotenv()
 
+TTS_API_URL = os.getenv("TTS_API_URL", "").strip().rstrip("/")
+TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
+TTS_VOICE = os.getenv("TTS_VOICE", "pf_dora").strip() or "pf_dora"
+
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
 MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:11434/v1").rstrip("/")
@@ -103,6 +107,10 @@ class ImageEditRequest(BaseModel):
     mime_type: str = Field(pattern="^(image/jpeg|image/png|image/webp)$")
     prompt: str = Field(min_length=3, max_length=2000)
 
+class TTSProxyRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=3000)
+    speed: float = Field(default=1.0, ge=0.7, le=1.3)
+
 
 class ImageEditResponse(BaseModel):
     image_data: str
@@ -132,6 +140,62 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
+
+
+@app.get("/api/tts/status", dependencies=[Depends(require_app_key)])
+async def tts_status() -> dict[str, Any]:
+    """Informa se a síntese feminina remota está configurada, sem revelar segredos."""
+    return {
+        "configured": bool(TTS_API_URL),
+        "engine": "Kokoro-82M" if TTS_API_URL else "browser-fallback",
+        "voice": TTS_VOICE if TTS_API_URL else None,
+        "language": "pt-BR",
+    }
+
+
+@app.post("/api/tts/speech", dependencies=[Depends(require_app_key)])
+async def tts_speech(data: TTSProxyRequest) -> Response:
+    """Proxy seguro para o TTS: a chave do serviço nunca chega ao navegador."""
+    if not TTS_API_URL:
+        raise HTTPException(status_code=503, detail="Voz natural ainda não configurada; usando a voz do navegador.")
+    headers = {"Authorization": f"Bearer {TTS_API_KEY}"} if TTS_API_KEY else {}
+    payload = {
+        "model": "kokoro",
+        "input": data.text.strip(),
+        "voice": TTS_VOICE,
+        "response_format": "wav",
+        "speed": data.speed,
+    }
+    if not payload["input"]:
+        raise HTTPException(status_code=400, detail="Texto vazio.")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=8.0)) as client:
+            upstream = await client.post(
+                f"{TTS_API_URL}/v1/audio/speech",
+                headers=headers,
+                json=payload,
+            )
+        upstream.raise_for_status()
+        content_type = upstream.headers.get("content-type", "audio/wav").split(";")[0].strip()
+        if not content_type.startswith("audio/") or not upstream.content:
+            raise HTTPException(status_code=502, detail="O serviço de voz retornou um áudio inválido.")
+        return Response(
+            content=upstream.content,
+            media_type=content_type,
+            headers={"Cache-Control": "no-store", "Content-Disposition": 'inline; filename="ada-m.wav"'},
+        )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="A síntese de voz demorou demais. Tente novamente.")
+    except httpx.HTTPStatusError as exc:
+        print(f"TTS provider HTTP {exc.response.status_code}")
+        if exc.response.status_code in (401, 403):
+            raise HTTPException(status_code=502, detail="A autenticação do serviço de voz falhou. Confira TTS_API_KEY.")
+        if exc.response.status_code == 503:
+            raise HTTPException(status_code=503, detail="O serviço de voz ainda está carregando.")
+        raise HTTPException(status_code=502, detail="O serviço de voz não conseguiu gerar o áudio.")
+    except httpx.HTTPError as exc:
+        print(f"TTS provider connection error ({type(exc).__name__})")
+        raise HTTPException(status_code=502, detail="Não foi possível conectar ao serviço de voz.")
 
 
 @app.get("/api/companion/state", dependencies=[Depends(require_app_key)])
@@ -180,6 +244,12 @@ async def diagnostics() -> dict[str, Any]:
         "app": "operacional",
         "uptime_seconds": round(time.time() - APP_STARTED_AT),
         "model": {"configured": provider_configured, **probe},
+        "voice": {
+            "configured": bool(TTS_API_URL),
+            "engine": "Kokoro-82M" if TTS_API_URL else "voz do navegador",
+            "voice": TTS_VOICE if TTS_API_URL else None,
+        },
+        "companion_storage": companion_storage_status(),
         "search": {"providers": search_providers, "last_provider": DIAGNOSTICS["last_search_provider"]},
         "metrics": {key: DIAGNOSTICS[key] for key in ("requests", "successes", "errors", "searches", "search_successes")},
         "last_error": DIAGNOSTICS["last_error"],
