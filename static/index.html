@@ -1366,6 +1366,14 @@
       }
       const pending = addBubble('Analisando...', 'assistant');
       try {
+        const imageFile = files.find(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
+        const imageEditPrompt = imageFile && window.ADAExtractImageEditPrompt ? window.ADAExtractImageEditPrompt(userText) : null;
+        if (imageEditPrompt && window.ADAEditImageInChat) {
+          const imageResult = await window.ADAEditImageInChat(imageFile, imageEditPrompt, pending);
+          history.push({ role: 'assistant', content: imageResult });
+          while (history.length > 12) history.shift();
+          return;
+        }
         const imagePrompt = !files.length && window.ADAExtractImagePrompt ? window.ADAExtractImagePrompt(userText) : null;
         if (imagePrompt && window.ADAGenerateImageInChat) {
           const imageResult = await window.ADAGenerateImageInChat(imagePrompt, pending);
