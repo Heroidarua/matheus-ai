@@ -791,7 +791,7 @@
       const root = document.createElement('div');
       root.className = 'assistant-content';
       const lines = String(text || '').replace(/\r/g, '').split('\n');
-      let paragraph = [], list = null, codeLines = null;
+      let paragraph = [], list = null, codeLines = null, orderedCount = 0;
       const flushParagraph = () => {
         if (!paragraph.length) return;
         const p = document.createElement('p');
@@ -828,9 +828,18 @@
         if (item || ordered) {
           flushParagraph();
           const tag = ordered ? 'ol' : 'ul';
-          if (!list || list.tagName.toLowerCase() !== tag) { flushList(); list = document.createElement(tag); }
+          if (!list || list.tagName.toLowerCase() !== tag) {
+            flushList();
+            list = document.createElement(tag);
+            // Continua a numeração entre blocos <ol> separados por parágrafos
+            // ou listas com marcadores dentro da mesma resposta.
+            if (ordered) list.start = orderedCount + 1;
+          }
           const li = document.createElement('li');
-          renderInline(li, (item || ordered)[1]); list.appendChild(li); continue;
+          renderInline(li, (item || ordered)[1]);
+          list.appendChild(li);
+          if (ordered) orderedCount++;
+          continue;
         }
         flushList();
         paragraph.push(line.trim());
