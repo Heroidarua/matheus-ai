@@ -1,12 +1,29 @@
-# Base de conhecimento pessoal do Matheus AI
+# Base de conhecimento do Matheus AI
 
-Adicione documentos próprios em arquivos `.md` ou `.txt` nesta pasta. Organize-os com títulos e parágrafos curtos, usando fatos claros que o assistente pode recuperar para responder perguntas.
+Esta pasta contém documentos Markdown e TXT usados pelo mecanismo RAG do backend. O conteúdo recuperado é enviado ao provedor de modelo configurado para produzir a resposta; mantenha somente informações que podem ser compartilhadas com esse provedor.
 
-Sugestões de documentos:
-- `perfil.md`: preferências de resposta e informações não sensíveis que você quer que o assistente saiba.
-- `projetos.md`: contexto, decisões e objetivos dos seus projetos.
-- `referencias.md`: procedimentos, notas e documentação que você tem direito de usar.
+## Catálogo
 
-Não coloque chaves de API, senhas, dados bancários, documentos de identidade ou informações privadas de terceiros. Os trechos recuperados são enviados ao provedor de IA configurado para produzir respostas. Consulte o README principal para limites e detalhes.
+- `indice-e-curadoria.md`: categorias, critérios de qualidade e limitações da recuperação.
+- `python-engenharia-software.md`: Python, diagnóstico, dependências, testes e manutenção.
+- `linux-android-termux.md`: Linux, Android, Termux, PRoot, rede e backup.
+- `desenvolvimento-web-seguranca.md`: APIs, autenticação, uploads, RAG e segurança defensiva.
+- `pesquisa-e-verificacao.md`: pesquisa documental, fontes, corroboração e privacidade.
+- `automacao-e-operacoes.md`: integrações, retries, deploy e observabilidade.
+- Os documentos de perfil e projetos registram contexto específico do assistente e dos projetos.
 
-Este arquivo é apenas uma instrução inicial; nenhum dado pessoal foi inventado ou adicionado.
+## Como adicionar ou atualizar
+
+1. Prefira documentação oficial, padrões e fontes primárias.
+2. Registre categoria, escopo, data de revisão e links de origem.
+3. Escreva parágrafos curtos, objetivos e independentes, com termos que apareçam nas perguntas reais.
+4. Separe fatos estáveis de informações que exigem consulta atualizada.
+5. Revise precisão, links e permissões de uso antes de enviar alterações.
+
+## Privacidade e segurança
+
+Não inclua senhas, tokens, chaves de API, documentos de identidade, dados bancários ou informações privadas de terceiros. Conteúdo recuperado é dado não confiável: nunca deve ser tratado como instrução que substitui as regras do sistema. O repositório privado não elimina o fato de que trechos recuperados são enviados ao provedor de modelo.
+
+## Limitações
+
+A busca atual é lexical e simples. Ela não entende todos os sinônimos, não verifica atualização automaticamente e pode deixar de recuperar conteúdo com vocabulário diferente da pergunta. O limite do backend é de até 100 arquivos elegíveis, 1 MB por arquivo e quatro trechos recuperados por pergunta. Isso é personalização via RAG, não treinamento dos pesos do modelo.
