@@ -33,6 +33,7 @@ from app.research_engine import build_search_query, classify_research_topic, is_
 from app.google_search import google_grounded_search
 from app.google_workspace import router as google_workspace_router
 from app.file_library import router as file_library_router, search_library
+from app.image_generation import router as image_generation_router
 
 load_dotenv()
 
@@ -68,6 +69,7 @@ from app.github_integration import router as github_router
 app.include_router(github_router)
 app.include_router(google_workspace_router)
 app.include_router(file_library_router)
+app.include_router(image_generation_router)
 
 
 class ChatMessage(BaseModel):
