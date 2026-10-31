@@ -131,11 +131,14 @@ async def google_grounded_search(
             except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
                 last_error = exc
                 status = getattr(getattr(exc, "response", None), "status_code", None)
-                # Do not retry the same model; try the known fallback model.
+                # A 429 is a project quota/rate-limit response, not a model compatibility issue.
+                # Trying another Gemini model consumes another request against the same quota.
                 print(
                     f"Google Search Grounding model={model_name} failed "
                     f"(status={status or 'n/a'}, error={type(exc).__name__})"
                 )
+                if status == 429:
+                    raise
 
     if last_error:
         raise last_error
