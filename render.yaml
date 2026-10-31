@@ -8,7 +8,7 @@ services:
       - key: MODEL_BASE_URL
         sync: false
       - key: MODEL_NAME
-        value: qwen2.5:3b
+        value: gemma4:31b
       - key: GOOGLE_GEMINI_API_KEY
         sync: false
       - key: GOOGLE_SEARCH_MODEL
@@ -30,8 +30,6 @@ services:
       - key: KNOWLEDGE_DIR
         value: data/knowledge
       - key: OPENAI_API_KEY
-        sync: false
-      - key: GPT_LIVE_API_KEY
         sync: false
       - key: CLOUDFLARE_ACCOUNT_ID
         sync: false
