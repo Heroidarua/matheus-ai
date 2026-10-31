@@ -46,6 +46,7 @@ load_dotenv()
 TTS_API_URL = os.getenv("TTS_API_URL", "").strip().rstrip("/")
 TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
 TTS_VOICE = os.getenv("TTS_VOICE", "pf_dora").strip() or "pf_dora"
+GPT_LIVE_API_KEY = os.getenv("GPT_LIVE_API_KEY", "").strip()
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
@@ -112,6 +113,10 @@ class TTSProxyRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.7, le=1.3)
 
 
+class LiveSessionRequest(BaseModel):
+    sdp: str = Field(min_length=1, max_length=100000)
+
+
 class ImageEditResponse(BaseModel):
     image_data: str
     mime_type: str = "image/png"
@@ -140,6 +145,60 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
+
+
+@app.post("/api/live/session", dependencies=[Depends(require_app_key)])
+async def create_live_session(data: LiveSessionRequest) -> dict[str, str]:
+    """Cria uma sessão GPT-Live via WebRTC sem expor a chave OpenAI ao navegador."""
+    if not GPT_LIVE_API_KEY:
+        raise HTTPException(status_code=503, detail="GPT-Live ainda não está configurado. Adicione GPT_LIVE_API_KEY nas variáveis do Render.")
+    payload = {
+        "session": {
+            "model": "gpt-live-1",
+            "instructions": (
+                "Você é a interface de voz da ADA-M, assistente pessoal de Matheus. "
+                "Fale sempre em português brasileiro, de forma natural, clara e concisa. "
+                "Você cuida da conversa por voz, escuta, fala e pode interromper sua própria fala "
+                "quando o usuário começar a falar. Para perguntas, explicações, programação, pesquisas, "
+                "análises ou tarefas, delegue o trabalho ao backend da aplicação; não invente respostas "
+                "nem diga que uma ação foi concluída sem confirmação do backend. "
+                "Saudações e pequenas confirmações podem ser respondidas diretamente. "
+                "Quando o backend retornar informações, explique-as naturalmente sem alterar os fatos."
+            ),
+            "audio": {"output": {"voice": "marin"}},
+            "delegation": {"type": "client", "acknowledgement_delay_ms": 800},
+        },
+        "transport": {"type": "webrtc", "sdp": data.sdp},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(35.0, connect=8.0)) as client:
+            upstream = await client.post(
+                "https://api.openai.com/v1/live/sessions",
+                headers={"Authorization": f"Bearer {GPT_LIVE_API_KEY}", "Content-Type": "application/json"},
+                json=payload,
+            )
+        if not upstream.is_success:
+            print(f"GPT-Live session creation failed: HTTP {upstream.status_code}")
+            if upstream.status_code in (401, 403):
+                raise HTTPException(status_code=502, detail="A chave GPT-Live foi recusada. Confira GPT_LIVE_API_KEY e o acesso do projeto.")
+            if upstream.status_code == 429:
+                raise HTTPException(status_code=429, detail="Limite ou crédito da API OpenAI atingido. Confira o faturamento e os limites do projeto.")
+            raise HTTPException(status_code=502, detail="A OpenAI não conseguiu iniciar a sessão GPT-Live.")
+        result = upstream.json()
+        session_id = (result.get("session") or {}).get("id")
+        answer_sdp = (result.get("transport") or {}).get("sdp")
+        if not session_id or not answer_sdp:
+            raise HTTPException(status_code=502, detail="A OpenAI retornou uma resposta de sessão incompleta.")
+        return {"session_id": session_id, "sdp": answer_sdp}
+    except HTTPException:
+        raise
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="A conexão com GPT-Live demorou demais. Tente novamente.")
+    except httpx.HTTPError as exc:
+        print(f"GPT-Live connection error ({type(exc).__name__})")
+        raise HTTPException(status_code=502, detail="Não foi possível conectar ao GPT-Live.")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=502, detail="A OpenAI retornou uma resposta inválida para a sessão GPT-Live.")
 
 
 @app.get("/api/tts/status", dependencies=[Depends(require_app_key)])
