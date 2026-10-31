@@ -1341,16 +1341,21 @@
       const files = [...selectedFiles];
       const userText = text || 'Analise os arquivos anexados.';
       
+      const imageFile = files.find(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
+      const imageEditPrompt = imageFile && window.ADAExtractImageEditPrompt ? window.ADAExtractImageEditPrompt(userText) : null;
+
+      // Edição de foto usa uma única transferência direta ao endpoint de imagem.
       let content;
       try {
         content = [{ type: 'text', text: userText }];
-        for (const file of files) content.push(await serializeFile(file));
+        if (!imageEditPrompt) {
+          for (const file of files) content.push(await serializeFile(file));
+        }
       } catch (error) {
         addBubble('Erro: ' + (error.message || 'Não foi possível ler o arquivo.'), 'assistant', 'error');
         return;
       }
-      const userMessage = { role: 'user', content };
-      history.push(userMessage);
+      history.push({ role: 'user', content });
       while (history.length > 12) history.shift();
       addBubble(userText, 'user', '', files);
       promptEl.value = '';
@@ -1366,9 +1371,7 @@
       }
       const pending = addBubble('Analisando...', 'assistant');
       try {
-        const imageFile = files.find(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
-        const imageEditPrompt = imageFile && window.ADAExtractImageEditPrompt ? window.ADAExtractImageEditPrompt(userText) : null;
-        if (imageEditPrompt && window.ADAEditImageInChat) {
+        if (imageEditPrompt && imageFile && window.ADAEditImageInChat) {
           const imageResult = await window.ADAEditImageInChat(imageFile, imageEditPrompt, pending);
           history.push({ role: 'assistant', content: imageResult });
           while (history.length > 12) history.shift();
@@ -1473,6 +1476,6 @@
       }
     })();
   </script>
-  <script src="/static/image-chat.js"></script>
+  <script src="/static/image-chat.js?v=edit-fix-20261031"></script>
 </body>
 </html>
