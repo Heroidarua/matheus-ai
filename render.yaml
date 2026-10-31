@@ -25,6 +25,12 @@ services:
         value: data/knowledge
       - key: OPENAI_API_KEY
         sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: IMAGE_GENERATION_MODEL
+        value: "@cf/black-forest-labs/flux-1-schnell"
       - key: APP_API_KEY
         sync: false
       - key: SEARXNG_URL
