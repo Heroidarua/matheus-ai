@@ -43,6 +43,20 @@
     .attachments { display:flex;flex-wrap:wrap;gap:8px;margin-top:10px; }
     .attachment-chip { font-size:12px;color:var(--muted);background:#080808;border:1px solid var(--border);border-radius:9px;padding:6px 9px;max-width:220px;overflow-wrap:anywhere; }
     .bubble-image { display:block;max-width:min(260px,100%);max-height:220px;object-fit:contain;border-radius:10px;margin-top:10px;border:1px solid var(--border); }
+    .generated-image{display:block;width:100%;max-width:560px;max-height:70vh;object-fit:contain;border-radius:14px;border:1px solid var(--border);margin-top:10px;background:#111;}
+    .image-studio-dialog{width:min(560px,calc(100vw - 24px));max-height:88vh;padding:0;border:1px solid var(--border);border-radius:18px;background:var(--panel);color:var(--text);}
+    .image-studio-dialog::backdrop{background:rgba(0,0,0,.68);backdrop-filter:blur(3px);}
+    .image-studio-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);}
+    .image-studio-body{display:grid;gap:12px;padding:16px 18px 18px;}
+    .image-studio-body label{display:grid;gap:6px;font-size:13px;color:var(--muted);}
+    .image-studio-body textarea,.image-studio-body select{width:100%;border:1px solid var(--border);border-radius:11px;background:var(--panel2);color:var(--text);padding:11px;font:inherit;font-size:14px;}
+    .image-studio-body textarea{min-height:110px;resize:vertical;}
+    .image-studio-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;}
+    .image-studio-actions button{flex:1;min-width:120px;}
+    .image-studio-status{font-size:12px;color:var(--muted);min-height:18px;}
+    .image-download{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;background:var(--panel2);}
+    .generated-image-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+
     form { position:sticky;bottom:0;background:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.96) 18%);padding:18px 0 8px; }
     .input-wrap { display:flex;align-items:flex-end;gap:8px;padding:9px 10px 9px 16px;border:1px solid #444;border-radius:28px;background:#303030;box-shadow:0 4px 18px rgba(0,0,0,.18);transition:border-color .18s,box-shadow .18s; }
     .input-wrap:focus-within { border-color:#5b5b5b;box-shadow:0 0 0 1px rgba(255,255,255,.025); }
@@ -327,6 +341,7 @@
             <div class="drawer-content">
               <div class="tools primary-tools">
                 <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
+                <button class="tool-btn" type="button" id="image-studio-button"><span>✨</span>Criar imagem com IA</button>
                 <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
               <button class="tool-btn" type="button" id="library-button"><span>📚</span>Biblioteca de arquivos</button>
                 <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
@@ -371,6 +386,25 @@
     <div id="library-results" class="library-results"></div>
     <div class="library-list-head"><strong>Documentos salvos</strong><button type="button" id="library-refresh">Atualizar</button></div>
     <div id="library-files" class="library-files"></div>
+  </dialog>
+  <dialog id="image-studio-dialog" class="image-studio-dialog">
+    <div class="image-studio-head"><div><strong>Estúdio de imagens IA</strong><div style="font-size:11px;color:var(--muted);margin-top:3px">Descreva a imagem que deseja criar</div></div><button type="button" id="image-studio-close" class="library-close" aria-label="Fechar">×</button></div>
+    <form id="image-studio-form" class="image-studio-body">
+      <label for="image-studio-prompt">Descrição da imagem
+        <textarea id="image-studio-prompt" maxlength="1800" minlength="3" required placeholder="Ex.: Uma cidade futurista brasileira à noite, com luzes neon, chuva suave e estilo cinematográfico..."></textarea>
+      </label>
+      <label for="image-studio-style">Estilo visual
+        <select id="image-studio-style">
+          <option value="realista">Realista / Fotográfico</option>
+          <option value="anime">Anime</option>
+          <option value="3d">3D</option>
+          <option value="ilustracao">Ilustração digital</option>
+          <option value="minimalista">Minimalista</option>
+        </select>
+      </label>
+      <div class="image-studio-actions"><button id="image-studio-generate" type="submit">✨ Gerar imagem</button></div>
+      <div id="image-studio-status" class="image-studio-status" aria-live="polite"></div>
+    </form>
   </dialog>
   <script>
     const messagesEl = document.getElementById('messages');
@@ -1240,6 +1274,64 @@
       return bubble;
     }
 
+
+    // Estúdio de criação de imagens via Cloudflare Workers AI.
+    const imageStudioDialog = document.getElementById('image-studio-dialog');
+    const imageStudioForm = document.getElementById('image-studio-form');
+    const imageStudioPrompt = document.getElementById('image-studio-prompt');
+    const imageStudioStatus = document.getElementById('image-studio-status');
+    const imageStudioGenerate = document.getElementById('image-studio-generate');
+    document.getElementById('image-studio-button').addEventListener('click', () => {
+      plusMenu.hidden = true;
+      plusButton.setAttribute('aria-expanded', 'false');
+      imageStudioDialog.showModal();
+      imageStudioPrompt.focus();
+    });
+    document.getElementById('image-studio-close').addEventListener('click', () => imageStudioDialog.close());
+    imageStudioForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const prompt = imageStudioPrompt.value.trim();
+      if (prompt.length < 3 || imageStudioGenerate.disabled) return;
+      imageStudioGenerate.disabled = true;
+      imageStudioGenerate.textContent = 'Gerando…';
+      imageStudioStatus.textContent = 'A ADA-M está criando sua imagem. Isso pode levar alguns instantes.';
+      try {
+        const response = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, style: document.getElementById('image-studio-style').value })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || 'Não foi possível gerar a imagem.');
+        if (!data.image_data || !data.mime_type) throw new Error('O serviço não retornou uma imagem válida.');
+        const dataUrl = 'data:' + data.mime_type + ';base64,' + data.image_data;
+        imageStudioDialog.close();
+        const bubble = addBubble('Imagem criada pela ADA-M', 'assistant');
+        const image = document.createElement('img');
+        image.className = 'generated-image';
+        image.alt = prompt;
+        image.loading = 'lazy';
+        image.src = dataUrl;
+        bubble.appendChild(image);
+        const actions = document.createElement('div');
+        actions.className = 'generated-image-actions';
+        const download = document.createElement('a');
+        download.className = 'image-download';
+        download.href = dataUrl;
+        download.download = 'ada-m-imagem-' + Date.now() + '.png';
+        download.textContent = '↓ Salvar imagem';
+        actions.appendChild(download);
+        bubble.appendChild(actions);
+        bubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        imageStudioPrompt.value = '';
+        imageStudioStatus.textContent = 'Imagem gerada com sucesso.';
+      } catch (error) {
+        imageStudioStatus.textContent = error.message || 'Falha ao gerar imagem.';
+      } finally {
+        imageStudioGenerate.disabled = false;
+        imageStudioGenerate.textContent = '✨ Gerar imagem';
+      }
+    });
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
