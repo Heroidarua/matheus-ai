@@ -317,3 +317,14 @@ def test_extract_document_text_reads_xlsx():
     assert "[Planilha: Vendas]" in extracted
     assert "Produto | Total" in extracted
     assert "Livro | 25" in extracted
+
+
+def test_research_engine_allows_results_for_short_explicit_queries():
+    candidate = {
+        "title": "Página inicial",
+        "url": "https://example.org/",
+        "snippet": "Informações gerais da página.",
+    }
+    ranked = main.rank_results("Oi", [candidate])
+    assert len(ranked) == 1
+    assert ranked[0]["url"] == candidate["url"]
