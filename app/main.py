@@ -152,6 +152,7 @@ async def create_live_session(data: LiveSessionRequest) -> dict[str, str]:
     """Cria uma sessão GPT-Live via WebRTC sem expor a chave OpenAI ao navegador."""
     if not GPT_LIVE_API_KEY:
         raise HTTPException(status_code=503, detail="GPT-Live ainda não está configurado. Adicione GPT_LIVE_API_KEY nas variáveis do Render.")
+
     payload = {
         "session": {
             "model": "gpt-live-1",
@@ -167,6 +168,7 @@ async def create_live_session(data: LiveSessionRequest) -> dict[str, str]:
             ),
             "audio": {"output": {"voice": "marin"}},
             "delegation": {"type": "client", "acknowledgement_delay_ms": 800},
+            "max_output_tokens": 256,
         },
         "transport": {"type": "webrtc", "sdp": data.sdp},
     }
@@ -178,12 +180,30 @@ async def create_live_session(data: LiveSessionRequest) -> dict[str, str]:
                 json=payload,
             )
         if not upstream.is_success:
-            print(f"GPT-Live session creation failed: HTTP {upstream.status_code}")
+            try:
+                body = upstream.json()
+            except ValueError:
+                body = {}
+            error = body.get("error") if isinstance(body, dict) else {}
+            error = error if isinstance(error, dict) else {}
+            code = str(error.get("code") or error.get("type") or "unknown")
+            message = str(error.get("message") or "")[:240]
+            print(f"GPT-Live session creation failed: HTTP {upstream.status_code}, code={code}, message={message}")
             if upstream.status_code in (401, 403):
-                raise HTTPException(status_code=502, detail="A chave GPT-Live foi recusada. Confira GPT_LIVE_API_KEY e o acesso do projeto.")
-            if upstream.status_code == 429:
-                raise HTTPException(status_code=429, detail="Limite ou crédito da API OpenAI atingido. Confira o faturamento e os limites do projeto.")
-            raise HTTPException(status_code=502, detail="A OpenAI não conseguiu iniciar a sessão GPT-Live.")
+                raise HTTPException(status_code=502, detail="A chave GPT-Live foi recusada. Confira a chave e as permissões do projeto.")
+            if code == "credit_balance_exhausted":
+                detail = "A conta da API OpenAI está sem créditos pré-pagos. O Live não foi iniciado."
+            elif code in ("rate_limit_exceeded", "requests", "tokens"):
+                detail = "A API OpenAI aplicou um limite temporário de requisições ou tokens. Aguarde e tente novamente."
+            elif code in ("organization_spend_limit_exceeded", "project_spend_limit_exceeded"):
+                detail = "O limite de gastos configurado na organização ou no projeto OpenAI foi atingido. O Live não foi iniciado."
+            elif code == "organization_usage_limit_exceeded":
+                detail = "O limite de uso aprovado para a organização OpenAI foi atingido. O Live não foi iniciado."
+            elif upstream.status_code == 429:
+                detail = f"A OpenAI recusou a sessão por limite de uso (código: {code}). Consulte o painel de uso e faturamento."
+            else:
+                detail = "A OpenAI não conseguiu iniciar a sessão GPT-Live. Consulte os logs do Render para o código do erro."
+            raise HTTPException(status_code=429 if upstream.status_code == 429 else 502, detail=detail)
         result = upstream.json()
         session_id = (result.get("session") or {}).get("id")
         answer_sdp = (result.get("transport") or {}).get("sdp")
