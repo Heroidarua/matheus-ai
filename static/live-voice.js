@@ -1,0 +1,108 @@
+(() => {
+  const button = document.getElementById('voice-button');
+  const status = document.getElementById('voice-status');
+  const messages = document.getElementById('messages');
+  if (!button || !status || !messages) return;
+  let peer = null, channel = null, microphone = null, audioOutput = null;
+  let active = false, connecting = false, transcriptSegments = [], lastConsumedEnd = 0;
+  let liveHistory = [], delegationCounter = 0;
+  const setStatus = value => { status.textContent = value; };
+  const setButton = () => {
+    button.classList.toggle('voice-active', active || connecting);
+    button.setAttribute('aria-pressed', String(active || connecting));
+    button.setAttribute('aria-label', active ? 'Encerrar GPT-Live' : 'Iniciar GPT-Live');
+    button.title = active ? 'Encerrar GPT-Live' : 'Iniciar GPT-Live';
+  };
+  function addBubble(text, role, error = false) {
+    document.getElementById('welcome')?.remove();
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'assistant') + (error ? ' error' : '');
+    bubble.textContent = text; messages.appendChild(bubble);
+    bubble.scrollIntoView({ behavior: 'smooth', block: 'end' }); return bubble;
+  }
+  function waitForIceGathering(connection) {
+    if (connection.iceGatheringState === 'complete') return Promise.resolve();
+    return new Promise(resolve => {
+      const timeout = setTimeout(resolve, 10000);
+      connection.addEventListener('icegatheringstatechange', () => {
+        if (connection.iceGatheringState === 'complete') { clearTimeout(timeout); resolve(); }
+      });
+    });
+  }
+  function sendEvent(event) { if (channel?.readyState === 'open') channel.send(JSON.stringify(event)); }
+  async function processDelegation(delegationId, offsetMs) {
+    const eligible = transcriptSegments.filter(s => s.endMs > lastConsumedEnd && s.endMs <= (Number(offsetMs) || Infinity) + 1500);
+    const selected = eligible.length ? eligible : transcriptSegments.filter(s => s.endMs > lastConsumedEnd);
+    const utterance = selected.map(s => s.text).join('').trim();
+    if (selected.length) lastConsumedEnd = Math.max(lastConsumedEnd, ...selected.map(s => s.endMs));
+    if (!utterance) {
+      sendEvent({ type: 'session.commentary.append', event_id: 'live_no_transcript_' + (++delegationCounter), delegation_id: delegationId, content: 'Não consegui identificar sua última frase. Peça ao usuário para repetir.' });
+      return;
+    }
+    addBubble(utterance, 'user'); liveHistory.push({ role: 'user', content: utterance }); liveHistory = liveHistory.slice(-12);
+    setStatus('ADA-M está analisando sua solicitação…');
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ messages: liveHistory, mode: 'livre', response_length: 'curta', web_search: false, stream: false })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'O backend da ADA-M não conseguiu responder.');
+      const answer = String(data.reply || '').trim(); if (!answer) throw new Error('O backend não retornou uma resposta.');
+      liveHistory.push({ role: 'assistant', content: answer }); liveHistory = liveHistory.slice(-12);
+      addBubble(answer, 'assistant');
+      const spokenResult = answer.length > 1700 ? answer.slice(0, 1690).replace(/\s+\S*$/, '') + '…' : answer;
+      sendEvent({ type: 'session.commentary.append', event_id: 'live_result_' + (++delegationCounter), delegation_id: delegationId, content: spokenResult });
+      setStatus('Conversa ao vivo · pode continuar falando');
+    } catch (error) {
+      addBubble('Não consegui concluir: ' + (error.message || 'Falha no backend.'), 'assistant', true);
+      sendEvent({ type: 'session.commentary.append', event_id: 'live_error_' + (++delegationCounter), delegation_id: delegationId, content: 'Tive um problema ao consultar o sistema principal. Informe isso ao usuário sem inventar uma resposta.' });
+      setStatus('Falha ao consultar ADA-M');
+    }
+  }
+  function handleServerEvent(event) {
+    if (!event || typeof event.type !== 'string') return;
+    if (event.type === 'session.started') { active = true; connecting = false; setButton(); setStatus('GPT-Live conectado · pode falar'); }
+    else if (event.type === 'session.input_transcript.delta') {
+      const text = String(event.delta || '');
+      if (text) {
+        const startMs = Number(event.start_ms) || 0, endMs = Number(event.end_ms) || startMs;
+        const previous = transcriptSegments[transcriptSegments.length - 1];
+        if (previous && previous.startMs === startMs) { previous.text += text; previous.endMs = Math.max(previous.endMs, endMs); }
+        else transcriptSegments.push({ startMs, endMs, text });
+      }
+    } else if (event.type === 'session.delegation.created' && event.delegation?.target === 'client') {
+      processDelegation(event.delegation.id, event.offset_ms);
+    } else if (event.type === 'error') {
+      setStatus('GPT-Live: ' + (event.error?.message || event.message || 'erro na sessão'));
+    } else if (event.type === 'session.closed') stop('Sessão encerrada.');
+  }
+  async function start() {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) throw new Error('GPT-Live precisa de HTTPS e de um navegador com suporte a microfone/WebRTC.');
+    connecting = true; setButton(); setStatus('Solicitando acesso ao microfone…');
+    microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
+    peer = new RTCPeerConnection(); audioOutput = new Audio(); audioOutput.autoplay = true; audioOutput.playsInline = true;
+    peer.ontrack = event => { audioOutput.srcObject = event.streams[0] || new MediaStream([event.track]); audioOutput.play().catch(() => setStatus('Toque na página para permitir a reprodução do áudio.')); };
+    microphone.getTracks().forEach(track => peer.addTrack(track, microphone));
+    channel = peer.createDataChannel('oai-events');
+    channel.addEventListener('open', () => setStatus('Canal de voz conectado…'));
+    channel.addEventListener('message', event => { try { handleServerEvent(JSON.parse(event.data)); } catch {} });
+    const offer = await peer.createOffer(); await peer.setLocalDescription(offer); await waitForIceGathering(peer);
+    setStatus('Conectando ao GPT-Live…');
+    const response = await fetch('/api/live/session', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ sdp: peer.localDescription?.sdp || offer.sdp }) });
+    const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.detail || 'Não foi possível iniciar o GPT-Live.');
+    await peer.setRemoteDescription({ type: 'answer', sdp: data.sdp }); active = true; connecting = false; setButton(); setStatus('Finalizando conexão de áudio…');
+  }
+  function stop(message = 'Conversa GPT-Live encerrada.') {
+    active = false; connecting = false; if (channel) { try { channel.close(); } catch {} }
+    if (peer) { try { peer.close(); } catch {} } if (microphone) microphone.getTracks().forEach(track => track.stop());
+    if (audioOutput) { audioOutput.pause(); audioOutput.srcObject = null; }
+    peer = null; channel = null; microphone = null; audioOutput = null; transcriptSegments = []; lastConsumedEnd = 0;
+    setButton(); setStatus(message);
+  }
+  async function toggle() {
+    if (active || connecting) { stop(); return; }
+    try { await start(); } catch (error) { stop('Falha ao iniciar GPT-Live.'); addBubble('Não foi possível iniciar o modo Live: ' + (error.message || 'erro desconhecido'), 'assistant', true); }
+  }
+  window.ADALiveVoice = { toggle, stop, get active() { return active; } }; setButton();
+})();
