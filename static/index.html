@@ -484,9 +484,14 @@
       utterance.volume = 1;
       const voice = selectedSpeechVoice();
       if (voice) { utterance.voice = voice; utterance.lang = voice.lang || 'pt-BR'; }
-      utterance.onstart = () => { voiceStatus.textContent = 'ADA-M falando…'; };
+      utterance.onstart = () => {
+        voiceStatus.textContent = 'ADA-M falando… Pode interromper quando quiser.';
+        startBargeInRecognition();
+      };
       utterance.onend = () => {
         if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+          stopBargeInRecognition();
+          bargeInHandled = false;
           voiceStatus.textContent = voiceSessionActive ? 'Sua vez. Estou ouvindo…' : 'Leitura concluída.';
           if (voiceSessionActive) startVoiceRecognition();
         }
@@ -898,6 +903,64 @@
     const voiceButton = document.getElementById('voice-button');
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+    let bargeInRecognition = null;
+    let bargeInRestartTimer = null;
+    let bargeInHandled = false;
+    const interruptionPattern = /\\b(pare|para|parar|pare de falar|interrompa|interromper|cala|calma|espera|espere|um momento|só um minuto|outra pergunta|quero perguntar|deixa eu falar|na verdade)\\b/i;
+
+    function stopBargeInRecognition() {
+      clearTimeout(bargeInRestartTimer);
+      if (bargeInRecognition) {
+        const current = bargeInRecognition;
+        bargeInRecognition = null;
+        try { current.abort(); } catch {}
+      }
+    }
+
+    function startBargeInRecognition() {
+      if (!voiceSessionActive || !SpeechRecognitionAPI || bargeInRecognition || bargeInHandled) return;
+      const instance = new SpeechRecognitionAPI();
+      bargeInRecognition = instance;
+      instance.lang = 'pt-BR';
+      instance.continuous = true;
+      instance.interimResults = true;
+      instance.maxAlternatives = 1;
+      instance.onresult = event => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0]?.transcript || '';
+        }
+        transcript = transcript.trim();
+        if (!transcript || !interruptionPattern.test(transcript)) return;
+        bargeInHandled = true;
+        stopBargeInRecognition();
+        window.speechSynthesis.cancel();
+        stopVoiceRecognition();
+        const question = transcript.replace(interruptionPattern, '').replace(/^[,.:;\\s-]+/, '').trim();
+        voiceStatus.textContent = question ? 'Interrompendo. Vou ouvir sua pergunta…' : 'Interrompida. Pode continuar falando…';
+        if (question.length > 2) {
+          promptEl.value = question;
+          setTimeout(() => { if (voiceSessionActive) form.requestSubmit(); }, 120);
+        } else {
+          bargeInHandled = false;
+          setTimeout(startVoiceRecognition, 250);
+        }
+      };
+      instance.onerror = () => {
+        if (bargeInRecognition === instance) bargeInRecognition = null;
+      };
+      instance.onend = () => {
+        if (bargeInRecognition === instance) bargeInRecognition = null;
+        if (voiceSessionActive && window.speechSynthesis?.speaking && !bargeInHandled) {
+          bargeInRestartTimer = setTimeout(startBargeInRecognition, 450);
+        }
+      };
+      try { instance.start(); }
+      catch {
+        if (bargeInRecognition === instance) bargeInRecognition = null;
+      }
+    }
+
     function updateVoiceButton() {
       voiceButton.classList.toggle('voice-active', voiceSessionActive);
       voiceButton.setAttribute('aria-pressed', String(voiceSessionActive));
@@ -907,6 +970,7 @@
 
     function stopVoiceRecognition() {
       clearTimeout(recognitionRestartTimer);
+      stopBargeInRecognition();
       if (recognition) {
         const current = recognition;
         recognition = null;
@@ -976,6 +1040,7 @@
         return;
       }
       voiceSessionActive = true;
+      bargeInHandled = false;
       voiceConversationToggle.checked = true;
       updateVoiceButton();
       voiceStatus.textContent = 'Preparando o microfone…';
