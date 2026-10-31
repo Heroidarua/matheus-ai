@@ -104,23 +104,34 @@
     setStatus('Conectando ao GPT-Live…');
     const response = await fetch('/api/live/session', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ sdp: peer.localDescription?.sdp || offer.sdp }) });
     const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.detail || 'Não foi possível iniciar o GPT-Live.');
+    maxTimer = setTimeout(() => stop('Live encerrado ao atingir o limite de 5 minutos.'), MAX_SESSION_MS);
     await peer.setRemoteDescription({ type: 'answer', sdp: data.sdp });
     active = true; connecting = false; setButton();
-    maxTimer = setTimeout(() => stop('Live encerrado ao atingir o limite de 5 minutos.'), MAX_SESSION_MS);
     setStatus('Finalizando conexão de áudio…');
   }
   function stop(message = 'Conversa GPT-Live encerrada.', notifyServer = true) {
     clearSafetyTimers();
-    if (notifyServer && channel?.readyState === 'open') {
-      try { sendEvent({ type: 'session.close' }); } catch {}
-    }
+    const oldChannel = channel, oldPeer = peer, oldMicrophone = microphone, oldAudioOutput = audioOutput;
     active = false; connecting = false;
-    if (channel) { try { channel.close(); } catch {} }
-    if (peer) { try { peer.close(); } catch {} }
-    if (microphone) microphone.getTracks().forEach(track => track.stop());
-    if (audioOutput) { audioOutput.pause(); audioOutput.srcObject = null; }
-    peer = null; channel = null; microphone = null; audioOutput = null; transcriptSegments = []; lastConsumedEnd = 0;
+    if (notifyServer && oldChannel?.readyState === 'open') {
+      try { oldChannel.send(JSON.stringify({ type: 'session.close' })); } catch {}
+      setButton(); setStatus(message);
+      setTimeout(() => releaseConnection(oldChannel, oldPeer, oldMicrophone, oldAudioOutput), 1200);
+      return;
+    }
+    releaseConnection(oldChannel, oldPeer, oldMicrophone, oldAudioOutput);
     setButton(); setStatus(message);
+  }
+  function releaseConnection(oldChannel, oldPeer, oldMicrophone, oldAudioOutput) {
+    if (oldChannel) { try { oldChannel.close(); } catch {} }
+    if (oldPeer) { try { oldPeer.close(); } catch {} }
+    if (oldMicrophone) oldMicrophone.getTracks().forEach(track => track.stop());
+    if (oldAudioOutput) { oldAudioOutput.pause(); oldAudioOutput.srcObject = null; }
+    if (channel === oldChannel) channel = null;
+    if (peer === oldPeer) peer = null;
+    if (microphone === oldMicrophone) microphone = null;
+    if (audioOutput === oldAudioOutput) audioOutput = null;
+    transcriptSegments = []; lastConsumedEnd = 0;
   }
   async function toggle() {
     if (active || connecting) { stop(); return; }
