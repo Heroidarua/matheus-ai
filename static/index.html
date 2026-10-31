@@ -267,6 +267,27 @@
     /* Marca ADA-M: símbolo de mais */
     .monogram-plus{display:grid;place-items:center;font-size:34px;font-weight:400;line-height:1;letter-spacing:0;transform:translateY(-1px);color:#78adff;}
     @media(max-width:520px){.monogram-plus{font-size:31px;}}
+
+    .library-dialog{width:min(620px,calc(100% - 28px));max-height:82vh;overflow:auto;background:#101010;color:#f4f4f4;border:1px solid #3a3a3a;border-radius:18px;padding:20px;box-shadow:0 24px 80px #000a}
+    .library-dialog::backdrop{background:#000b;backdrop-filter:blur(4px)}
+    .library-head,.library-list-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .library-head p{margin:5px 0 0;color:#aaa;font-size:13px}
+    .library-close{background:#292929;color:#fff;padding:5px 11px;font-size:22px}
+    .library-upload-label{display:block;margin:18px 0 8px;font-size:13px;color:#ccc}
+    #library-upload{width:100%;color:#bbb;font-size:13px}
+    .library-status{font-size:12px;color:#aaa;margin:12px 0}
+    .library-search{display:flex;gap:8px;margin:14px 0}
+    .library-search input{flex:1;min-width:0;background:#1c1c1c;border:1px solid #444;border-radius:10px;padding:10px;color:#fff}
+    .library-search button,.library-list-head button{padding:9px 12px;border-radius:10px;font-size:12px}
+    .library-list-head{border-top:1px solid #333;padding-top:14px;margin-top:14px;font-size:14px}
+    .library-file-row,.library-result-row{padding:11px 0;border-bottom:1px solid #292929;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;font-size:13px}
+    .library-file-meta{color:#999;font-size:11px;margin-top:4px}
+    .library-delete{background:#302020;color:#ffbaba;padding:6px 9px;font-size:11px;border-radius:8px;flex-shrink:0}
+    .library-result-row{display:block;color:#ddd;line-height:1.5}
+    .library-result-row small{display:block;color:#aaa;margin-bottom:4px}
+    .library-empty{color:#888;font-size:12px;padding:12px 0}
+    @media(max-width:520px){.library-dialog{padding:15px}.library-search{flex-wrap:wrap}.library-search button{width:100%}}
+
 </style>
 </head>
 <body>
@@ -307,6 +328,7 @@
               <div class="tools primary-tools">
                 <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
                 <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
+              <button class="tool-btn" type="button" id="library-button"><span>📚</span>Biblioteca de arquivos</button>
                 <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
                 <button class="tool-btn" type="button" id="export-button">Exportar conversa</button>
                 <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
@@ -340,6 +362,16 @@
       <div class="hint">Enter para enviar · Shift+Enter para nova linha</div>
     </form>
   </main>
+  <dialog id="library-dialog" class="library-dialog">
+    <div class="library-head"><div><strong>Biblioteca de arquivos</strong><p>Arquivos salvos para consultas e pesquisas futuras</p></div><button type="button" id="library-close" class="library-close" aria-label="Fechar">×</button></div>
+    <label class="library-upload-label" for="library-upload">Adicionar documentos (até 10 MB por arquivo)</label>
+    <input id="library-upload" type="file" accept=".pdf,.docx,.xlsx,.xlsm,.txt,.md,.csv,.json" multiple>
+    <div id="library-status" class="library-status" aria-live="polite">Conectando ao banco de arquivos…</div>
+    <div class="library-search"><input id="library-query" type="search" placeholder="Pesquisar dentro dos documentos…"><button type="button" id="library-search-button">Pesquisar</button></div>
+    <div id="library-results" class="library-results"></div>
+    <div class="library-list-head"><strong>Documentos salvos</strong><button type="button" id="library-refresh">Atualizar</button></div>
+    <div id="library-files" class="library-files"></div>
+  </dialog>
   <script>
     const messagesEl = document.getElementById('messages');
     const form = document.getElementById('chat-form');
@@ -600,6 +632,100 @@
 
     document.getElementById('photo-button').addEventListener('click', () => photoInput.click());
     document.getElementById('file-button').addEventListener('click', () => fileInput.click());
+
+    const libraryDialog = document.getElementById('library-dialog');
+    const libraryStatus = document.getElementById('library-status');
+    const libraryFiles = document.getElementById('library-files');
+    const libraryResults = document.getElementById('library-results');
+    const libraryUpload = document.getElementById('library-upload');
+    document.getElementById('library-button').addEventListener('click', async () => {
+      if (typeof libraryDialog.showModal === 'function') libraryDialog.showModal();
+      else libraryDialog.setAttribute('open', '');
+      await refreshLibrary();
+    });
+    document.getElementById('library-close').addEventListener('click', () => libraryDialog.close());
+    document.getElementById('library-refresh').addEventListener('click', refreshLibrary);
+    async function refreshLibrary() {
+      libraryStatus.textContent = 'Carregando biblioteca…';
+      try {
+        const [statusResponse, filesResponse] = await Promise.all([fetch('/api/files/status'), fetch('/api/files')]);
+        const status = await statusResponse.json();
+        if (!statusResponse.ok) throw new Error(status.detail || 'Banco indisponível');
+        const data = await filesResponse.json();
+        if (!filesResponse.ok) throw new Error(data.detail || 'Não foi possível listar arquivos');
+        libraryStatus.textContent = status.documents + ' documento(s) · ' + Number(status.indexed_characters || 0).toLocaleString('pt-BR') + ' caracteres indexados · PostgreSQL';
+        libraryFiles.replaceChildren();
+        if (!data.files.length) libraryFiles.innerHTML = '<div class="library-empty">Nenhum documento salvo ainda.</div>';
+        for (const file of data.files) {
+          const row = document.createElement('div'); row.className = 'library-file-row';
+          const info = document.createElement('div');
+          const name = document.createElement('strong'); name.textContent = file.name;
+          const meta = document.createElement('div'); meta.className = 'library-file-meta';
+          meta.textContent = Math.max(1, Math.round(file.size_bytes / 1024)) + ' KB · ' + Number(file.characters_indexed).toLocaleString('pt-BR') + ' caracteres';
+          info.append(name, meta);
+          const del = document.createElement('button'); del.type = 'button'; del.className = 'library-delete'; del.textContent = 'Excluir';
+          del.addEventListener('click', async () => {
+            if (!confirm('Excluir "' + file.name + '" da biblioteca?')) return;
+            const response = await fetch('/api/files/' + encodeURIComponent(file.id), { method: 'DELETE' });
+            const result = await response.json();
+            if (!response.ok) { libraryStatus.textContent = result.detail || 'Falha ao excluir.'; return; }
+            await refreshLibrary();
+          });
+          row.append(info, del); libraryFiles.append(row);
+        }
+      } catch (error) {
+        libraryStatus.textContent = error.message || 'Banco de arquivos não configurado.';
+        libraryFiles.innerHTML = '<div class="library-empty">Configure DATABASE_URL com um PostgreSQL persistente no Render para ativar o acervo.</div>';
+      }
+    }
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.onerror = () => reject(new Error('Falha ao ler ' + file.name));
+        reader.readAsDataURL(file);
+      });
+    }
+    libraryUpload.addEventListener('change', async () => {
+      const files = [...libraryUpload.files];
+      for (const file of files) {
+        if (file.size > 10 * 1024 * 1024) { libraryStatus.textContent = file.name + ' excede 10 MB.'; continue; }
+        try {
+          libraryStatus.textContent = 'Indexando ' + file.name + '…';
+          const data = await fileToBase64(file);
+          const response = await fetch('/api/files', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: file.name, mime_type: file.type || 'application/octet-stream', data })
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.detail || 'Falha ao salvar ' + file.name);
+          libraryStatus.textContent = result.name + (result.duplicate ? ' já estava salvo.' : ' foi indexado com sucesso.');
+        } catch (error) { libraryStatus.textContent = error.message; }
+      }
+      libraryUpload.value = '';
+      await refreshLibrary();
+    });
+    async function searchLibraryUI() {
+      const q = document.getElementById('library-query').value.trim();
+      if (q.length < 2) { libraryResults.textContent = 'Digite pelo menos 2 caracteres.'; return; }
+      libraryResults.textContent = 'Pesquisando documentos…';
+      try {
+        const response = await fetch('/api/files/search?q=' + encodeURIComponent(q));
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Falha na pesquisa');
+        libraryResults.replaceChildren();
+        if (!data.results.length) { libraryResults.innerHTML = '<div class="library-empty">Nenhum trecho relevante encontrado.</div>'; return; }
+        for (const item of data.results) {
+          const row = document.createElement('div'); row.className = 'library-result-row';
+          const source = document.createElement('small'); source.textContent = item.name + ' · ID ' + item.id;
+          const excerpt = document.createElement('div'); excerpt.textContent = item.excerpt;
+          row.append(source, excerpt); libraryResults.append(row);
+        }
+      } catch (error) { libraryResults.textContent = error.message; }
+    }
+    document.getElementById('library-search-button').addEventListener('click', searchLibraryUI);
+    document.getElementById('library-query').addEventListener('keydown', event => { if (event.key === 'Enter') searchLibraryUI(); });
+
 
     photoInput.addEventListener('change', () => { addSelectedFiles([...photoInput.files]); photoInput.value = ''; });
     fileInput.addEventListener('change', () => { addSelectedFiles([...fileInput.files]); fileInput.value = ''; });
