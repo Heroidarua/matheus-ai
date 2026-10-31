@@ -1293,20 +1293,11 @@
     }
 
     function toggleVoiceInput() {
-      if (!SpeechRecognitionAPI) {
-        voiceStatus.textContent = 'Seu navegador não oferece reconhecimento de voz. Tente usar o Chrome e permitir o microfone.';
+      if (window.ADALiveVoice) {
+        window.ADALiveVoice.toggle();
         return;
       }
-      if (voiceSessionActive) {
-        endVoiceSession();
-        return;
-      }
-      voiceSessionActive = true;
-      bargeInHandled = false;
-      voiceConversationToggle.checked = true;
-      updateVoiceButton();
-      voiceStatus.textContent = 'Preparando o microfone…';
-      startVoiceRecognition();
+      voiceStatus.textContent = 'O modo GPT-Live ainda está carregando. Atualize a página e tente novamente.';
     }
 
     updateVoiceButton();
@@ -1545,5 +1536,6 @@
     })();
   </script>
   <script src="/static/image-chat.js?v=edit-fix-20261031"></script>
+  <script src="/static/live-voice.js?v=20261031"></script>
 </body>
 </html>
