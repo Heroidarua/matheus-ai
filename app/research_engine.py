@@ -142,6 +142,14 @@ def is_relevant_result(query: str, item: dict[str, str]) -> bool:
 
     # Busca pode usar siglas/sinônimos (IA/AI) e manchetes curtas. Aceita uma
     # correspondência temática razoável, mas nunca aceita páginas lexicais acima.
+    meaningful_tokens = {
+        token for token in re.findall(r"[^\\W_]+", query.casefold(), flags=re.UNICODE)
+        if len(token) >= 4
+    }
+    # Short explicit searches have no useful token-overlap score; don't reject every candidate.
+    if not meaningful_tokens:
+        return bool(title.strip() or snippet.strip())
+
     score = result_relevance_score(query, item)
     trusted = source_trust_score(item, topic) > 0
     if trusted:
