@@ -200,6 +200,9 @@ def search_library(query: str, limit: int = 4) -> list[dict[str, Any]]:
             conn.close()
     except HTTPException:
         return []
+    except Exception as exc:
+        print(f"File library retrieval failed: {type(exc).__name__}")
+        return []
     candidates = []
     for file_id, name, content in docs:
         paragraphs = [p.strip() for p in re.split(r"\n\s*\n", content) if p.strip()]
