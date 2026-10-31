@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,6 +34,12 @@ from app.google_search import google_grounded_search
 from app.google_workspace import router as google_workspace_router
 from app.file_library import router as file_library_router, search_library
 from app.image_generation import router as image_generation_router
+from app.companion import (
+    build_companion_prompt,
+    companion_storage_status,
+    get_companion_state,
+    update_companion_state,
+)
 
 load_dotenv()
 
@@ -126,6 +132,22 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
+
+
+@app.get("/api/companion/state", dependencies=[Depends(require_app_key)])
+async def companion_state_endpoint(http_request: Request) -> dict[str, Any]:
+    """Estado afetivo simulado desta sessão; não expõe mensagens ou conteúdo privado."""
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        session_id = secrets.token_urlsafe(32)
+        http_request.session["companion_id"] = session_id
+    state = await asyncio.to_thread(get_companion_state, session_id)
+    return {
+        "identity": "ADA-M / Matheus AI",
+        "state": state,
+        "storage": companion_storage_status(),
+        "note": "Estados afetivos simulados, não sentimentos subjetivos.",
+    }
 
 @app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
 async def diagnostics() -> dict[str, Any]:
@@ -902,7 +924,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
     return diverse[:6]
 
 @app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     DIAGNOSTICS["requests"] += 1
     last_user_message = next((content_as_text(m.content) for m in reversed(request.messages) if m.role == "user"), "")
     if not last_user_message and isinstance(request.messages[-1].content, str):
@@ -943,7 +965,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
             search_unavailable = True
             print(f"Web search unavailable (HTTP {exc.status_code}): {str(exc.detail)[:250]}")
 
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        session_id = secrets.token_urlsafe(32)
+        http_request.session["companion_id"] = session_id
+    affective_state = await asyncio.to_thread(update_companion_state, session_id, last_user_message)
     system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
+    system_prompt += "\n\n" + build_companion_prompt(affective_state)
     if deep_research:
         system_prompt += (
             "\n\nMODO DE PESQUISA APROFUNDADA: trate o pedido como uma investigação documental. "
