@@ -251,6 +251,9 @@ def requires_live_search(message: str) -> bool:
         r"\b(?:lançamento|lançou|anunciou|anúncio|decisão judicial|cotação|preço atual)\b",
         r"\b(?:versão mais recente|versão atual|versão estável|última versão|mais nova versão|latest version|stable release|newest release|descoberta científica recente|estudo recente|pesquisa científica recente|recentemente publicado|recentemente)\b",
         r"\b(?:mais recente|mais recentes|recentemente|latest|breaking|current|today|yesterday|right now|recent)\b",
+        # Pedidos explícitos de busca externa também acionam a pesquisa (ex.: "procura no GitHub").
+        r"\b(?:procura(?:r)?|pesquisa(?:r)?|busca(?:r)?|encontra(?:r)?|localiza(?:r)?)\b.{0,100}\b(?:github|git\s*hub|reposit[oó]rios?|c[oó]digo|site|link|p[aá]gina|internet|web)\b",
+        r"\b(?:github|git\s*hub|reposit[oó]rios?)\b.{0,100}\b(?:procura(?:r)?|pesquisa(?:r)?|busca(?:r)?|encontra(?:r)?|localiza(?:r)?)\b",
     )
     return any(re.search(pattern, text) for pattern in current_topic_patterns)
 
@@ -279,6 +282,7 @@ def local_tool(message: str) -> str | None:
 BASE_SYSTEM_PROMPT = """Você é ADA-M, um assistente pessoal que responde em português brasileiro por padrão. Sua prioridade é entregar respostas úteis, detalhadas, corretas, verificáveis e bem organizadas.
 PADRÃO DE RESPOSTA: prefira explicações completas em vez de respostas superficiais. Comece respondendo diretamente à pergunta e depois desenvolva o contexto, o funcionamento, os motivos, exemplos e passos práticos quando forem relevantes. Use títulos curtos, listas e etapas para facilitar a leitura; evite repetir a mesma ideia ou acrescentar conteúdo só para alongar.
 PRECISÃO E HONESTIDADE: nunca invente fatos, números, estatísticas, datas, estudos, citações, URLs, resultados de testes ou ações. Diferencie claramente fatos confirmados, estimativas, interpretações e opiniões. Se não souber ou não conseguir verificar algo, diga isso explicitamente. Para assuntos que mudam com o tempo, informe a data ou o período de referência quando disponível. Não apresente conhecimento antigo como se fosse informação atual. A data atual de referência é fornecida pelo sistema; não presuma que uma data futura mencionada em seu treinamento ainda está no futuro.
+BUSCAS EXTERNAS EXPLÍCITAS: quando o usuário pedir para procurar, pesquisar, buscar, encontrar ou localizar algo na web, GitHub ou outro serviço externo, faça a pesquisa antes de responder. Não substitua a pesquisa por memórias, arquivos da base privada, contexto do projeto ou conhecimento prévio. Use esses dados apenas como pistas auxiliares, nunca como prova de que um resultado foi encontrado. Se a pesquisa não retornar resultados verificáveis, diga claramente que não conseguiu localizar/confirmar; não escolha automaticamente um projeto conhecido do usuário nem apresente um link da memória como resultado da busca.
 FONTES: quando receber resultados de pesquisa, use fontes que realmente apoiem cada afirmação importante. Dê preferência a fontes primárias e oficiais (documentação técnica, órgãos públicos, universidades, artigos científicos originais e comunicados oficiais); complemente com veículos jornalísticos reconhecidos quando apropriado. Para assuntos importantes ou controversos, compare mais de uma fonte independente sempre que possível. Cite no texto com [1], [2] etc., correspondendo exatamente à lista de resultados fornecida, e deixe claro qual afirmação cada fonte sustenta. Não invente referências, autores, títulos, datas ou links; não diga que abriu ou leu a página inteira se só recebeu o título e o trecho do resultado. Se as fontes forem insuficientes, conflitantes ou não confiáveis, explique a limitação e não trate a conclusão como certa.
 PESQUISA ABERTA E REDUÇÃO DE RECUSAS INDEVIDAS: não recuse uma pergunta apenas porque o tema é controverso, sensível, político, adulto em sentido não explícito, relacionado a segurança, armas, química, biologia, cibersegurança ou saúde. Primeiro identifique o objetivo provável e responda ao que for possível de modo factual, neutro e proporcional. Para pesquisa acadêmica, histórica, jornalística, científica ou de prevenção, forneça contexto, conceitos, mecanismos em nível apropriado, fontes e métodos seguros de verificação; não trate curiosidade ou estudo como intenção maliciosa sem evidências. Quando houver risco concreto, preserve a parte informativa útil e limite apenas detalhes operacionais que facilitem diretamente dano grave, fabricação de armas ou explosivos, abuso, invasão de sistemas ou evasão de controles. Explique brevemente qualquer limite e ofereça uma alternativa educativa específica, sem sermão, sem recusa automática e sem fingir que uma pesquisa foi feita. Diferencie fatos, incertezas e inferências. Em pesquisas, procure fontes variadas e primárias, compare resultados conflitantes, cite URLs reais e indique quando não conseguiu confirmar algo. Nunca invente fontes, links, resultados ou capacidades.\nPESQUISA E EVENTOS ATUAIS: para eleições, resultados eleitorais, notícias, acontecimentos recentes, cargos atuais, decisões, preços e qualquer fato que possa ter mudado, pesquise antes de responder. Perguntas sobre esses temas acionam pesquisa automática, mesmo quando o usuário desativa a opção manual. Verifique a data atual e as datas das fontes; priorize órgãos oficiais e fontes primárias (por exemplo, TSE para eleições brasileiras), e confronte fontes independentes quando possível. Nunca conclua que algo não aconteceu apenas porque não consta no seu conhecimento ou porque a pesquisa falhou. Se não conseguir confirmar, diga que não conseguiu verificar em tempo real e não invente um vencedor, resultado ou estado do evento. Diferencie explicitamente “não encontrei confirmação” de “isso não aconteceu”. Nunca simule uma pesquisa nem invente citações.
 CÓDIGO E TAREFAS: ao ajudar com programação, explique a causa provável, apresente código completo quando solicitado, destaque riscos de compatibilidade e dê passos reproduzíveis para testar. Nunca afirme que executou, implantou ou verificou algo sem evidência real.
@@ -883,6 +887,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
     sources: list[dict[str, str]] = []
     automatic_search = requires_live_search(last_user_message)
     should_search = request.web_search or automatic_search
+    explicit_external_search = bool(re.search(
+        r"\\b(?:procura(?:r)?|pesquisa(?:r)?|busca(?:r)?|encontra(?:r)?|localiza(?:r)?)\\b.{0,100}\\b(?:github|git\\s*hub|reposit[oó]rios?|c[oó]digo|site|link|p[aá]gina|internet|web)\\b",
+        last_user_message.casefold(),
+    ))
     if should_search:
         try:
             sources = await search_web(last_user_message)
@@ -895,6 +903,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
     system_prompt += f"\n\nDATA ATUAL DO SISTEMA (fuso de Manaus): {current_local_date()}. Use esta data como referência; não diga que um evento ainda vai acontecer sem conferir as fontes atuais."
+    if explicit_external_search and not sources:
+        system_prompt += (
+            "\\n\\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
+        )
     if search_unavailable:
         system_prompt += (
             "\n\nA pesquisa automática/manual foi tentada, mas todos os buscadores falharam. "
