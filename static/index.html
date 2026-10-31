@@ -1366,6 +1366,13 @@
       }
       const pending = addBubble('Analisando...', 'assistant');
       try {
+        const imagePrompt = !files.length && window.ADAExtractImagePrompt ? window.ADAExtractImagePrompt(userText) : null;
+        if (imagePrompt && window.ADAGenerateImageInChat) {
+          const imageResult = await window.ADAGenerateImageInChat(imagePrompt, pending);
+          history.push({ role: 'assistant', content: imageResult });
+          while (history.length > 12) history.shift();
+          return;
+        }
         const response = await fetch('/api/chat', {
           method: 'POST',
           signal: activeController.signal,
@@ -1458,5 +1465,6 @@
       }
     })();
   </script>
+  <script src="/static/image-chat.js"></script>
 </body>
 </html>
