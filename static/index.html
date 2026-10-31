@@ -325,6 +325,10 @@
               </label>
               <label class="mode-toggle web-search-toggle"><input id="web-search-toggle" type="checkbox" checked> <span>Pesquisar na internet e citar fontes</span></label>
               <label class="mode-toggle voice-conversation-toggle"><input id="voice-conversation-toggle" type="checkbox"> <span>Ler respostas automaticamente em voz alta</span></label>
+              <label class="field-label" for="speech-voice">Voz da leitura
+                <select id="speech-voice" aria-label="Voz da leitura"><option value="">Voz padrão do dispositivo</option></select>
+              </label>
+              <button class="tool-btn" type="button" id="test-speech-voice">Testar voz</button>
               <button class="tool-btn theme-button" type="button" id="theme-button">Tema claro</button>
             </div>
           </details>
@@ -419,46 +423,72 @@
     });
 
 
-    // Leitura de respostas usando exclusivamente a voz nativa do navegador.
+    // Leitura com síntese nativa do navegador, sem serviços externos.
     let speechBuffer = '';
+    const speechVoiceSelect = document.getElementById('speech-voice');
+    const speechTestButton = document.getElementById('test-speech-voice');
+    let availableSpeechVoices = [];
+
+    function loadSpeechVoices() {
+      if (!('speechSynthesis' in window)) return;
+      availableSpeechVoices = window.speechSynthesis.getVoices()
+        .filter(voice => /^pt(-|_)/i.test(voice.lang))
+        .sort((a, b) => Number(!/^pt-BR$/i.test(a.lang)) - Number(!/^pt-BR$/i.test(b.lang)) || a.name.localeCompare(b.name));
+      const savedVoice = (() => { try { return localStorage.getItem('ada-m-speech-voice') || ''; } catch { return ''; } })();
+      speechVoiceSelect.replaceChildren(new Option('Voz padrão do dispositivo', ''));
+      availableSpeechVoices.forEach((voice, index) => speechVoiceSelect.add(new Option(voice.name + ' — ' + voice.lang, voice.voiceURI || String(index))));
+      if (savedVoice && [...speechVoiceSelect.options].some(option => option.value === savedVoice)) speechVoiceSelect.value = savedVoice;
+    }
+    if ('speechSynthesis' in window) {
+      loadSpeechVoices();
+      window.speechSynthesis.addEventListener?.('voiceschanged', loadSpeechVoices);
+      setTimeout(loadSpeechVoices, 500);
+    }
+    speechVoiceSelect.addEventListener('change', () => {
+      try { localStorage.setItem('ada-m-speech-voice', speechVoiceSelect.value); } catch {}
+    });
 
     function stopBrowserSpeech() {
       speechBuffer = '';
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     }
 
+    function selectedSpeechVoice() {
+      const key = speechVoiceSelect.value;
+      return availableSpeechVoices.find(voice => voice.voiceURI === key)
+        || availableSpeechVoices.find((voice, index) => String(index) === key)
+        || availableSpeechVoices.find(voice => /^pt-BR$/i.test(voice.lang))
+        || availableSpeechVoices.find(voice => /^pt/i.test(voice.lang))
+        || null;
+    }
+
     function queueBrowserSpeech(text) {
       const clean = String(text)
-        .replace(/```[\s\S]*?```/g, ' código omitido ')
-        .replace(/https?:\/\/\S+/g, ' link ')
+        .replace(new RegExp(String.fromCharCode(96).repeat(3) + '[\\\\s\\\\S]*?' + String.fromCharCode(96).repeat(3), 'g'), ' trecho de código omitido ')
+        .replace(/https?:\\/\\/\\S+/g, ' link ')
+        .replace(/^\\s{0,3}#{1,6}\\s+/gm, '')
+        .replace(/^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)/gm, '')
         .replace(/[*_#>~|]/g, ' ')
-        .replace(/\s+/g, ' ')
+        .replace(/\\s+/g, ' ')
         .trim();
       if (!clean) return;
       if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
         voiceStatus.textContent = 'Leitura em voz alta não é suportada neste navegador.';
         return;
       }
-
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.lang = 'pt-BR';
-      utterance.rate = 1.18;
-      utterance.pitch = 1;
-      const voices = window.speechSynthesis.getVoices();
-      const brazilianVoice = voices.find(voice => /^pt-BR$/i.test(voice.lang))
-        || voices.find(voice => /^pt/i.test(voice.lang));
-      if (brazilianVoice) utterance.voice = brazilianVoice;
-
+      utterance.rate = 1.08;
+      utterance.pitch = 1.02;
+      utterance.volume = 1;
+      const voice = selectedSpeechVoice();
+      if (voice) { utterance.voice = voice; utterance.lang = voice.lang || 'pt-BR'; }
       utterance.onstart = () => { voiceStatus.textContent = 'ADA-M falando…'; };
       utterance.onend = () => {
-        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-          voiceStatus.textContent = 'Leitura concluída.';
-        }
+        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) voiceStatus.textContent = 'Leitura concluída.';
       };
       utterance.onerror = event => {
-        if (event.error !== 'canceled' && event.error !== 'interrupted') {
-          voiceStatus.textContent = 'O navegador não conseguiu reproduzir a voz.';
-        }
+        if (event.error !== 'canceled' && event.error !== 'interrupted') voiceStatus.textContent = 'O navegador não conseguiu reproduzir a voz.';
       };
       window.speechSynthesis.speak(utterance);
     }
@@ -466,16 +496,19 @@
     function feedSpeechToken(token) {
       speechBuffer += token;
       let boundary = -1;
-      const punctuation = /[.!?…](?:["'”’)]*)\s+/g;
+      const punctuation = /[.!?…](?:["'”’)]*)\\s+|[,;:]\\s+/g;
       let match;
-      while ((match = punctuation.exec(speechBuffer)) !== null) boundary = match.index + match[0].length;
-      if (boundary < 0 && speechBuffer.length > 180) {
-        boundary = speechBuffer.lastIndexOf(' ', 180);
+      while ((match = punctuation.exec(speechBuffer)) !== null) {
+        if (/[.!?…]/.test(match[0]) || match.index + match[0].length >= 150) {
+          boundary = match.index + match[0].length;
+          break;
+        }
       }
+      if (boundary < 0 && speechBuffer.length > 210) boundary = speechBuffer.lastIndexOf(' ', 190);
       if (boundary > 0) {
-        const sentence = speechBuffer.slice(0, boundary).trim();
+        const segment = speechBuffer.slice(0, boundary).trim();
         speechBuffer = speechBuffer.slice(boundary);
-        queueBrowserSpeech(sentence);
+        queueBrowserSpeech(segment);
       }
     }
 
@@ -491,9 +524,18 @@
         voiceStatus.textContent = 'Leitura em voz alta não é suportada neste navegador.';
         return;
       }
-      const pieces = String(text).match(/[^.!?…]+[.!?…]*|[.!?…]+/g) || [String(text)];
+      const normalized = String(text).replace(/\\r/g, '')
+        .replace(/\\n{2,}/g, '. ')
+        .replace(/\\n/g, ', ')
+        .replace(/^\\s*[-*+]\\s+/gm, '')
+        .replace(/^\\s*\\d+[.)]\\s+/gm, '');
+      const pieces = normalized.match(/[^.!?…]+[.!?…]*|[.!?…]+/g) || [normalized];
       for (const piece of pieces) queueBrowserSpeech(piece);
     }
+
+    speechTestButton.addEventListener('click', () => {
+      speakText('Olá! Eu sou a ADA-M. Esta é uma demonstração da minha voz. Como posso ajudar você hoje?');
+    });
 
     async function loadDiagnostics() {
       const panel = document.getElementById('diagnostics-panel');
