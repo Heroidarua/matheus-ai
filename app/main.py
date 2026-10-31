@@ -260,24 +260,24 @@ def requires_live_search(message: str) -> bool:
 
 def is_deep_research_request(message: str) -> bool:
     """Detecta pedidos explícitos de investigação/pesquisa aprofundada."""
-    text = re.sub(r"\\s+", " ", message.casefold()).strip()
+    text = re.sub(r"\s+", " ", message.casefold()).strip()
     patterns = (
-        r"\\bpesquisa\\s+(?:bem\\s+)?profunda\\b",
-        r"\\bpesquise\\s+a\\s+fundo\\b",
-        r"\\binvestiga(?:r|ção|cao)\\b",
-        r"\\bdossi[eê]\\b",
-        r"\\blevantamento\\s+completo\\b",
-        r"\\bdeep\\s+research\\b",
+        r"\bpesquisa\s+(?:bem\s+)?profunda\b",
+        r"\bpesquise\s+a\s+fundo\b",
+        r"\binvestiga(?:r|ção|cao)\b",
+        r"\bdossi[eê]\b",
+        r"\blevantamento\s+completo\b",
+        r"\bdeep\s+research\b",
     )
     return any(re.search(pattern, text) for pattern in patterns)
 
 
 def requests_private_identifier_lookup(message: str) -> bool:
     """Identifica tentativas de descobrir identificadores pessoais de terceiros."""
-    text = re.sub(r"\\s+", " ", message.casefold()).strip()
-    identifier = r"\\b(?:cpf|rg|registro\\s+geral|n[uú]mero\\s+do\\s+documento|documento\\s+pessoal)\\b"
-    discovery = r"\\b(?:descubra|descobrir|encontre|encontrar|localize|localizar|puxe|consultar|consulta|pesquise|pesquisar|procure|procurar|ache|achar|rastreie|rastrear)\\b"
-    possession = r"\\b(?:meu|minha|pr[oó]prio|pr[oó]pria|sou\\s+eu|titular)\\b"
+    text = re.sub(r"\s+", " ", message.casefold()).strip()
+    identifier = r"\b(?:cpf|rg|registro\s+geral|n[uú]mero\s+do\s+documento|documento\s+pessoal)\b"
+    discovery = r"\b(?:descubra|descobrir|encontre|encontrar|localize|localizar|puxe|consultar|consulta|pesquise|pesquisar|procure|procurar|ache|achar|rastreie|rastrear)\b"
+    possession = r"\b(?:meu|minha|pr[oó]prio|pr[oó]pria|sou\s+eu|titular)\b"
     return bool(re.search(identifier, text) and re.search(discovery, text) and not re.search(possession, text))
 
 
