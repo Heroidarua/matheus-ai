@@ -1230,7 +1230,7 @@
     let bargeInRecognition = null;
     let bargeInRestartTimer = null;
     let bargeInHandled = false;
-    const interruptionPattern = /\b(pare\s+de\s+falar|deixa\s+eu\s+falar|quero\s+perguntar|outra\s+pergunta|s[oó]\s+um\s+minuto|um\s+momento|interrompa|interromper|parar|pare|para|espera|espere|cala|calma|na\s+verdade)\b/i;
+    const interruptionPattern = /\b(acessar\s+(?:o\s+)?youtube(?:\s+music)?|abrir\s+(?:o\s+)?youtube(?:\s+music)?|abra\s+(?:o\s+)?youtube(?:\s+music)?|abre\s+(?:o\s+)?youtube(?:\s+music)?|pare\s+de\s+falar|deixa\s+eu\s+falar|quero\s+perguntar|outra\s+pergunta|s[oó]\s+um\s+minuto|um\s+momento|interrompa|interromper|parar|pare|para|espera|espere|cala|calma|na\s+verdade)\b/i;
 
     function stopBargeInRecognition() {
       clearTimeout(bargeInRestartTimer);
@@ -1259,6 +1259,16 @@
         stopBargeInRecognition();
         stopBrowserSpeech();
         stopVoiceRecognition();
+        if (window.ADAMusic?.handleCommand(transcript)) {
+          voiceStatus.textContent = 'Abrindo o YouTube…';
+          setTimeout(() => {
+            if (voiceSessionActive) {
+              bargeInHandled = false;
+              startVoiceRecognition();
+            }
+          }, 900);
+          return;
+        }
         const question = transcript.replace(interruptionPattern, '').replace(/^[,.:;\\s-]+/, '').trim();
         voiceStatus.textContent = question ? 'Interrompendo. Vou ouvir sua pergunta…' : 'Interrompida. Pode continuar falando…';
         if (question.length > 2) {
