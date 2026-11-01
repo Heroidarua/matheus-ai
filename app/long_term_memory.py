@@ -103,7 +103,10 @@ def forget_all(owner_id: str) -> int:
     finally: conn.close()
 
 def storage_status() -> str:
-    conn=_db()
+    try:
+        conn=_db()
+    except Exception as exc:
+        return f"PostgreSQL indisponível ({type(exc).__name__})"
     if conn is None: return "temporária: DATABASE_URL não configurado"
     try:
         with conn:
