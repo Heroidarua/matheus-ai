@@ -57,7 +57,11 @@
   }
 
   window.ADAExtractImagePrompt = extractImagePrompt;
-  window.ADAExtractImageEditPrompt = extractImageEditPrompt;
+  window.ADAExtractImageEditPrompt = (text, hasImage = false) => {
+    const source = cleanPrompt(text);
+    // Com uma foto anexada, pedidos de criação também usam essa foto como referência.
+    return source && (EDIT_RE.test(source) || (hasImage && CREATE_RE.test(source))) ? source : null;
+  };
 
   window.ADAEditImageInChat = async (file, prompt, bubble) => {
     bubble.replaceChildren();
