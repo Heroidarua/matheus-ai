@@ -4,17 +4,17 @@
   const CREATE_ACTION = String.raw`(?:crie?|criar|cria|gere?|gerar|gera|desenhe?|desenhar|desenha|ilustre?|ilustrar|produza|produzir|fa[cç]a|faz|monte|montar|elabore|elaborar|make|create|generate|draw|design)`;
   const EDIT_ACTION = String.raw`(?:transforme?|transformar|transforma|edite?|editar|edita|modifique?|modificar|modifica|altere?|alterar|altera|converta|converter|converte|estilize?|estilizar|estiliza|recrie?|recriar|recria|restaure?|restaurar|restaura|melhore?|melhorar|melhora|aperfei[cç]oe|remova|remover|retire|retirar|apague|apagar|adicione|adicionar|troque|trocar|substitua|substituir|recorte|recortar|remove|erase|edit|change|replace|turn|make me)`;
   const IMAGE_CONTEXT = String.raw`(?:foto|imagem|retrato|rosto|pessoa|fundo|cen[aá]rio|roupa|objeto|objeto|qualidade|resolu[cç][aã]o|luz|ilumina[cç][aã]o|cor|estilo|personagem|cartoon|anime|simpsons|pixar|disney|gibi|caricatura|background|photo|image|picture|face|object)`;
-  const CREATE_RE = new RegExp(String.raw`\\b${CREATE_ACTION}\\b[\\s\\S]{0,100}\\b${IMAGE_NOUN}\\b|\\b${IMAGE_NOUN}\\b[\\s\\S]{0,80}\\b${CREATE_ACTION}\\b|\\b(?:quero|preciso|gostaria)\\b[\\s\\S]{0,55}\\b(?:uma?\\s+)?${IMAGE_NOUN}\\b`, 'i');
-  const EDIT_RE = new RegExp(String.raw`\\b${EDIT_ACTION}\\b[\\s\\S]{0,100}\\b${IMAGE_CONTEXT}\\b|\\b(?:estilo|personagem|cartoon|anime|simpsons|pixar|disney|gibi|caricatura)\\b|\\b(?:remova|retire|apague|adicione|troque|substitua|melhore|aumente|restaure|recorte)\\b`, 'i');
+  const CREATE_RE = new RegExp(String.raw`\b${CREATE_ACTION}\b[\s\S]{0,100}\b${IMAGE_NOUN}\b|\b${IMAGE_NOUN}\b[\s\S]{0,80}\b${CREATE_ACTION}\b|\b(?:quero|preciso|gostaria)\b[\s\S]{0,55}\b(?:uma?\s+)?${IMAGE_NOUN}\b`, 'i');
+  const EDIT_RE = new RegExp(String.raw`\b${EDIT_ACTION}\b[\s\S]{0,100}\b${IMAGE_CONTEXT}\b|\b(?:estilo|personagem|cartoon|anime|simpsons|pixar|disney|gibi|caricatura)\b|\b(?:remova|retire|apague|adicione|troque|substitua|melhore|aumente|restaure|recorte)\b`, 'i');
 
   function cleanPrompt(text) {
-    return String(text || '').trim().replace(/\\s+/g, ' ');
+    return String(text || '').trim().replace(/\s+/g, ' ');
   }
 
   function extractImagePrompt(text) {
     const source = cleanPrompt(text);
     if (!source || !CREATE_RE.test(source)) return null;
-    return source.replace(/^[\\s,!.]*(?:por favor[,! ]*)?(?:quero que você|quero|preciso que você|pode|por favor)?[\\s,!.]*/i, '') || source;
+    return source.replace(/^[\s,!.]*(?:por favor[,! ]*)?(?:quero que você|quero|preciso que você|pode|por favor)?[\s,!.]*/i, '') || source;
   }
 
   function extractImageEditPrompt(text) {
@@ -81,7 +81,7 @@
     status.textContent = '🎨 Criando sua imagem… Isso pode levar alguns instantes.';
     bubble.appendChild(status);
     const style = /anime|mangá|japonês/i.test(prompt) ? 'anime'
-      : /\\b3d\\b/i.test(prompt) ? '3d'
+      : /\b3d\b/i.test(prompt) ? '3d'
       : /minimalista/i.test(prompt) ? 'minimalista'
       : /ilustra[cç][aã]o|pintura digital/i.test(prompt) ? 'ilustracao'
       : 'realista';
