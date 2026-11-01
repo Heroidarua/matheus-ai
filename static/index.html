@@ -1483,7 +1483,7 @@
       const userText = text || 'Analise os arquivos anexados.';
       
       const imageFile = files.find(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
-      const imageEditPrompt = imageFile && window.ADAExtractImageEditPrompt ? window.ADAExtractImageEditPrompt(userText) : null;
+      const imageEditPrompt = imageFile && window.ADAExtractImageEditPrompt ? window.ADAExtractImageEditPrompt(userText, Boolean(imageFile)) : null;
 
       // Edição de foto usa uma única transferência direta ao endpoint de imagem.
       let content;
