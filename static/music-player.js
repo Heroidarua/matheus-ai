@@ -75,8 +75,13 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (response.status === 503) {
-          say('Para pesquisa automática, configure YOUTUBE_API_KEY no Render. Você também pode pesquisar no YouTube e colar o link abaixo.');
-          window.open('https://www.youtube.com/results?search_query=' + encodeURIComponent(query), '_blank', 'noopener,noreferrer');
+          say('Pesquisa automática do YouTube ainda não configurada. Abra os resultados pelo link abaixo e cole um link de vídeo para reproduzir.');
+          const link = document.createElement('a');
+          link.href = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
+          link.target = '_blank'; link.rel = 'noopener noreferrer';
+          link.textContent = 'Abrir resultados no YouTube ↗';
+          link.style.color = 'var(--accent)';
+          resultsEl.replaceChildren(link);
           return;
         }
         throw new Error(data.detail || 'A pesquisa no YouTube falhou.');
@@ -189,7 +194,12 @@
     if (volume) {
       const value = Math.max(0, Math.min(100, Number(volume[1])));
       if (audio) audio.volume = value / 100;
-      open(); say(provider === 'spotify' ? 'Ajuste o volume pelo player do Spotify ou pelo dispositivo.' : 'Volume ajustado quando o player permite controle externo.');
+      if (provider === 'youtube') {
+        const frame = stage.querySelector('iframe');
+        frame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [value] }), '*');
+      }
+      open();
+      say(provider === 'spotify' ? 'Ajuste o volume pelo player do Spotify ou pelo dispositivo.' : 'Comando de volume enviado ao player.');
       return true;
     }
     const playMatch = normalized.match(/^(?:toque|toca|reproduza|reproduzir|coloque|coloca|bota|pesquise|procure)(?:\s+(?:a|uma|um))?\s+(?:(?:musica|som|faixa)\s+)?(?:de|do|da|dos|das)?\s*(.+)$/i);
