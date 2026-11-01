@@ -9,6 +9,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import secrets
 import time
 from typing import Any
@@ -20,6 +21,7 @@ import httpx
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/google", tags=["google-workspace"])
 
