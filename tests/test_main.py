@@ -328,3 +328,26 @@ def test_research_engine_allows_results_for_short_explicit_queries():
     ranked = main.rank_results("Oi", [candidate])
     assert len(ranked) == 1
     assert ranked[0]["url"] == candidate["url"]
+
+
+def test_long_term_memory_only_captures_explicit_durable_context():
+    from app.long_term_memory import extract_memory_candidate
+
+    assert extract_memory_candidate("Meu projeto ADA-M usa Gemma 4 e Kokoro para conversar.") is not None
+    assert extract_memory_candidate("Prefiro respostas diretas e instruções passo a passo.") is not None
+    assert extract_memory_candidate("Qual é a melhor forma de organizar meu projeto?") is None
+    assert extract_memory_candidate("Minha senha é exemplo-super-secreto-123.") is None
+
+
+def test_long_term_memory_retrieval_is_contextual(monkeypatch):
+    from app import long_term_memory
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    long_term_memory._VOLATILE.clear()
+    long_term_memory.remember("test-owner", "Meu projeto ADA-M usa Gemma 4 e Kokoro.")
+    long_term_memory.remember("test-owner", "Prefiro respostas diretas e instruções passo a passo.")
+
+    related = long_term_memory.retrieve("test-owner", "Como está o projeto ADA-M?")
+    assert any("ADA-M" in item for item in related)
+    assert not any("Prefiro respostas" in item for item in related)
+    assert long_term_memory.forget_all("test-owner") == 2
