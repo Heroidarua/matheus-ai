@@ -23,6 +23,8 @@ services:
         sync: false
       - key: TTS_API_KEY
         sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
       - key: TTS_VOICE
         value: pf_dora
       - key: GOOGLE_TOKEN_ENCRYPTION_KEY
