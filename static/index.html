@@ -435,23 +435,20 @@
     </form>
   </dialog>
   <dialog id="music-dialog" class="music-dialog">
-    <div class="music-head"><div><strong>♫ ADA-M Music</strong><div style="font-size:11px;color:var(--muted);margin-top:3px">YouTube · Spotify · seus arquivos</div></div><button type="button" id="music-close" class="library-close" aria-label="Fechar">×</button></div>
+    <div class="music-head"><div><strong>♫ ADA-M Music</strong><div style="font-size:11px;color:var(--muted);margin-top:3px">Somente YouTube</div></div><button type="button" id="music-close" class="library-close" aria-label="Fechar">×</button></div>
     <div class="music-body">
       <div class="music-search-row"><input id="music-query" type="search" placeholder="Pesquisar música ou artista..." aria-label="Pesquisar música"><button type="button" id="music-search">Pesquisar</button></div>
       <div class="music-actions">
         <button type="button" id="music-youtube-search" class="music-secondary">Abrir pesquisa YouTube</button>
-        <button type="button" id="music-spotify-search" class="music-secondary">Abrir pesquisa Spotify</button>
-        <button type="button" id="music-local-button" class="music-secondary">＋ Arquivos de áudio</button>
-        <input id="music-files" type="file" accept="audio/*" multiple hidden>
       </div>
-      <div class="music-url-row"><input id="music-url" type="url" placeholder="Cole aqui um link do YouTube ou Spotify..." aria-label="Link de música"><button type="button" id="music-load-url">Reproduzir link</button></div>
+      <div class="music-url-row"><input id="music-url" type="url" placeholder="Cole aqui um link do YouTube..." aria-label="Link de música"><button type="button" id="music-load-url">Reproduzir link</button></div>
       <div id="music-results" class="music-results" aria-live="polite"></div>
       <div id="music-stage" class="music-stage"></div>
       <div class="music-actions">
         <button type="button" id="music-prev" class="music-secondary">⏮ Anterior</button><button type="button" id="music-play" class="music-secondary">▶ Continuar</button><button type="button" id="music-pause" class="music-secondary">Ⅱ Pausar</button><button type="button" id="music-next" class="music-secondary">Próxima ⏭</button><button type="button" id="music-stop" class="music-secondary">Parar</button><span id="music-queue" class="music-queue">Nenhuma fila local</span>
       </div>
       <div id="music-status" class="music-status" role="status">Pronto para reproduzir.</div>
-      <div class="music-note">YouTube e Spotify usam os players oficiais incorporados. O Spotify pode exigir login ou Premium para alguns recursos. Arquivos locais são reproduzidos no seu navegador e não são enviados ao servidor. A pesquisa automática do YouTube requer uma chave gratuita da YouTube Data API v3 no Render.</div>
+      <div class="music-note">A reprodução usa o player oficial do YouTube. A pesquisa automática dentro do ADA-M requer uma chave da YouTube Data API v3 configurada no Render.</div>
     </div>
   </dialog>
   <script>
@@ -1596,6 +1593,6 @@
     })();
   </script>
   <script src="/static/image-chat.js?v=edit-fix-20261031"></script>
-  <script src="/static/music-player.js?v=ada-m-music-2"></script>
+  <script src="/static/music-player.js?v=ada-m-youtube-only-1"></script>
   </body>
 </html>
