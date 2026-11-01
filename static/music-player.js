@@ -5,9 +5,24 @@
   const $ = id => document.getElementById(id);
   const status = $('music-status'), resultsEl = $('music-results'), stage = $('music-stage');
   const queryInput = $('music-query'), urlInput = $('music-url'), queueLabel = $('music-queue');
+  const dock = $('music-mini-player'), dockStage = $('music-mini-stage'), dockTitle = $('music-mini-title');
+  const modalBody = dialog.querySelector('.music-body'), modalControls = $('music-controls');
   let queue = [], queueIndex = -1, ytPlayer = null, ytApiPromise = null, playerCounter = 0;
+  function hasTrack() { return !!(ytPlayer && queueIndex >= 0 && queue[queueIndex]); }
+  function moveStageToDock() {
+    if (!hasTrack() || dialog.open) return;
+    if (stage.parentElement !== dockStage) dockStage.appendChild(stage);
+    dock.hidden = false;
+  }
+  function moveStageToDialog() {
+    if (stage.parentElement !== modalBody) modalBody.insertBefore(stage, modalControls);
+    dock.hidden = true;
+  }
+  function updateMiniTitle(item) {
+    if (dockTitle) dockTitle.textContent = item?.title || 'YouTube';
+  }
   function say(message) { status.textContent = message; }
-  function open() { if (!dialog.open) dialog.showModal(); setTimeout(() => queryInput?.focus(), 80); }
+  function open() { moveStageToDialog(); if (!dialog.open) dialog.showModal(); setTimeout(() => queryInput?.focus(), 80); }
   function updateQueue() { queueLabel.textContent = queue.length ? ('Lista: ' + (queueIndex + 1) + '/' + queue.length) : 'Nenhuma música selecionada'; }
   function clearStage() {
     if (ytPlayer) { try { ytPlayer.destroy(); } catch {} ytPlayer = null; }
@@ -36,7 +51,7 @@
     clearStage();
     const target = document.createElement('div'); target.id = 'ada-m-youtube-player-' + (++playerCounter);
     target.style.width = '100%'; target.style.minHeight = '315px'; stage.appendChild(target);
-    say('Carregando o player oficial do YouTube…'); updateQueue();
+    say('Carregando o player oficial do YouTube…'); updateQueue(); updateMiniTitle(item);
     try {
       const YT = await loadYouTubeApi();
       if (!stage.contains(target)) return;
@@ -146,6 +161,12 @@
   }
   $('music-open').addEventListener('click', open);
   $('music-close').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', moveStageToDock);
+  $('music-mini-expand').addEventListener('click', open);
+  $('music-mini-hide').addEventListener('click', () => { dock.hidden = true; });
+  $('music-mini-play').addEventListener('click', () => control('play'));
+  $('music-mini-pause').addEventListener('click', () => control('pause'));
+  $('music-mini-next').addEventListener('click', next);
   $('music-search').addEventListener('click', () => searchYouTube(queryInput.value));
   queryInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); searchYouTube(queryInput.value); } });
   $('music-load-url').addEventListener('click', () => loadUrl(urlInput.value));
@@ -158,7 +179,7 @@
   $('music-next').addEventListener('click', next);
   $('music-pause').addEventListener('click', () => control('pause'));
   $('music-play').addEventListener('click', () => control('play'));
-  $('music-stop').addEventListener('click', () => { clearStage(); say('Reprodução encerrada.'); updateQueue(); });
+  $('music-stop').addEventListener('click', () => { clearStage(); dock.hidden = true; say('Reprodução encerrada.'); updateQueue(); });
   window.ADAMusic = { handleCommand, open, search: searchYouTube, loadUrl, control };
   const form = document.getElementById('chat-form'), prompt = document.getElementById('prompt');
   if (form && prompt) form.addEventListener('submit', event => {
