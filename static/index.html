@@ -327,6 +327,17 @@
     .music-result-button{flex:0 0 auto}
     .music-queue{font-size:11px;color:var(--muted);margin-left:auto;align-self:center}
     .music-note{font-size:11px;line-height:1.5;color:var(--muted)}
+    .music-mini-player{position:fixed;z-index:1000;right:18px;bottom:18px;width:232px;padding:10px;border:1px solid var(--border);border-radius:15px;background:var(--panel);color:var(--text);box-shadow:0 12px 42px #000b;display:grid;gap:8px}
+    .music-mini-player[hidden]{display:none}
+    .music-mini-head{display:flex;align-items:center;gap:8px;min-width:0}
+    .music-mini-title{flex:1;min-width:0;font-size:12px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .music-mini-head button,.music-mini-controls button{padding:6px 9px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);color:var(--text);font-size:11px}
+    .music-mini-stage{width:100%;height:200px;overflow:hidden;border-radius:10px;background:#111;display:grid;place-items:center}
+    .music-mini-stage .music-stage{width:200px;height:200px;min-height:200px;padding:0;border:0;border-radius:0;overflow:hidden}
+    .music-mini-stage .music-stage iframe{width:200px!important;height:200px!important;min-height:200px!important;border:0;border-radius:0}
+    .music-mini-controls{display:flex;gap:6px;justify-content:space-between}
+    .music-mini-controls button{flex:1}
+    @media(max-width:520px){.music-mini-player{right:10px;bottom:10px;width:216px}.music-mini-stage{height:200px}.music-mini-stage .music-stage{width:200px;height:200px}.music-mini-stage .music-stage iframe{width:200px!important;height:200px!important}}
     @media(max-width:520px){.music-body{padding:12px}.music-stage iframe{min-height:220px}.music-result img{width:56px;height:44px}.music-result{gap:7px}.music-result-button{padding:8px!important}}
 
 </style>
@@ -444,13 +455,18 @@
       <div class="music-url-row"><input id="music-url" type="url" placeholder="Cole aqui um link do YouTube..." aria-label="Link de música"><button type="button" id="music-load-url">Reproduzir link</button></div>
       <div id="music-results" class="music-results" aria-live="polite"></div>
       <div id="music-stage" class="music-stage"></div>
-      <div class="music-actions">
+      <div class="music-actions" id="music-controls">
         <button type="button" id="music-prev" class="music-secondary">⏮ Anterior</button><button type="button" id="music-play" class="music-secondary">▶ Continuar</button><button type="button" id="music-pause" class="music-secondary">Ⅱ Pausar</button><button type="button" id="music-next" class="music-secondary">Próxima ⏭</button><button type="button" id="music-stop" class="music-secondary">Parar</button><span id="music-queue" class="music-queue">Nenhuma fila local</span>
       </div>
       <div id="music-status" class="music-status" role="status">Pronto para reproduzir.</div>
       <div class="music-note">A reprodução usa o player oficial do YouTube. A pesquisa automática dentro do ADA-M requer uma chave da YouTube Data API v3 configurada no Render.</div>
     </div>
   </dialog>
+  <aside id="music-mini-player" class="music-mini-player" aria-label="Mini player ADA-M Music" hidden>
+    <div class="music-mini-head"><span id="music-mini-title" class="music-mini-title">YouTube</span><button type="button" id="music-mini-expand" aria-label="Abrir player">Abrir</button><button type="button" id="music-mini-hide" aria-label="Ocultar mini player">×</button></div>
+    <div id="music-mini-stage" class="music-mini-stage"></div>
+    <div class="music-mini-controls"><button type="button" id="music-mini-play" aria-label="Continuar">▶</button><button type="button" id="music-mini-pause" aria-label="Pausar">Ⅱ</button><button type="button" id="music-mini-next" aria-label="Próxima música">⏭</button></div>
+  </aside>
   <script>
     const messagesEl = document.getElementById('messages');
     const form = document.getElementById('chat-form');
