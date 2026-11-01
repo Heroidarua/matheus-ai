@@ -374,18 +374,6 @@
       <div class="plus-menu" id="plus-menu" hidden>
         <div class="plus-menu-heading">Ferramentas e preferências</div>
         <div class="drawer-row">
-          <details class="settings-drawer">
-            <summary>Contas e produtividade</summary>
-            <div class="drawer-content">
-              <div class="tools primary-tools">
-                <button class="tool-btn" type="button" id="google-connect-button">Conectar Google Calendar e Gmail</button>
-                <span id="google-connection-status" class="voice-status" aria-live="polite">Verificando conexão Google…</span>
-              </div>
-              <p class="muted" style="font-size:12px;padding:0 8px">A conexão permite consultar agenda e e-mails. Ações de escrita exigem confirmação explícita.</p>
-            </div>
-          </details>
-        </div>
-        <div class="drawer-row">
           <details class="settings-drawer tools-drawer">
             <summary>Ferramentas</summary>
             <div class="drawer-content">
@@ -1476,31 +1464,6 @@
         imageStudioGenerate.textContent = '✨ Gerar imagem';
       }
     });
-
-    // Conexão opcional com Google Workspace.
-    const googleConnectButton = document.getElementById('google-connect-button');
-    const googleConnectionStatus = document.getElementById('google-connection-status');
-    async function refreshGoogleConnectionStatus() {
-      if (!googleConnectionStatus) return;
-      try {
-        const response = await fetch('/api/google/status', { credentials: 'same-origin' });
-        const data = await response.json();
-        googleConnectionStatus.textContent = !data.configured
-          ? 'Integração aguardando configuração no servidor.'
-          : data.connected ? 'Conta Google conectada.' : 'Nenhuma conta Google conectada.';
-        if (googleConnectButton) googleConnectButton.textContent = data.connected
-          ? 'Reconectar / atualizar permissões Google'
-          : 'Conectar Google Calendar e Gmail';
-      } catch {
-        googleConnectionStatus.textContent = 'Não foi possível verificar a conexão Google.';
-      }
-    }
-    googleConnectButton?.addEventListener('click', () => window.location.assign('/api/google/connect'));
-    refreshGoogleConnectionStatus();
-    if (new URLSearchParams(location.search).get('google') === 'connected') {
-      refreshGoogleConnectionStatus();
-      history.replaceState({}, '', location.pathname);
-    }
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
