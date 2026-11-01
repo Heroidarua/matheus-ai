@@ -381,9 +381,8 @@
               <div class="tools primary-tools">
                 <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
                 <button class="tool-btn" type="button" id="camera-button"><span>📷</span>Tirar foto</button>
-                <button class="tool-btn" type="button" id="image-studio-button"><span>✨</span>Criar imagem com IA</button>
+                <button class="tool-btn" type="button" hidden id="image-studio-button"><span>✨</span>Criar imagem com IA</button>
                 <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
-              <button class="tool-btn" type="button" id="library-button"><span>📚</span>Biblioteca de arquivos</button>
                 <button class="tool-btn" type="button" id="music-open"><span>🎵</span>ADA-M Music</button>
                 <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
                 <button class="tool-btn" type="button" id="export-button">Exportar conversa</button>
@@ -831,11 +830,6 @@
     const libraryFiles = document.getElementById('library-files');
     const libraryResults = document.getElementById('library-results');
     const libraryUpload = document.getElementById('library-upload');
-    document.getElementById('library-button').addEventListener('click', async () => {
-      if (typeof libraryDialog.showModal === 'function') libraryDialog.showModal();
-      else libraryDialog.setAttribute('open', '');
-      await refreshLibrary();
-    });
     document.getElementById('library-close').addEventListener('click', () => libraryDialog.close());
     document.getElementById('library-refresh').addEventListener('click', refreshLibrary);
     async function refreshLibrary() {
