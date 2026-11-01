@@ -12,6 +12,8 @@ import os
 import secrets
 import time
 from typing import Any
+from datetime import datetime
+from email.message import EmailMessage
 from urllib.parse import urlencode
 
 import httpx
@@ -29,8 +31,10 @@ SCOPES = [
     "openid",
     "email",
     "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/documents.readonly",
     "https://www.googleapis.com/auth/spreadsheets.readonly",
 ]
@@ -366,3 +370,156 @@ async def google_spreadsheet_values(request: Request, spreadsheet_id: str, cell_
     return await _google_get(request, f"/sheets/v4/spreadsheets/{spreadsheet_id}/values/{safe_range}", {
         "majorDimension": "ROWS", "valueRenderOption": "FORMATTED_VALUE"
     })
+
+
+class CalendarEventInput(BaseModel):
+    summary: str = Field(min_length=1, max_length=250)
+    start: str = Field(min_length=10, max_length=80)
+    end: str = Field(min_length=10, max_length=80)
+    time_zone: str = Field(default="America/Manaus", min_length=1, max_length=80)
+    description: str = Field(default="", max_length=8000)
+    location: str = Field(default="", max_length=500)
+    attendees: list[str] = Field(default_factory=list, max_length=30)
+    confirm: bool = False
+
+
+class CalendarEventUpdateInput(BaseModel):
+    summary: str | None = Field(default=None, min_length=1, max_length=250)
+    start: str | None = Field(default=None, min_length=10, max_length=80)
+    end: str | None = Field(default=None, min_length=10, max_length=80)
+    time_zone: str = Field(default="America/Manaus", min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=8000)
+    location: str | None = Field(default=None, max_length=500)
+    confirm: bool = False
+
+
+class GmailSendInput(BaseModel):
+    to: list[str] = Field(min_length=1, max_length=20)
+    subject: str = Field(min_length=1, max_length=250)
+    body: str = Field(min_length=1, max_length=20000)
+    cc: list[str] = Field(default_factory=list, max_length=20)
+    confirm: bool = False
+
+
+def _validated_datetime(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Data inválida. Use ISO 8601, por exemplo 2026-11-03T14:00:00-04:00.") from exc
+    if parsed.tzinfo is None:
+        raise HTTPException(status_code=400, detail="Informe o fuso horário ou deslocamento UTC na data.")
+    return parsed
+
+
+def _calendar_datetime(value: str, time_zone: str) -> dict[str, str]:
+    parsed = _validated_datetime(value)
+    return {"dateTime": parsed.isoformat(), "timeZone": time_zone}
+
+
+def _validate_email_list(values: list[str]) -> list[str]:
+    cleaned = []
+    for value in values:
+        address = value.strip()
+        if len(address) > 254 or not re.fullmatch(r"[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+", address):
+            raise HTTPException(status_code=400, detail="Um dos endereços de e-mail é inválido.")
+        cleaned.append(address)
+    return cleaned
+
+
+async def _google_write(request: Request, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    access_token = await _get_access_token(request)
+    if not path.startswith("/"):
+        raise HTTPException(status_code=400, detail="Caminho de API inválido.")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(25.0, connect=5.0)) as client:
+        response = await client.request(
+            method, API_ROOT + path,
+            json=payload if payload is not None else None,
+            headers={"Authorization": "Bearer " + access_token},
+        )
+    if response.status_code == 401:
+        raise HTTPException(status_code=401, detail="A autorização Google expirou. Reconecte sua conta.")
+    if response.status_code == 403:
+        raise HTTPException(status_code=403, detail="O Google negou a operação. Reconecte a conta para conceder os novos escopos e confira as APIs ativadas.")
+    if response.status_code == 404:
+        raise HTTPException(status_code=404, detail="O recurso Google solicitado não foi encontrado.")
+    if not response.is_success:
+        print(f"Google Workspace write failed (HTTP {response.status_code}) method={method} path={path.split('?')[0][:80]}")
+        raise HTTPException(status_code=502, detail="A API Google não conseguiu concluir a alteração.")
+    if response.status_code == 204 or not response.content:
+        return {"success": True}
+    data = response.json()
+    return data if isinstance(data, dict) else {"success": True}
+
+
+@router.post("/calendar/events")
+async def google_calendar_create_event(request: Request, data: CalendarEventInput) -> dict[str, Any]:
+    if not data.confirm:
+        raise HTTPException(status_code=428, detail="Confirmação necessária. Revise os dados do evento e envie confirm=true.")
+    start = _validated_datetime(data.start)
+    end = _validated_datetime(data.end)
+    if end <= start:
+        raise HTTPException(status_code=400, detail="O horário de término deve ser posterior ao início.")
+    payload: dict[str, Any] = {
+        "summary": data.summary.strip(),
+        "start": _calendar_datetime(data.start, data.time_zone),
+        "end": _calendar_datetime(data.end, data.time_zone),
+    }
+    if data.description.strip():
+        payload["description"] = data.description.strip()
+    if data.location.strip():
+        payload["location"] = data.location.strip()
+    if data.attendees:
+        payload["attendees"] = [{"email": email} for email in _validate_email_list(data.attendees)]
+    result = await _google_write(request, "POST", "/calendar/v3/calendars/primary/events", payload)
+    return {"success": True, "event": result}
+
+
+@router.patch("/calendar/events/{event_id}")
+async def google_calendar_update_event(request: Request, event_id: str, data: CalendarEventUpdateInput) -> dict[str, Any]:
+    if not data.confirm:
+        raise HTTPException(status_code=428, detail="Confirmação necessária. Revise as alterações e envie confirm=true.")
+    if not event_id or len(event_id) > 512 or not re.fullmatch(r"[A-Za-z0-9_@.%-]+", event_id):
+        raise HTTPException(status_code=400, detail="ID de evento inválido.")
+    payload: dict[str, Any] = {}
+    if data.summary is not None:
+        payload["summary"] = data.summary.strip()
+    if data.description is not None:
+        payload["description"] = data.description.strip()
+    if data.location is not None:
+        payload["location"] = data.location.strip()
+    if data.start is not None:
+        payload["start"] = _calendar_datetime(data.start, data.time_zone)
+    if data.end is not None:
+        payload["end"] = _calendar_datetime(data.end, data.time_zone)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Nenhuma alteração foi informada.")
+    result = await _google_write(request, "PATCH", f"/calendar/v3/calendars/primary/events/{event_id}", payload)
+    return {"success": True, "event": result}
+
+
+@router.delete("/calendar/events/{event_id}")
+async def google_calendar_delete_event(request: Request, event_id: str, confirm: bool = False) -> dict[str, bool]:
+    if not confirm:
+        raise HTTPException(status_code=428, detail="Confirmação necessária. Envie confirm=true para cancelar o evento.")
+    if not event_id or len(event_id) > 512 or not re.fullmatch(r"[A-Za-z0-9_@.%-]+", event_id):
+        raise HTTPException(status_code=400, detail="ID de evento inválido.")
+    await _google_write(request, "DELETE", f"/calendar/v3/calendars/primary/events/{event_id}")
+    return {"success": True, "deleted": True}
+
+
+@router.post("/gmail/send")
+async def google_gmail_send(request: Request, data: GmailSendInput) -> dict[str, Any]:
+    if not data.confirm:
+        raise HTTPException(status_code=428, detail="Confirmação necessária. Revise destinatários, assunto e mensagem e envie confirm=true.")
+    recipients = _validate_email_list(data.to)
+    cc = _validate_email_list(data.cc)
+    message = EmailMessage()
+    message["To"] = ", ".join(recipients)
+    if cc:
+        message["Cc"] = ", ".join(cc)
+    message["Subject"] = data.subject.strip()
+    message.set_content(data.body)
+    import base64
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
+    result = await _google_write(request, "POST", "/gmail/v1/users/me/messages/send", {"raw": raw})
+    return {"success": True, "message_id": result.get("id"), "thread_id": result.get("threadId")}
