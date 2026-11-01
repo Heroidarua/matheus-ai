@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -145,7 +145,7 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/api/music/youtube/search", dependencies=[Depends(require_app_key)])
-async def music_youtube_search(q: str = Field(min_length=2, max_length=120)) -> dict[str, Any]:
+async def music_youtube_search(q: str = Query(min_length=2, max_length=120)) -> dict[str, Any]:
     """Pesquisa vídeos musicais pela YouTube Data API sem expor a chave no navegador."""
     if not YOUTUBE_API_KEY:
         raise HTTPException(status_code=503, detail="Pesquisa automática indisponível. Configure YOUTUBE_API_KEY no Render.")
