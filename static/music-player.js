@@ -59,7 +59,7 @@
         width: '100%', height: '315', videoId: item.id,
         playerVars: { autoplay: autoplay ? 1 : 0, controls: 1, rel: 0, playsinline: 1, origin: location.origin },
         events: {
-          onReady: () => say('YouTube pronto: ' + (item.title || 'música selecionada') + '.'),
+          onReady: () => { say('YouTube pronto: ' + (item.title || 'música selecionada') + '.'); if (!dialog.open) moveStageToDock(); },
           onStateChange: event => {
             if (event.data === YT.PlayerState.ENDED && queueIndex >= 0 && queueIndex < queue.length - 1) {
               queueIndex++; showYouTube(queue[queueIndex], true);
