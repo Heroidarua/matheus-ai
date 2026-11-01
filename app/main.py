@@ -1129,7 +1129,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     # os itens mais relevantes para esta pergunta. Falhas de memória não bloqueiam o chat.
     try:
         await asyncio.to_thread(remember_long_term_memory, session_id, last_user_message)
-        long_term_items = await asyncio.to_thread(retrieve_long_term_memory, session_id, last_user_message)
+        recent_context = "\n".join(
+            content_as_text(message.content) for message in request.messages[-6:]
+            if message.role in {"user", "assistant"}
+        )[-1800:]
+        long_term_items = await asyncio.to_thread(retrieve_long_term_memory, session_id, recent_context)
     except Exception as exc:
         print(f"Long-term memory unavailable ({type(exc).__name__})")
         long_term_items = []
