@@ -1324,6 +1324,17 @@
       instance.onresult = event => {
         const transcript = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
         if (!transcript || !voiceSessionActive) return;
+
+        // Executa comandos de mídia pelo dispatcher já usado no chat digitado.
+        if (window.ADAMusic?.handleCommand(transcript)) {
+          stopVoiceRecognition();
+          promptEl.value = '';
+          voiceStatus.textContent = 'Executando comando do YouTube…';
+          window.dispatchEvent(new Event('ada-m:music-command-complete'));
+          return;
+        }
+
+        // Os demais comandos seguem pelo pipeline normal do chat (/api/chat).
         promptEl.value = transcript;
         voiceStatus.textContent = 'Entendi: ' + transcript;
         stopVoiceRecognition();
