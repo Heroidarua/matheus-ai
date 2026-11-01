@@ -1,7 +1,7 @@
 """Optional Google Workspace OAuth integration with encrypted PostgreSQL token storage.
 
 The integration is disabled unless OAuth credentials, a PostgreSQL DATABASE_URL,
-and a Fernet encryption key are configured. Only read-only Google scopes are used.
+and a Fernet encryption key are configured. Read and explicitly confirmed write scopes are supported.
 """
 from __future__ import annotations
 
