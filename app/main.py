@@ -40,6 +40,13 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
+from app.long_term_memory import (
+    forget_all as forget_long_term_memory,
+    list_memories as list_long_term_memories,
+    remember as remember_long_term_memory,
+    retrieve as retrieve_long_term_memory,
+    storage_status as long_term_memory_storage_status,
+)
 
 load_dotenv()
 
@@ -258,6 +265,25 @@ async def companion_state_endpoint(http_request: Request) -> dict[str, Any]:
         "note": "Estados afetivos simulados, não sentimentos subjetivos.",
     }
 
+@app.get("/api/memory", dependencies=[Depends(require_app_key)])
+async def get_long_term_memory(http_request: Request) -> dict[str, Any]:
+    owner_id = http_request.session.get("companion_id")
+    if not owner_id:
+        owner_id = secrets.token_urlsafe(32)
+        http_request.session["companion_id"] = owner_id
+    items = await asyncio.to_thread(list_long_term_memories, owner_id)
+    return {"items": items, "count": len(items), "storage": long_term_memory_storage_status()}
+
+
+@app.delete("/api/memory", dependencies=[Depends(require_app_key)])
+async def delete_long_term_memory(http_request: Request) -> dict[str, Any]:
+    owner_id = http_request.session.get("companion_id")
+    if not owner_id:
+        return {"deleted": 0}
+    count = await asyncio.to_thread(forget_long_term_memory, owner_id)
+    return {"deleted": count}
+
+
 @app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
 async def diagnostics() -> dict[str, Any]:
     """Diagnóstico operacional sem revelar chaves, URLs privadas ou conteúdo do usuário."""
@@ -295,6 +321,7 @@ async def diagnostics() -> dict[str, Any]:
             "voice": TTS_VOICE if TTS_API_URL else None,
         },
         "companion_storage": companion_storage_status(),
+        "long_term_memory": long_term_memory_storage_status(),
         "search": {"providers": search_providers, "last_provider": DIAGNOSTICS["last_search_provider"]},
         "metrics": {key: DIAGNOSTICS[key] for key in ("requests", "successes", "errors", "searches", "search_successes")},
         "last_error": DIAGNOSTICS["last_error"],
@@ -1049,7 +1076,19 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     last_user_message = next((content_as_text(m.content) for m in reversed(request.messages) if m.role == "user"), "")
     if not last_user_message and isinstance(request.messages[-1].content, str):
         raise HTTPException(status_code=400, detail="Envie uma mensagem ou anexe um arquivo.")
-    tool_result = local_tool(last_user_message)
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        session_id = secrets.token_urlsafe(32)
+        http_request.session["companion_id"] = session_id
+    normalized_command = re.sub(r"\s+", " ", last_user_message.casefold()).strip()
+    if normalized_command in {"/memoria", "minhas memorias", "minhas memórias"}:
+        saved = await asyncio.to_thread(list_long_term_memories, session_id)
+        tool_result = ("Memórias salvas:\n" + "\n".join(f"• {item}" for item in saved)) if saved else "Ainda não há memórias de longo prazo salvas."
+    elif normalized_command in {"/esquecer memoria", "/esquecer memória", "apagar minhas memorias", "apagar minhas memórias"}:
+        deleted = await asyncio.to_thread(forget_long_term_memory, session_id)
+        tool_result = f"Apaguei {deleted} memória(s) de longo prazo desta sessão."
+    else:
+        tool_result = local_tool(last_user_message)
     if tool_result is not None:
         if request.stream:
             async def local_tool_stream():
@@ -1085,12 +1124,17 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             search_unavailable = True
             print(f"Web search unavailable (HTTP {exc.status_code}): {str(exc.detail)[:250]}")
 
-    session_id = http_request.session.get("companion_id")
-    if not session_id:
-        session_id = secrets.token_urlsafe(32)
-        http_request.session["companion_id"] = session_id
     affective_state = await asyncio.to_thread(update_companion_state, session_id, last_user_message)
-    system_prompt = build_system_prompt(request.mode, last_user_message, request.memory, request.response_length)
+    # Memória contextual: registra apenas declarações duráveis explícitas e recupera
+    # os itens mais relevantes para esta pergunta. Falhas de memória não bloqueiam o chat.
+    try:
+        await asyncio.to_thread(remember_long_term_memory, session_id, last_user_message)
+        long_term_items = await asyncio.to_thread(retrieve_long_term_memory, session_id, last_user_message)
+    except Exception as exc:
+        print(f"Long-term memory unavailable ({type(exc).__name__})")
+        long_term_items = []
+    combined_memory = list(request.memory) + long_term_items
+    system_prompt = build_system_prompt(request.mode, last_user_message, combined_memory, request.response_length)
     system_prompt += "\n\n" + build_companion_prompt(affective_state)
     if deep_research:
         system_prompt += (
