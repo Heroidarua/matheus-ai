@@ -68,6 +68,25 @@
       resultsEl.appendChild(row);
     });
   }
+  function showExternalProvider(providerName, query = '') {
+    open();
+    resultsEl.replaceChildren();
+    const isSpotify = providerName === 'spotify';
+    const url = query
+      ? (isSpotify ? 'https://open.spotify.com/search/' + encodeURIComponent(query) : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query))
+      : (isSpotify ? 'https://open.spotify.com/' : 'https://www.youtube.com/');
+    const button = makeButton(isSpotify ? 'Abrir Spotify para escolher' : 'Abrir YouTube para escolher', () => {
+      const opened = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!opened) say('O navegador bloqueou a nova aba. Permita pop-ups ou use o link abaixo.');
+    });
+    resultsEl.appendChild(button);
+    const link = document.createElement('a');
+    link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    link.textContent = isSpotify ? 'Abrir Spotify ↗' : 'Abrir YouTube ↗';
+    link.style.color = 'var(--accent)';
+    resultsEl.appendChild(link);
+    say(query ? 'Escolha uma música nos resultados. A página será aberta em outra aba.' : 'Escolha uma música no serviço. A página será aberta em outra aba.');
+  }
   async function searchYouTube(query, autoplayFirst = false) {
     open(); say('Pesquisando no YouTube…'); resultsEl.replaceChildren();
     try {
@@ -202,6 +221,12 @@
       say(provider === 'spotify' ? 'Ajuste o volume pelo player do Spotify ou pelo dispositivo.' : 'Comando de volume enviado ao player.');
       return true;
     }
+    const providerCommand = normalized.match(/^(?:abra|abrir|abre|acessar|acesse|ir para|va para)\s+(?:o\s+|a\s+)?(youtube|youtube music|spotify)(?:\s+(?:e\s+)?(?:pesquise|procure|busque)\s+(.+))?$/i);
+    if (providerCommand) {
+      const service = providerCommand[1].includes('spotify') ? 'spotify' : 'youtube';
+      showExternalProvider(service, (providerCommand[2] || '').trim().replace(/[.!?]+$/, ''));
+      return true;
+    }
     const playMatch = normalized.match(/^(?:toque|toca|reproduza|reproduzir|coloque|coloca|bota|pesquise|procure)(?:\s+(?:a|uma|um))?\s+(?:(?:musica|som|faixa)\s+)?(?:de|do|da|dos|das)?\s*(.+)$/i);
     if (playMatch) {
       const query = playMatch[1].trim().replace(/[.!?]+$/, '');
@@ -223,14 +248,8 @@
   queryInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); $('music-search').click(); } });
   $('music-load-url').addEventListener('click', () => loadUrl(urlInput.value));
   urlInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); loadUrl(urlInput.value); } });
-  $('music-youtube-search').addEventListener('click', () => {
-    const query = queryInput.value.trim();
-    if (query) window.open('https://www.youtube.com/results?search_query=' + encodeURIComponent(query), '_blank', 'noopener,noreferrer');
-  });
-  $('music-spotify-search').addEventListener('click', () => {
-    const query = queryInput.value.trim();
-    if (query) window.open('https://open.spotify.com/search/' + encodeURIComponent(query), '_blank', 'noopener,noreferrer');
-  });
+  $('music-youtube-search').addEventListener('click', () => showExternalProvider('youtube', queryInput.value.trim()));
+  $('music-spotify-search').addEventListener('click', () => showExternalProvider('spotify', queryInput.value.trim()));
   $('music-local-button').addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
     if (!fileInput.files?.length) return;
