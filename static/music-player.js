@@ -20,6 +20,37 @@
   }
   function updateMiniTitle(item) {
     if (dockTitle) dockTitle.textContent = item?.title || 'YouTube';
+    updateMediaSession(item);
+  }
+  function updateMediaSession(item) {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      if ('MediaMetadata' in window) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: item?.title || 'YouTube',
+          artist: item?.channel || 'ADA-M Music',
+          album: 'ADA-M',
+          artwork: item?.thumbnail ? [{ src: item.thumbnail, sizes: '480x360', type: 'image/jpeg' }] : []
+        });
+      }
+    } catch {}
+  }
+  function setMediaPlaybackState(state) {
+    if (!('mediaSession' in navigator)) return;
+    try { navigator.mediaSession.playbackState = state; } catch {}
+  }
+  function registerMediaSessionActions() {
+    if (!('mediaSession' in navigator) || typeof navigator.mediaSession.setActionHandler !== 'function') return;
+    const actions = {
+      play: () => control('play'),
+      pause: () => control('pause'),
+      nexttrack: () => next(),
+      previoustrack: () => previous(),
+      stop: () => control('pause')
+    };
+    for (const [action, handler] of Object.entries(actions)) {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
+    }
   }
   function say(message) { status.textContent = message; }
   function open() { moveStageToDialog(); if (!dialog.open) dialog.showModal(); setTimeout(() => queryInput?.focus(), 80); }
@@ -61,6 +92,9 @@
         events: {
           onReady: () => { say('YouTube pronto: ' + (item.title || 'música selecionada') + '.'); if (!dialog.open) moveStageToDock(); },
           onStateChange: event => {
+            if (event.data === YT.PlayerState.PLAYING) setMediaPlaybackState('playing');
+            else if (event.data === YT.PlayerState.PAUSED) setMediaPlaybackState('paused');
+            else if (event.data === YT.PlayerState.ENDED) setMediaPlaybackState('none');
             if (event.data === YT.PlayerState.ENDED && queueIndex >= 0 && queueIndex < queue.length - 1) {
               queueIndex++; showYouTube(queue[queueIndex], true);
             }
@@ -162,6 +196,11 @@
   $('music-open').addEventListener('click', open);
   $('music-close').addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', moveStageToDock);
+  // Não pause nem destrua o iframe ao trocar de aba; mantenha o player fora do dialog.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && !dialog.open && hasTrack()) moveStageToDock();
+  });
+  registerMediaSessionActions();
   $('music-mini-expand').addEventListener('click', open);
   $('music-mini-hide').addEventListener('click', () => { dock.hidden = true; });
   $('music-mini-play').addEventListener('click', () => control('play'));
@@ -179,7 +218,11 @@
   $('music-next').addEventListener('click', next);
   $('music-pause').addEventListener('click', () => control('pause'));
   $('music-play').addEventListener('click', () => control('play'));
-  $('music-stop').addEventListener('click', () => { clearStage(); dock.hidden = true; say('Reprodução encerrada.'); updateQueue(); });
+  $('music-stop').addEventListener('click', () => {
+    clearStage(); dock.hidden = true; setMediaPlaybackState('none');
+    if ('mediaSession' in navigator) { try { navigator.mediaSession.metadata = null; } catch {} }
+    say('Reprodução encerrada.'); updateQueue();
+  });
   window.ADAMusic = { handleCommand, open, search: searchYouTube, loadUrl, control };
   const form = document.getElementById('chat-form'), prompt = document.getElementById('prompt');
   if (form && prompt) form.addEventListener('submit', event => {
