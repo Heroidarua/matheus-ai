@@ -363,6 +363,7 @@
     <form id="chat-form">
       <div id="selected-files" class="selected-files" aria-live="polite"></div>
       <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden aria-label="Selecionar fotos">
+      <input id="camera-input" type="file" accept="image/*" capture="environment" hidden aria-label="Tirar foto com a câmera">
       <input id="file-input" type="file" accept=".pdf,.docx,.xlsx,.xlsm,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yml,.yaml,.log,.sh,.toml,.ini,.sql,.java,.c,.cpp,.h,.go,.rs" multiple hidden aria-label="Selecionar arquivos">
       <div class="composer-shell">
       <div class="input-wrap">
@@ -379,6 +380,7 @@
             <div class="drawer-content">
               <div class="tools primary-tools">
                 <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
+                <button class="tool-btn" type="button" id="camera-button"><span>📷</span>Tirar foto</button>
                 <button class="tool-btn" type="button" id="image-studio-button"><span>✨</span>Criar imagem com IA</button>
                 <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
               <button class="tool-btn" type="button" id="library-button"><span>📚</span>Biblioteca de arquivos</button>
@@ -473,6 +475,7 @@
     const promptEl = document.getElementById('prompt');
     const sendBtn = document.getElementById('send');
     const photoInput = document.getElementById('photo-input');
+    const cameraInput = document.getElementById('camera-input');
     const fileInput = document.getElementById('file-input');
     const selectedFilesEl = document.getElementById('selected-files');
     const responseLength = document.getElementById('response-length');
@@ -820,6 +823,7 @@
     }
 
     document.getElementById('photo-button').addEventListener('click', () => photoInput.click());
+    document.getElementById('camera-button').addEventListener('click', () => cameraInput.click());
     document.getElementById('file-button').addEventListener('click', () => fileInput.click());
 
     const libraryDialog = document.getElementById('library-dialog');
@@ -917,6 +921,7 @@
 
 
     photoInput.addEventListener('change', () => { addSelectedFiles([...photoInput.files]); photoInput.value = ''; });
+    cameraInput.addEventListener('change', () => { addSelectedFiles([...cameraInput.files]); cameraInput.value = ''; });
     fileInput.addEventListener('change', () => { addSelectedFiles([...fileInput.files]); fileInput.value = ''; });
     promptEl.addEventListener('keydown', event => {
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
