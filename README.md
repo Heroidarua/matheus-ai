@@ -188,6 +188,23 @@ render.yaml
 Para ativar o botão **Editar foto com IA**, configure `HF_TOKEN` no ambiente do Render com um token da Hugging Face que tenha acesso a Inference Providers. A integração usa `Qwen/Qwen-Image-Edit` via provedor `fal-ai`; disponibilidade e cobrança dependem da conta e do provedor. Opcionalmente, configure `IMAGE_EDIT_MODEL` para outro modelo de edição compatível com image-to-image.
 
 
+## ADA-M Music — reprodutor unificado
+
+O player **+ → Ferramentas → ADA-M Music** reúne três fontes:
+- **YouTube:** pesquisa pela YouTube Data API v3 e reprodução no player oficial incorporado.
+- **Spotify:** reprodução por links oficiais incorporados de faixas, álbuns, playlists, episódios e programas. Login, disponibilidade e recursos podem depender da conta e da região.
+- **Arquivos locais:** reprodução de áudios selecionados no navegador, com fila, anterior, próxima, pausar e continuar. Os arquivos locais não são enviados ao servidor.
+
+A conversa por voz e a entrada digitada reconhecem comandos como “toque música eletrônica”, “pause”, “continue”, “próxima música” e “música anterior”. A reprodução incorporada pode exigir um toque inicial devido às políticas de autoplay do navegador. Os controles de volume externos não são suportados por todos os players de terceiros.
+
+### Ativar pesquisa automática do YouTube
+
+1. No Google Cloud Console, crie ou selecione um projeto e ative **YouTube Data API v3**.
+2. Crie uma chave de API e, se possível, restrinja-a à YouTube Data API v3.
+3. No Render, adicione a variável privada `YOUTUBE_API_KEY` com essa chave e faça deploy.
+
+A pesquisa usa a cota da YouTube Data API (o método search.list consome unidades de cota). Sem a chave, o player continua aceitando links do YouTube/Spotify e arquivos locais; a pesquisa do YouTube abre os resultados oficiais em outra aba para você copiar o link. A chave fica no backend e não é enviada ao navegador.
+
 ## Integração com GitHub
 
 O painel **Ferramentas → GitHub** usa um GitHub App instalado nos repositórios que o usuário autorizar. A chave privada e os tokens temporários ficam somente no backend. O painel permite listar os repositórios da instalação, escolher um repositório, ler um arquivo, enviar seu conteúdo ao chat e preparar uma alteração em uma nova branch com confirmação explícita. A branch padrão não é modificada.
