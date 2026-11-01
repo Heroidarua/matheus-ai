@@ -12,7 +12,7 @@ _TRIGGERS = (
  r"\b(meu projeto|minha empresa|meu site|meu aplicativo|minha aplicação)\b",
  r"\b(estou desenvolvendo|estou criando|estou construindo|trabalho com)\b",
  r"\b(prefiro|minha preferência|gosto de|não gosto de|nao gosto de)\b",
- r"\b(quero que você|quero que voce|sempre|nunca|não quero|nao quero)\b",
+ r"\b(quero que você (?:sempre|nunca)|quero que voce (?:sempre|nunca)|sempre|nunca|não quero|nao quero)\b",
  r"\b(meu objetivo|minha meta|estou usando|uso atualmente)\b",
  r"\b(lembre-se|lembre que|guarde que)\b",
 )
@@ -70,7 +70,7 @@ def retrieve(owner_id: str, query: str, limit: int=8) -> list[str]:
     for i,item in enumerate(items):
         body=item["content"].casefold()
         overlap=sum(1 for w in words if w in body)
-        if not words or overlap: ranked.append((overlap,i,item))
+        if words and overlap: ranked.append((overlap,i,item))
     ranked.sort(key=lambda x:(x[0],x[1]),reverse=True)
     chosen=[x[2] for x in ranked[:limit]]
     if conn is not None:
