@@ -175,9 +175,10 @@
     return true;
   }
   function handleCommand(raw) {
-    const normalized = String(raw || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/^ada[- ]?m[, ]*/, '').trim();
+    const normalized = String(raw || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/^ada[- ]?m[, ]*/, '').replace(/[.!?,;]+$/g, '').trim();
     if (!normalized) return false;
-    if (/^(?:abra|abrir|abre|acessar|acesse|ir para|va para)\s+(?:o\s+)?youtube(?:\s+music)?$/i.test(normalized)) {
+    // Reconhece variações naturais, inclusive quando a frase vem dentro de uma solicitação maior.
+    if (/(?:^|\b)(?:por favor\s+)?(?:quero\s+)?(?:pode\s+)?(?:abrir|abra|abre|acessar|acesse|ir para|va para)\s+(?:o\s+)?youtube(?:\s+music)?(?:\b|$)/i.test(normalized)) {
       open(); say('YouTube aberto no ADA-M. Pesquise uma música ou artista e escolha um resultado.'); return true;
     }
     const youtubeSearch = normalized.match(/^(?:abra|abrir|abre|pesquise|pesquisar|procure|buscar|busque)(?:\s+o)?\s+youtube(?:\s+e)?\s+(?:pesquise|pesquisar|procure|buscar|busque)\s+(.+)$/i);
