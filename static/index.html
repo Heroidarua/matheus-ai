@@ -1376,10 +1376,17 @@
       instance.maxAlternatives = 1;
       voiceButton.classList.add('voice-active');
       voiceStatus.textContent = 'Ouvindo para transcrever…';
+      const dictationBaseText = promptEl.value.trim();
       instance.onresult = event => {
-        const transcript = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
+        // O navegador envia resultados parciais repetidos; reconstrua o texto
+        // a partir do resultado atual em vez de acrescentá-lo a cada evento.
+        const transcript = Array.from(event.results)
+          .map(result => result[0]?.transcript || '')
+          .join(' ')
+          .replace(/\\s+/g, ' ')
+          .trim();
         if (transcript) {
-          promptEl.value = [promptEl.value.trim(), transcript].filter(Boolean).join(' ');
+          promptEl.value = [dictationBaseText, transcript].filter(Boolean).join(' ');
           promptEl.dispatchEvent(new Event('input', { bubbles: true }));
           promptEl.focus();
           voiceStatus.textContent = 'Texto transcrito. Revise e envie quando quiser.';
