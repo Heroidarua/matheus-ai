@@ -1605,7 +1605,7 @@
         let liveSpeechBuffer = '';
         const speakLiveChunks = (flush = false) => {
           if (!voiceConversationToggle.checked) return;
-          const parts = liveSpeechBuffer.match(/[\\s\\S]*?[.!?…](?:\\s+|$)/g) || [];
+          const parts = liveSpeechBuffer.match(/[\s\S]*?[.!?…](?:\s+|$)/g) || [];
           if (parts.length) {
             for (const part of parts) queueNativeBrowserSpeech(part.trim());
             liveSpeechBuffer = liveSpeechBuffer.slice(parts.join('').length);
