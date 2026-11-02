@@ -138,7 +138,7 @@ def require_app_key(x_app_key: str | None = Header(default=None)) -> None:
         raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
 
 
-@app.post("/api/livekit/token", status_code=201, dependencies=[Depends(require_app_key)])
+@app.post("/api/livekit/token", status_code=201)
 async def create_livekit_token(request: Request) -> dict[str, Any]:
     """Emite token LiveKit curto, limitado a áudio e a uma sala da sessão ADA-M."""
     if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
@@ -179,7 +179,7 @@ async def create_livekit_token(request: Request) -> dict[str, Any]:
             .with_grants(livekit_api.VideoGrants(
                 room_join=True,
                 room=room_name,
-                can_publish=False,
+                can_publish=True,
                 can_publish_sources=["microphone"],
                 can_subscribe=True,
                 can_publish_data=False,
