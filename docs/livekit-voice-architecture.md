@@ -63,18 +63,18 @@ As variáveis de STT/TTS devem ser adicionadas apenas após escolher os provedor
 - Implementar health check e logs sem áudio/transcrições sensíveis.
 - Não alterar a experiência atual nem iniciar o agente automaticamente.
 
-### Fase 2 — integração de backend
-- Criar endpoint autenticado que emite token LiveKit de curta duração para a sessão do próprio usuário.
-- Validar identidade e permissões da sala.
-- Implementar adaptador que envia o texto reconhecido ao fluxo existente `/api/chat`, preservando o contexto de conversa.
-- Validar STT pt-BR e saída TTS.
+### Fase 2 — integração de backend (implementada nesta branch)
+- Endpoint `POST /api/livekit/token` com token de 10 minutos, sala nova por chamada e permissões limitadas a publicar/assinar áudio.
+- O endpoint valida a origem, aplica intervalo mínimo entre emissões por sessão e exige as credenciais apenas no servidor.
+- O token despacha explicitamente o agente `ada-m-voice`.
+- O worker envia o histórico textual da sessão ao fluxo existente `/api/chat`; a geração continua no Gemma 4 via backend ADA-M.
 
-### Fase 3 — interface
-- Adicionar modo LiveKit como opção separada no controle de voz.
-- Solicitar microfone somente após ação explícita do usuário.
-- Mostrar estados: conectando, ouvindo, pensando, falando, interrompido e desconectado.
-- Permitir interrupção imediata e saída da sala.
-- Manter o modo de voz atual como fallback.
+### Fase 3 — interface (implementada nesta branch)
+- Botão separado **Conversar em tempo real** na área de Ferramentas.
+- Solicitação do microfone somente após ação explícita do usuário.
+- Conexão WebRTC via LiveKit Client SDK; reprodução das faixas de áudio recebidas.
+- Encerramento da sala pelo mesmo botão.
+- O modo de voz atual do navegador continua disponível como alternativa.
 
 ### Fase 4 — testes antes da produção
 - Testar Chrome/Edge desktop e Android.
@@ -95,4 +95,4 @@ As variáveis de STT/TTS devem ser adicionadas apenas após escolher os provedor
 
 ## Estado desta branch
 
-Esta branch registra a arquitetura e o plano de implementação. Ela **não ativa ainda** uma sessão LiveKit nem modifica o deploy. A implementação funcional depende da escolha e configuração de STT/TTS, das credenciais LiveKit e da validação do adaptador com o endpoint atual da ADA-M.
+Esta branch adiciona o endpoint de tokens, o botão de conexão no navegador e o cliente LiveKit. O serviço worker permanece separado e deve ser implantado como processo contínuo com o nome `ada-m-voice`. O modo LiveKit só conecta quando `LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` estiverem configurados no backend e no worker. O STT usa LiveKit Inference (Deepgram Nova-3) e pode gerar cobrança conforme a conta. Ainda não houve teste de ponta a ponta com credenciais reais; não considerar pronto para produção até validar STT, Kokoro, latência, barge-in e reconexão. Nenhum segredo foi adicionado ao repositório e nenhum serviço pago foi criado automaticamente.

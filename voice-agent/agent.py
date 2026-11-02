@@ -127,7 +127,7 @@ class AdaMVoiceAgent(Agent):
 server = AgentServer()
 
 
-@server.rtc_session()
+@server.rtc_session(agent_name=os.getenv("LIVEKIT_AGENT_NAME", "ada-m-voice"))
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
 

@@ -24,6 +24,7 @@ Configure somente no ambiente do worker; nunca coloque segredos no repositório 
 | `LIVEKIT_URL` | Sim | URL WebSocket do projeto LiveKit |
 | `LIVEKIT_API_KEY` | Sim | Chave de servidor LiveKit |
 | `LIVEKIT_API_SECRET` | Sim | Segredo de servidor LiveKit |
+| `LIVEKIT_AGENT_NAME` | Sim | Nome de dispatch; deve ser `ada-m-voice` para coincidir com o backend |
 | `ADA_M_API_URL` | Sim | URL HTTPS do backend ADA-M, sem barra final |
 | `ADA_M_APP_API_KEY` | Se configurada no backend | Mesmo valor de `APP_API_KEY` da ADA-M |
 | `ADA_M_TTS_BASE_URL` | Sim | URL do Kokoro terminando em `/v1` |
@@ -56,10 +57,10 @@ Crie um serviço do tipo **Background Worker** no provedor escolhido, usando est
 ## Limites desta etapa
 
 - O worker do agente está separado do processo web e não altera o chat digitado nem o modo de voz atual.
-- A interface do navegador ainda precisa receber um token de sala de curta duração e oferecer a opção de entrar/sair do LiveKit. Essa ponte de token e o botão da interface são a próxima etapa de integração.
+- O backend ADA-M emite tokens de sala de curta duração em `/api/livekit/token`, e a interface oferece o botão para entrar/sair do LiveKit. Configure as mesmas credenciais LiveKit no backend e no worker.
 - O worker cria uma sessão própria no backend ADA-M por meio de seu cliente HTTP. Assim, a memória de longo prazo da sessão de voz é independente da sessão já aberta no navegador; vincular ambas exige uma ponte autenticada de identidade/sessão, sem expor cookies ou segredos.
 - O pipeline é STT → Gemma 4 via ADA-M → TTS. O LiveKit gerencia streaming de áudio e interrupções, mas isso não é o mesmo que um modelo speech-to-speech full-duplex nativo.
-- O worker não foi implantado nem testado com credenciais reais neste commit. Primeiro valide STT, Kokoro, latência, custos e interrupções em uma sala de teste.
+- O worker e o backend ainda precisam ser implantados/testados com credenciais reais. Primeiro valide STT, Kokoro, latência, custos e interrupções em uma sala de teste.
 
 ## Segurança
 
