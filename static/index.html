@@ -1600,6 +1600,21 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '', answer = '', streamSources = [];
+        // No modo Live, comece a falar assim que chegar a primeira frase completa.
+        // Usa a voz nativa do navegador para evitar esperar uma chamada TTS remota.
+        let liveSpeechBuffer = '';
+        const speakLiveChunks = (flush = false) => {
+          if (!voiceConversationToggle.checked) return;
+          const parts = liveSpeechBuffer.match(/[\\s\\S]*?[.!?…](?:\\s+|$)/g) || [];
+          if (parts.length) {
+            for (const part of parts) queueNativeBrowserSpeech(part.trim());
+            liveSpeechBuffer = liveSpeechBuffer.slice(parts.join('').length);
+          }
+          if (flush && liveSpeechBuffer.trim()) {
+            queueNativeBrowserSpeech(liveSpeechBuffer.trim());
+            liveSpeechBuffer = '';
+          }
+        };
         const consumeEvent = eventText => {
           let eventName = 'message', dataText = '';
           for (const line of eventText.split('\n')) {
@@ -1613,6 +1628,10 @@
           if (eventName === 'done') { streamSources = Array.isArray(payload.sources) ? payload.sources : []; return; }
           if (typeof payload.token === 'string') {
             answer += payload.token;
+            if (voiceConversationToggle.checked) {
+              liveSpeechBuffer += prepareSpeechText(payload.token);
+              speakLiveChunks(false);
+            }
 
             pending.replaceChildren(renderMarkdown(answer));
             pending.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -1631,8 +1650,8 @@
           if (buffer.trim()) consumeEvent(buffer);
         } finally { reader.releaseLock(); }
         if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
+        speakLiveChunks(true);
         displayAssistantReply(pending, answer, streamSources);
-        if (voiceConversationToggle.checked) await speakText(answer);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
       } catch (error) {
@@ -1678,6 +1697,6 @@
   </script>
   <script src="/static/image-chat.js?v=auto-image-intent-20261031"></script>
   <script src="/static/music-player.js?v=youtube-command-20261031"></script>
-  <script src="/static/ada-m-live.js?v=20261101b"></script>
+  <script src="/static/ada-m-live.js?v=20261102a"></script>
   </body>
 </html>
