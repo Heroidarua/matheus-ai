@@ -7,10 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && groupadd --system app \
+    && useradd --system --gid app --home-dir /app app
 
-COPY agent.py .
+COPY --chown=app:app agent.py .
 
-EXPOSE 8081
+USER app
 
 CMD ["python", "agent.py", "start"]
