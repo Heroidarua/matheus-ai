@@ -686,7 +686,7 @@
 
     function speakText(text) {
       stopBrowserSpeech();
-      if (!('speechSynthesis' in window)) {
+      if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
         voiceStatus.textContent = 'Leitura em voz alta não é suportada neste navegador.';
         return;
       }
@@ -695,9 +695,53 @@
         voiceStatus.textContent = 'Não há texto para leitura.';
         return;
       }
-      const pieces = normalized.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [normalized];
-      for (const piece of pieces) queueBrowserSpeech(piece.trim());
-      return serverTtsQueue;
+
+      // Leitura manual usa diretamente a síntese nativa do navegador.
+      // Trechos menores evitam que o Chrome Android silencie respostas longas.
+      const chunks = [];
+      let remaining = normalized;
+      while (remaining.length > 0) {
+        if (remaining.length <= 180) {
+          chunks.push(remaining);
+          break;
+        }
+        let cut = remaining.lastIndexOf(' ', 180);
+        if (cut < 90) cut = remaining.indexOf(' ', 180);
+        if (cut < 0) cut = Math.min(180, remaining.length);
+        chunks.push(remaining.slice(0, cut).trim());
+        remaining = remaining.slice(cut).trim();
+      }
+
+      voiceStatus.textContent = 'Preparando leitura…';
+      chunks.forEach((chunk, index) => {
+        const utterance = new SpeechSynthesisUtterance(chunk);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.19;
+        utterance.pitch = 1.02;
+        utterance.volume = 1;
+        const voice = selectedSpeechVoice();
+        if (voice) {
+          utterance.voice = voice;
+          utterance.lang = voice.lang || 'pt-BR';
+        }
+        utterance.onstart = () => {
+          voiceStatus.textContent = 'ADA-M lendo a resposta…';
+          if (voiceSessionActive) startBargeInRecognition();
+        };
+        utterance.onend = () => {
+          if (index === chunks.length - 1) {
+            stopBargeInRecognition();
+            voiceStatus.textContent = 'Leitura concluída.';
+            if (voiceSessionActive) startVoiceRecognition();
+          }
+        };
+        utterance.onerror = event => {
+          if (event.error !== 'canceled' && event.error !== 'interrupted') {
+            voiceStatus.textContent = 'O navegador não conseguiu reproduzir a voz. Verifique se há uma voz instalada nas configurações do Android.';
+          }
+        };
+        window.speechSynthesis.speak(utterance);
+      });
     }
 
     speechTestButton.addEventListener('click', () => {
