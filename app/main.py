@@ -12,7 +12,7 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
+from livekit import api as livekit_api
 
 from app.research_engine import build_search_query, classify_research_topic, is_relevant_result, rank_results
 from app.google_search import google_grounded_search
@@ -65,6 +66,12 @@ MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
 MAX_KNOWLEDGE_FILES = 100
 MAX_RETRIEVED_CHUNKS = 4
 APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
+LIVEKIT_URL = os.getenv("LIVEKIT_URL", "").strip().rstrip("/")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "").strip()
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "").strip()
+LIVEKIT_AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "ada-m-voice").strip() or "ada-m-voice"
+LIVEKIT_TOKEN_TTL_SECONDS = 600
+LIVEKIT_TOKEN_ISSUES: dict[str, float] = {}
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
@@ -129,6 +136,77 @@ class ImageEditResponse(BaseModel):
 def require_app_key(x_app_key: str | None = Header(default=None)) -> None:
     if APP_API_KEY and x_app_key != APP_API_KEY:
         raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
+
+
+@app.post("/api/livekit/token", status_code=201, dependencies=[Depends(require_app_key)])
+async def create_livekit_token(request: Request) -> dict[str, Any]:
+    """Emite token LiveKit curto, limitado a áudio e a uma sala da sessão ADA-M."""
+    if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
+        raise HTTPException(status_code=503, detail="O modo LiveKit ainda não está configurado no servidor.")
+
+    origin = request.headers.get("origin")
+    if origin:
+        origin_host = urlparse(origin).netloc.lower()
+        request_host = request.headers.get("host", "").lower()
+        if not origin_host or origin_host != request_host:
+            raise HTTPException(status_code=403, detail="Origem não autorizada.")
+    elif request.headers.get("referer"):
+        referer_host = urlparse(request.headers["referer"]).netloc.lower()
+        request_host = request.headers.get("host", "").lower()
+        if not referer_host or referer_host != request_host:
+            raise HTTPException(status_code=403, detail="Origem não autorizada.")
+
+    session_id = request.session.get("companion_id")
+    if not session_id:
+        session_id = secrets.token_urlsafe(32)
+        request.session["companion_id"] = session_id
+
+    now = time.time()
+    last_issued = LIVEKIT_TOKEN_ISSUES.get(session_id, 0)
+    if now - last_issued < 5:
+        raise HTTPException(status_code=429, detail="Aguarde alguns segundos antes de solicitar outro token.")
+    LIVEKIT_TOKEN_ISSUES[session_id] = now
+    if len(LIVEKIT_TOKEN_ISSUES) > 5000:
+        cutoff = now - 3600
+        for key, issued_at in list(LIVEKIT_TOKEN_ISSUES.items()):
+            if issued_at < cutoff:
+                LIVEKIT_TOKEN_ISSUES.pop(key, None)
+
+    room_name = request.session.get("livekit_room")
+    if not room_name:
+        room_name = "ada-" + secrets.token_urlsafe(18).replace("-", "").replace("_", "")[:22].lower()
+        request.session["livekit_room"] = room_name
+
+    identity = "user-" + secrets.token_urlsafe(12).replace("-", "").replace("_", "")[:16].lower()
+    try:
+        token = (
+            livekit_api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+            .with_identity(identity)
+            .with_name("Usuário ADA-M")
+            .with_grants(livekit_api.VideoGrants(
+                room_join=True,
+                room=room_name,
+                can_publish=True,
+                can_subscribe=True,
+                can_publish_data=False,
+            ))
+            .with_ttl(timedelta(seconds=LIVEKIT_TOKEN_TTL_SECONDS))
+            .with_room_config(livekit_api.RoomConfiguration(
+                agents=[livekit_api.RoomAgentDispatch(agent_name=LIVEKIT_AGENT_NAME)]
+            ))
+        )
+        participant_token = token.to_jwt()
+    except Exception as exc:
+        print(f"LiveKit token generation failed ({type(exc).__name__})")
+        raise HTTPException(status_code=503, detail="Não foi possível preparar a conexão de voz agora.")
+
+    return {
+        "server_url": LIVEKIT_URL,
+        "participant_token": participant_token,
+        "room_name": room_name,
+        "participant_identity": identity,
+        "expires_in": LIVEKIT_TOKEN_TTL_SECONDS,
+    }
 
 
 @app.get("/sw.js", include_in_schema=False)
