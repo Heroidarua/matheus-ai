@@ -1670,12 +1670,20 @@
         stopButton.hidden = true;
         activeController = null;
         if (voiceSessionActive) {
-          if (window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
-            voiceStatus.textContent = 'ADA-M está respondendo…';
-          } else {
+          const resumeListening = () => {
+            if (!voiceSessionActive) return;
+            const speechBusy = window.speechSynthesis &&
+              (window.speechSynthesis.speaking || window.speechSynthesis.pending);
+            if (sendBtn.disabled || speechBusy) {
+              voiceStatus.textContent = 'ADA-M está respondendo…';
+              window.__adaLiveResumeTimer = setTimeout(resumeListening, 250);
+              return;
+            }
             voiceStatus.textContent = 'Sua vez. Estou ouvindo…';
             startVoiceRecognition();
-          }
+          };
+          clearTimeout(window.__adaLiveResumeTimer);
+          resumeListening();
         } else {
           promptEl.focus();
         }
