@@ -144,17 +144,11 @@ async def create_livekit_token(request: Request) -> dict[str, Any]:
     if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
         raise HTTPException(status_code=503, detail="O modo LiveKit ainda não está configurado no servidor.")
 
-    origin = request.headers.get("origin")
-    if origin:
-        origin_host = urlparse(origin).netloc.lower()
-        request_host = request.headers.get("host", "").lower()
-        if not origin_host or origin_host != request_host:
-            raise HTTPException(status_code=403, detail="Origem não autorizada.")
-    elif request.headers.get("referer"):
-        referer_host = urlparse(request.headers["referer"]).netloc.lower()
-        request_host = request.headers.get("host", "").lower()
-        if not referer_host or referer_host != request_host:
-            raise HTTPException(status_code=403, detail="Origem não autorizada.")
+    origin = request.headers.get("origin") or request.headers.get("referer")
+    request_host = request.headers.get("host", "").lower()
+    origin_host = urlparse(origin).netloc.lower() if origin else ""
+    if not origin_host or not request_host or origin_host != request_host:
+        raise HTTPException(status_code=403, detail="Origem não autorizada.")
 
     session_id = request.session.get("companion_id")
     if not session_id:
@@ -185,7 +179,8 @@ async def create_livekit_token(request: Request) -> dict[str, Any]:
             .with_grants(livekit_api.VideoGrants(
                 room_join=True,
                 room=room_name,
-                can_publish=True,
+                can_publish=False,
+                can_publish_sources=["microphone"],
                 can_subscribe=True,
                 can_publish_data=False,
             ))
