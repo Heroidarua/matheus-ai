@@ -63,9 +63,9 @@
     #prompt { flex:1;resize:none;min-width:0;min-height:28px;max-height:200px;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:15px;line-height:1.5;padding:8px 0;overflow-y:auto; }
     #prompt::placeholder { color:#a0a0a0; }
     button { border:0;border-radius:12px;background:var(--accent);color:#071b18;font-weight:750;padding:13px 17px;cursor:pointer; }
-    #voice-button { background:transparent;border:0;color:#ececec; }
-    #voice-button:hover { background:#414141; }
-    #voice-button.voice-active { color:#ff7777;background:rgba(255,90,90,.13);box-shadow:0 0 0 2px rgba(255,90,90,.16); }
+    #voice-button,#voice-live-button { background:transparent;border:0;color:#ececec; }
+    #voice-button:hover,#voice-live-button:hover { background:#414141; }
+    #voice-live-button.voice-active { color:#ff7777;background:rgba(255,90,90,.13);box-shadow:0 0 0 2px rgba(255,90,90,.16); }
     #send { width:38px;height:38px;min-width:38px;padding:0;border-radius:50%;background:#f3f3f3;color:#202020;display:grid;place-items:center;flex-shrink:0; }
     #send::after { content:"↑";font-size:23px;line-height:1;font-weight:500; }
     #send { font-size:0; }
@@ -369,7 +369,8 @@
       <div class="input-wrap">
         <button class="plus-button" type="button" id="plus-button" aria-label="Abrir ferramentas e preferências" aria-expanded="false" aria-controls="plus-menu" title="Ferramentas e preferências">+</button>
         <textarea id="prompt" rows="1" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
-        <button class="tool-btn" type="button" id="voice-button" aria-label="Iniciar voz" title="Iniciar voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0" ><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
+        <button class="tool-btn" type="button" id="voice-button" aria-label="Ditado por voz" title="Ditado por voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
+        <button class="tool-btn" type="button" id="voice-live-button" aria-label="Iniciar conversa por voz" title="Conversar por voz com ADA-M" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10v4M6 6v12M10 3v18M14 7v10M18 5v14M22 10v4"/></svg></button>
         <button id="send" type="submit">Enviar</button>
       </div>
       <div class="plus-menu" id="plus-menu" hidden>
@@ -529,7 +530,8 @@
       showWelcome();
     });
     document.getElementById('export-button').addEventListener('click', exportConversation);
-    document.getElementById('voice-button').addEventListener('click', toggleVoiceInput);
+    document.getElementById('voice-button').addEventListener('click', startVoiceDictation);
+    document.getElementById('voice-live-button').addEventListener('click', toggleVoiceInput);
     const voiceConversationToggle = document.getElementById('voice-conversation-toggle');
     const plusButton = document.getElementById('plus-button');
     const plusMenu = document.getElementById('plus-menu');
@@ -1224,6 +1226,7 @@
     let voiceSessionActive = false;
     let recognitionRestartTimer = null;
     const voiceButton = document.getElementById('voice-button');
+    const voiceLiveButton = document.getElementById('voice-live-button');
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     let bargeInRecognition = null;
@@ -1294,10 +1297,10 @@
     }
 
     function updateVoiceButton() {
-      voiceButton.classList.toggle('voice-active', voiceSessionActive);
-      voiceButton.setAttribute('aria-pressed', String(voiceSessionActive));
-      voiceButton.setAttribute('aria-label', voiceSessionActive ? 'Encerrar conversa por voz' : 'Iniciar conversa por voz');
-      voiceButton.title = voiceSessionActive ? 'Encerrar conversa por voz' : 'Iniciar conversa por voz';
+      voiceLiveButton.classList.toggle('voice-active', voiceSessionActive);
+      voiceLiveButton.setAttribute('aria-pressed', String(voiceSessionActive));
+      voiceLiveButton.setAttribute('aria-label', voiceSessionActive ? 'Encerrar conversa por voz' : 'Iniciar conversa por voz');
+      voiceLiveButton.title = voiceSessionActive ? 'Encerrar conversa por voz' : 'Conversar por voz com ADA-M';
     }
 
     function stopVoiceRecognition() {
@@ -1372,6 +1375,50 @@
       stopBrowserSpeech();
       updateVoiceButton();
       voiceStatus.textContent = message;
+    }
+
+    let dictationRecognition = null;
+    function startVoiceDictation() {
+      if (!SpeechRecognitionAPI) {
+        voiceStatus.textContent = 'Ditado por voz não é suportado neste navegador. Use Chrome ou Edge atualizado.';
+        return;
+      }
+      if (dictationRecognition) {
+        try { dictationRecognition.abort(); } catch {}
+        dictationRecognition = null;
+      }
+      const instance = new SpeechRecognitionAPI();
+      dictationRecognition = instance;
+      instance.lang = 'pt-BR';
+      instance.continuous = false;
+      instance.interimResults = true;
+      instance.maxAlternatives = 1;
+      voiceButton.classList.add('voice-active');
+      voiceStatus.textContent = 'Ouvindo para transcrever…';
+      instance.onresult = event => {
+        const transcript = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
+        if (transcript) {
+          promptEl.value = [promptEl.value.trim(), transcript].filter(Boolean).join(' ');
+          promptEl.dispatchEvent(new Event('input', { bubbles: true }));
+          promptEl.focus();
+          voiceStatus.textContent = 'Texto transcrito. Revise e envie quando quiser.';
+        }
+      };
+      instance.onerror = event => {
+        voiceStatus.textContent = event.error === 'not-allowed'
+          ? 'Permita o acesso ao microfone para usar o ditado.'
+          : 'Não foi possível transcrever. Tente novamente.';
+      };
+      instance.onend = () => {
+        if (dictationRecognition === instance) dictationRecognition = null;
+        voiceButton.classList.remove('voice-active');
+      };
+      try { instance.start(); }
+      catch {
+        dictationRecognition = null;
+        voiceButton.classList.remove('voice-active');
+        voiceStatus.textContent = 'Não foi possível iniciar o microfone.';
+      }
     }
 
     function toggleVoiceInput() {
