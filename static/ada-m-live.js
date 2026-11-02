@@ -137,7 +137,7 @@
       if (utterance instanceof SpeechSynthesisUtterance) {
         utterance.lang = 'pt-BR';
         // Velocidade mais próxima de uma conversa natural, sem acelerar sílabas.
-        utterance.rate = 1.25;
+        utterance.rate = 1.20;
         utterance.pitch = 1.0;
         const preferred = chooseNaturalVoice();
         if (preferred) utterance.voice = preferred;
