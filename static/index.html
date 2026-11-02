@@ -678,9 +678,10 @@
       value = value.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/gm, '');
       value = value.replace(/[*_#>~|]/g, ' ');
 
-      // Retira pontuação e símbolos para a voz pronunciar apenas as palavras.
-      // Os blocos de fala continuam sendo separados pelas frases originais.
-      value = value.replace(/[\p{P}\p{S}]/gu, ' ');
+      // Preserva a pontuação para que a síntese faça pausas naturais.
+      // Remove apenas símbolos decorativos comuns, sem apagar vírgulas,
+      // pontos, interrogações, exclamações ou dois-pontos.
+      value = value.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, ' ');
       return value.replace(/[ \t]+/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
@@ -705,7 +706,14 @@
           chunks.push(remaining);
           break;
         }
-        let cut = remaining.lastIndexOf(' ', 180);
+        // Prefere encerrar cada bloco após pontuação, preservando a pausa
+        // natural de vírgulas, pontos, ponto e vírgula e interrogações.
+        let cut = -1;
+        const windowText = remaining.slice(0, 180);
+        const punctuation = /[,;:.!?](?:[”"'»)]*)?\s/g;
+        let match;
+        while ((match = punctuation.exec(windowText)) !== null) cut = match.index + match[0].length - 1;
+        if (cut < 90) cut = remaining.lastIndexOf(' ', 180);
         if (cut < 90) cut = remaining.indexOf(' ', 180);
         if (cut < 0) cut = Math.min(180, remaining.length);
         chunks.push(remaining.slice(0, cut).trim());
