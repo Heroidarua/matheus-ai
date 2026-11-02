@@ -371,7 +371,7 @@
         <button class="plus-button" type="button" id="plus-button" aria-label="Abrir ferramentas e preferências" aria-expanded="false" aria-controls="plus-menu" title="Ferramentas e preferências">+</button>
         <textarea id="prompt" rows="1" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
         <button class="tool-btn" type="button" id="voice-button" aria-label="Ditado por voz" title="Ditado por voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
-        <button class="tool-btn" type="button" id="voice-live-button" aria-label="Iniciar conversa por voz" title="Conversar por voz com ADA-M" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10v4M6 6v12M10 3v18M14 7v10M18 5v14M22 10v4"/></svg></button>
+        <button class="tool-btn" type="button" id="voice-live-button" hidden aria-hidden="true" tabindex="-1" aria-label="Iniciar conversa por voz" title="Conversar por voz com ADA-M" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10v4M6 6v12M10 3v18M14 7v10M18 5v14M22 10v4"/></svg></button>
         <button id="send" type="submit">Enviar</button>
       </div>
       <div class="plus-menu" id="plus-menu" hidden>
@@ -1706,6 +1706,5 @@
   </script>
   <script src="/static/image-chat.js?v=auto-image-intent-20261031"></script>
   <script src="/static/music-player.js?v=youtube-command-20261031"></script>
-  <script src="/static/ada-m-live.js?v=20261102b"></script>
   </body>
 </html>
