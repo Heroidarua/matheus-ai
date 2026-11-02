@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 from dotenv import load_dotenv
-from livekit.agents import Agent, AgentServer, ChatContext, JobContext, cli, llm, inference
+from livekit.agents import Agent, AgentServer, AgentSession, ChatContext, JobContext, cli, llm, inference
 from livekit.plugins import openai
 
 load_dotenv()
@@ -132,10 +132,7 @@ async def entrypoint(ctx: JobContext) -> None:
         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     )
 
-    session = llm  # Keep the imported namespace explicit for static tooling.
-    del session
-
-    voice_session = __import__("livekit.agents", fromlist=["AgentSession"]).AgentSession(
+    voice_session = AgentSession(
         stt=inference.STT(
             model=LIVEKIT_STT_MODEL,
             language=LIVEKIT_STT_LANGUAGE,
