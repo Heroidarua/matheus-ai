@@ -109,6 +109,10 @@ class AdaMVoiceAgent(Agent):
                     token = event.get("token")
                     if isinstance(token, str) and token:
                         yield token
+                    elif event.get("detail"):
+                        logger.warning("ADA-M stream returned an error event")
+                        yield "A ADA-M não conseguiu concluir a resposta. Tente novamente."
+                        return
         except httpx.TimeoutException:
             logger.warning("Timeout calling ADA-M chat API")
             yield "A ADA-M demorou para responder. Tente falar novamente."
@@ -148,13 +152,16 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     logger.info("Starting ADA-M voice session in room %s", ctx.room.name)
-    await voice_session.start(
-        room=ctx.room,
-        agent=AdaMVoiceAgent(client),
-    )
-    await ctx.wait_for_shutdown()
-    await client.aclose()
-    logger.info("ADA-M voice session ended in room %s", ctx.room.name)
+    try:
+        await voice_session.start(
+            room=ctx.room,
+            agent=AdaMVoiceAgent(client),
+        )
+        await ctx.wait_for_shutdown()
+    finally:
+        await voice_session.aclose()
+        await client.aclose()
+        logger.info("ADA-M voice session ended in room %s", ctx.room.name)
 
 
 if __name__ == "__main__":
