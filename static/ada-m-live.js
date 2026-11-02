@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const voiceButton = document.getElementById('voice-button');
+  const voiceButton = document.getElementById('voice-live-button');
   const voiceStatus = document.getElementById('voice-status');
   const sendButton = document.getElementById('send');
   const stopButton = document.getElementById('stop-button');
