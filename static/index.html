@@ -738,11 +738,10 @@
       value = value.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/gm, '');
       value = value.replace(/[*_#>~|]/g, ' ');
 
-      // Pausas naturais: parágrafos viram pausa longa; quebras simples,
-      // pausa curta. A pontuação original é mantida.
-      value = value.replace(/\n\s*\n+/g, '. ');
-      value = value.replace(/\n/g, ', ');
-      return value.replace(/[ \t]+/g, ' ').replace(/\s+([,.;:!?])/g, '$1').trim();
+      // Retira pontuação e símbolos para a voz pronunciar apenas as palavras.
+      // Os blocos de fala continuam sendo separados pelas frases originais.
+      value = value.replace(/[\\p{P}\\p{S}]/gu, ' ');
+      return value.replace(/[ \t]+/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
     function speakText(text) {
@@ -1356,7 +1355,6 @@
       voiceConversationToggle.checked = false;
       stopVoiceRecognition();
       stopBrowserSpeech();
-      updateVoiceButton();
       voiceStatus.textContent = message;
     }
 
