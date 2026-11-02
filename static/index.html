@@ -1371,6 +1371,7 @@
 
     function endVoiceSession(message = 'Conversa por voz encerrada.') {
       voiceSessionActive = false;
+      clearTimeout(window.__adaLiveResumeTimer);
       voiceConversationToggle.checked = false;
       stopVoiceRecognition();
       stopBrowserSpeech();
