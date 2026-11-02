@@ -53,7 +53,6 @@ load_dotenv()
 TTS_API_URL = os.getenv("TTS_API_URL", "").strip().rstrip("/")
 TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
 TTS_VOICE = os.getenv("TTS_VOICE", "pf_dora").strip() or "pf_dora"
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
@@ -149,49 +148,6 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
-
-
-@app.get("/api/music/youtube/search", dependencies=[Depends(require_app_key)])
-async def music_youtube_search(q: str = Query(min_length=2, max_length=120)) -> dict[str, Any]:
-    """Pesquisa vídeos musicais pela YouTube Data API sem expor a chave no navegador."""
-    if not YOUTUBE_API_KEY:
-        raise HTTPException(status_code=503, detail="Pesquisa automática indisponível. Configure YOUTUBE_API_KEY no Render.")
-    params = {
-        "part": "snippet",
-        "type": "video",
-        "videoCategoryId": "10",
-        "maxResults": 8,
-        "q": q.strip(),
-        "key": YOUTUBE_API_KEY,
-        "safeSearch": "moderate",
-    }
-    try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            response = await client.get("https://www.googleapis.com/youtube/v3/search", params=params)
-            response.raise_for_status()
-            payload = response.json()
-    except httpx.HTTPStatusError as exc:
-        status = exc.response.status_code
-        if status in (400, 403):
-            raise HTTPException(status_code=502, detail="A YouTube Data API recusou a pesquisa. Verifique a chave e a cota no Google Cloud.") from exc
-        raise HTTPException(status_code=502, detail="O YouTube não respondeu à pesquisa.") from exc
-    except (httpx.HTTPError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail="Não foi possível consultar o YouTube agora.") from exc
-    items = []
-    for entry in payload.get("items", []):
-        video_id = (entry.get("id") or {}).get("videoId")
-        snippet = entry.get("snippet") or {}
-        if not video_id:
-            continue
-        thumbnails = snippet.get("thumbnails") or {}
-        thumb = (thumbnails.get("medium") or thumbnails.get("default") or {}).get("url")
-        items.append({
-            "id": video_id,
-            "title": str(snippet.get("title") or "Vídeo do YouTube")[:240],
-            "channel": str(snippet.get("channelTitle") or "YouTube")[:120],
-            "thumbnail": thumb,
-        })
-    return {"items": items}
 
 
 @app.get("/api/tts/status", dependencies=[Depends(require_app_key)])
