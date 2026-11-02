@@ -740,7 +740,7 @@
 
       // Retira pontuação e símbolos para a voz pronunciar apenas as palavras.
       // Os blocos de fala continuam sendo separados pelas frases originais.
-      value = value.replace(/[\\p{P}\\p{S}]/gu, ' ');
+      value = value.replace(/[\p{P}\p{S}]/gu, ' ');
       return value.replace(/[ \t]+/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
