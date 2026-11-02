@@ -1,0 +1,145 @@
+import { Room, RoomEvent, Track } from "https://cdn.jsdelivr.net/npm/livekit-client@2.9.6/dist/livekit-client.esm.mjs";
+
+const startButton = document.getElementById("livekit-voice-button");
+const statusLabel = document.getElementById("livekit-voice-status");
+
+if (startButton && statusLabel) {
+  let room = null;
+  let audioElements = new Set();
+  let connecting = false;
+
+  function setStatus(message) {
+    statusLabel.textContent = message;
+  }
+
+  function removeAudioElements() {
+    for (const element of audioElements) {
+      try {
+        element.pause();
+        element.srcObject = null;
+        element.remove();
+      } catch {}
+    }
+    audioElements.clear();
+  }
+
+  function resetControls(message = "Conversa em tempo real encerrada.") {
+    startButton.disabled = false;
+    startButton.classList.remove("livekit-active");
+    startButton.textContent = "🎙️ Conversar em tempo real";
+    setStatus(message);
+  }
+
+  async function disconnect(message) {
+    const activeRoom = room;
+    room = null;
+    removeAudioElements();
+    if (activeRoom) {
+      try {
+        await activeRoom.localParticipant.setMicrophoneEnabled(false);
+      } catch {}
+      try {
+        await activeRoom.disconnect();
+      } catch {}
+    }
+    resetControls(message);
+  }
+
+  async function connect() {
+    if (connecting) return;
+    if (room) {
+      await disconnect();
+      return;
+    }
+
+    connecting = true;
+    startButton.disabled = true;
+    setStatus("Preparando conexão segura…");
+
+    try {
+      window.__adaStopBrowserVoice?.();
+
+      const tokenResponse = await fetch("/api/livekit/token", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+
+      if (!tokenResponse.ok) {
+        let detail = "Não foi possível iniciar o modo LiveKit.";
+        try {
+          const body = await tokenResponse.json();
+          if (body.detail) detail = body.detail;
+        } catch {}
+        throw new Error(detail);
+      }
+
+      const credentials = await tokenResponse.json();
+      if (!credentials.server_url || !credentials.participant_token) {
+        throw new Error("O servidor não retornou as credenciais de voz.");
+      }
+
+      const activeRoom = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        stopLocalTrackOnUnpublish: true,
+      });
+      room = activeRoom;
+
+      activeRoom.on(RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind !== Track.Kind.Audio) return;
+        const element = track.attach();
+        element.autoplay = true;
+        element.setAttribute("playsinline", "");
+        element.style.display = "none";
+        document.body.appendChild(element);
+        audioElements.add(element);
+        element.play().catch(() => {
+          setStatus("Conectado. Se não ouvir a ADA-M, verifique o volume do navegador.");
+        });
+      });
+
+      activeRoom.on(RoomEvent.TrackUnsubscribed, (track) => {
+        for (const element of track.detach()) {
+          audioElements.delete(element);
+          element.remove();
+        }
+      });
+
+      activeRoom.on(RoomEvent.Disconnected, () => {
+        if (room === activeRoom) {
+          room = null;
+          removeAudioElements();
+          resetControls("Conexão encerrada.");
+        }
+      });
+
+      setStatus("Conectando à sala de voz…");
+      await activeRoom.connect(credentials.server_url, credentials.participant_token);
+      await activeRoom.localParticipant.setMicrophoneEnabled(true);
+
+      startButton.disabled = false;
+      startButton.classList.add("livekit-active");
+      startButton.textContent = "Encerrar conversa";
+      setStatus("Conectado. Pode falar; a ADA-M está ouvindo.");
+    } catch (error) {
+      console.error("ADA-M LiveKit connection failed:", error);
+      if (room) {
+        const failedRoom = room;
+        room = null;
+        try { await failedRoom.disconnect(); } catch {}
+      }
+      removeAudioElements();
+      resetControls(error instanceof Error ? error.message : "Falha ao conectar ao LiveKit.");
+    } finally {
+      connecting = false;
+      startButton.disabled = false;
+    }
+  }
+
+  startButton.addEventListener("click", connect);
+  window.addEventListener("beforeunload", () => {
+    try { room?.disconnect(); } catch {}
+  });
+}
