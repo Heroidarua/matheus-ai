@@ -172,10 +172,9 @@ async def create_livekit_token(request: Request) -> dict[str, Any]:
             if issued_at < cutoff:
                 LIVEKIT_TOKEN_ISSUES.pop(key, None)
 
-    room_name = request.session.get("livekit_room")
-    if not room_name:
-        room_name = "ada-" + secrets.token_urlsafe(18).replace("-", "").replace("_", "")[:22].lower()
-        request.session["livekit_room"] = room_name
+    # Uma sala nova por sessão de voz garante que o dispatch do agente ocorra
+    # mesmo quando o usuário encerra e inicia uma nova chamada rapidamente.
+    room_name = "ada-" + secrets.token_urlsafe(18).replace("-", "").replace("_", "")[:22].lower()
 
     identity = "user-" + secrets.token_urlsafe(12).replace("-", "").replace("_", "")[:16].lower()
     try:
