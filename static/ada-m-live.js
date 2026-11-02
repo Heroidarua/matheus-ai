@@ -114,5 +114,37 @@
   observer.observe(voiceStatus, { childList: true, characterData: true, subtree: true });
   if (sendButton) observer.observe(sendButton, { attributes: true, attributeFilter: ['disabled'] });
   window.addEventListener('beforeunload', () => observer.disconnect(), { once: true });
+
+  // Ajusta a fala nativa para priorizar vozes brasileiras instaladas e reduzir o ritmo robótico.
+  if ('speechSynthesis' in window && !window.__adaSpeechNaturalized) {
+    window.__adaSpeechNaturalized = true;
+    const nativeSpeak = window.speechSynthesis.speak.bind(window.speechSynthesis);
+    const chooseNaturalVoice = () => {
+      const voices = window.speechSynthesis.getVoices().filter(v => /^pt[-_]BR$/i.test(v.lang));
+      const score = voice => {
+        const name = (voice.name || '').toLocaleLowerCase('pt-BR');
+        let points = voice.localService ? 12 : 0;
+        if (/google/.test(name)) points += 24;
+        if (/microsoft.*(francisca|fernanda|female)|francisca|fernanda|luciana/.test(name)) points += 20;
+        if (/natural|neural|premium/.test(name)) points += 18;
+        if (/portugu[eê]s.*brasil|brazilian portuguese/.test(name)) points += 8;
+        if (/compact|e.?mail|espeak/.test(name)) points -= 20;
+        return points;
+      };
+      return voices.sort((a,b) => score(b)-score(a))[0] || null;
+    };
+    window.speechSynthesis.speak = utterance => {
+      if (utterance instanceof SpeechSynthesisUtterance) {
+        utterance.lang = 'pt-BR';
+        // Velocidade mais próxima de uma conversa natural, sem acelerar sílabas.
+        utterance.rate = 1.06;
+        utterance.pitch = 1.0;
+        const preferred = chooseNaturalVoice();
+        if (preferred) utterance.voice = preferred;
+      }
+      return nativeSpeak(utterance);
+    };
+  }
+
   sync();
 })();
