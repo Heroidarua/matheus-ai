@@ -1,0 +1,99 @@
+name: ADA-M LiveKit Cloud
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operação do agente LiveKit
+        required: true
+        type: choice
+        options:
+          - create
+          - deploy
+          - status
+        default: create
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: ada-m-livekit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and deploy the first ADA-M agent
+        if: ${{ inputs.operation == 'create' }}
+        uses: livekit/deploy-action@v2.12.2
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          SECRET_LIST: ${{ secrets.SECRET_LIST }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          OPERATION: create
+          WORKING_DIRECTORY: voice-agent
+
+      - name: Save generated agent config in a pull request
+        if: ${{ inputs.operation == 'create' }}
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          add-paths: voice-agent/livekit.toml
+          branch: cloud-agent-${{ github.run_id }}
+          delete-branch: true
+          base: main
+          title: Add ADA-M LiveKit agent configuration
+          commit-message: Add generated LiveKit agent configuration
+          body: The first LiveKit Cloud deployment created this agent configuration. Merge this PR to save the generated agent ID in the repository.
+
+      - name: Checkout generated config branch
+        if: ${{ inputs.operation == 'create' }}
+        uses: actions/checkout@v4
+        with:
+          ref: cloud-agent-${{ github.run_id }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Confirm agent is running
+        if: ${{ inputs.operation == 'create' }}
+        uses: livekit/deploy-action@v2.12.2
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+        with:
+          OPERATION: status-retry
+          WORKING_DIRECTORY: voice-agent
+          TIMEOUT: 5m
+
+      - name: Deploy a new version
+        if: ${{ inputs.operation == 'deploy' }}
+        uses: livekit/deploy-action@v2.12.2
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          SECRET_LIST: ${{ secrets.SECRET_LIST }}
+        with:
+          OPERATION: deploy
+          WORKING_DIRECTORY: voice-agent
+
+      - name: Check agent status
+        if: ${{ inputs.operation == 'status' }}
+        uses: livekit/deploy-action@v2.12.2
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+        with:
+          OPERATION: status
+          WORKING_DIRECTORY: voice-agent
