@@ -146,5 +146,123 @@
     };
   }
 
+
+  // Mantém uma única sessão de reconhecimento durante a fala do usuário.
+  // O Web Speech pode encerrar a sessão por conta própria; nesse caso, retoma
+  // com atraso curto e sem criar instâncias concorrentes.
+  let liveFinalTranscript = '';
+  let liveFinalizeTimer = null;
+  let liveRecognitionStarting = false;
+  let liveRecognitionRetry = 0;
+
+  function finalizeLiveUtterance() {
+    clearTimeout(liveFinalizeTimer);
+    const transcript = liveFinalTranscript.trim();
+    liveFinalTranscript = '';
+    if (!transcript || !voiceSessionActive || sendButton?.disabled) return;
+    if (window.ADAMusic?.handleCommand(transcript)) {
+      voiceStatus.textContent = 'Executando comando do YouTube…';
+      window.dispatchEvent(new Event('ada-m:music-command-complete'));
+      return;
+    }
+    promptEl.value = transcript;
+    voiceStatus.textContent = 'Entendi: ' + transcript;
+    stopVoiceRecognition();
+    form.requestSubmit();
+  }
+
+  startVoiceRecognition = function startVoiceRecognitionStable() {
+    if (!voiceSessionActive || !SpeechRecognitionAPI || sendButton?.disabled ||
+        recognition || liveRecognitionStarting ||
+        (window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) return;
+
+    liveRecognitionStarting = true;
+    const instance = new SpeechRecognitionAPI();
+    recognition = instance;
+    instance.lang = 'pt-BR';
+    instance.continuous = true;
+    instance.interimResults = true;
+    instance.maxAlternatives = 1;
+
+    instance.onstart = () => {
+      liveRecognitionStarting = false;
+      liveRecognitionRetry = 0;
+      voiceStatus.textContent = 'Ouvindo você…';
+    };
+
+    instance.onresult = event => {
+      if (!voiceSessionActive) return;
+      let changed = false;
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (!result?.isFinal) continue;
+        const phrase = result[0]?.transcript?.trim();
+        if (phrase) {
+          liveFinalTranscript = [liveFinalTranscript, phrase].filter(Boolean).join(' ').trim();
+          changed = true;
+        }
+      }
+      if (changed) {
+        clearTimeout(liveFinalizeTimer);
+        liveFinalizeTimer = setTimeout(finalizeLiveUtterance, 950);
+      }
+    };
+
+    instance.onerror = event => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        voiceSessionActive = false;
+        voiceConversationToggle.checked = false;
+        updateVoiceButton();
+        voiceStatus.textContent = 'Permita o acesso ao microfone para conversar por voz.';
+      } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        voiceStatus.textContent = 'Reconectando o microfone…';
+      }
+    };
+
+    instance.onend = () => {
+      if (recognition === instance) recognition = null;
+      liveRecognitionStarting = false;
+      if (!voiceSessionActive || sendButton?.disabled) return;
+      if (liveFinalTranscript.trim()) {
+        clearTimeout(liveFinalizeTimer);
+        liveFinalizeTimer = setTimeout(finalizeLiveUtterance, 350);
+        return;
+      }
+      liveRecognitionRetry = Math.min(liveRecognitionRetry + 1, 4);
+      const delay = Math.min(450 * liveRecognitionRetry, 1400);
+      clearTimeout(recognitionRestartTimer);
+      recognitionRestartTimer = setTimeout(() => {
+        if (voiceSessionActive && !recognition && !sendButton?.disabled) startVoiceRecognition();
+      }, delay);
+    };
+
+    try {
+      instance.start();
+    } catch {
+      if (recognition === instance) recognition = null;
+      liveRecognitionStarting = false;
+      if (voiceSessionActive) {
+        clearTimeout(recognitionRestartTimer);
+        recognitionRestartTimer = setTimeout(startVoiceRecognition, 900);
+      }
+    }
+  };
+
+  const originalStopVoiceRecognition = stopVoiceRecognition;
+  stopVoiceRecognition = function stopVoiceRecognitionStable() {
+    clearTimeout(liveFinalizeTimer);
+    liveFinalTranscript = '';
+    liveRecognitionStarting = false;
+    originalStopVoiceRecognition();
+  };
+
+  const originalEndVoiceSession = endVoiceSession;
+  endVoiceSession = function endVoiceSessionStable(message) {
+    clearTimeout(liveFinalizeTimer);
+    liveFinalTranscript = '';
+    liveRecognitionStarting = false;
+    originalEndVoiceSession(message);
+  };
+
   sync();
 })();
