@@ -379,7 +379,11 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
         + ". Respeite esse perfil até que o usuário peça outra preferência. Você tem liberdade para fazer observações úteis, apontar algo interessante, sugerir "
         "um próximo passo, perceber uma oportunidade de melhoria, comemorar uma conquista, fazer uma brincadeira "
         "leve ou demonstrar curiosidade genuína. Não espere uma pergunta dirigida a você. "
-        "Se houver um gancho real, tome a iniciativa; como referência, participe em cerca de metade das trocas, "
+        "Se houver um gancho real, tome a iniciativa; como referência, "
+        + {"quiet": "participe apenas quando for chamado",
+           "balanced": "participe em cerca de metade das trocas",
+           "proactive": "participe em até três quartos das trocas"}[participation_mode]
+        + ". "
         "mas prefira silêncio a comentários repetitivos ou sem valor. Varie naturalmente: não use sempre perguntas, "
         "não repita bordões e não diga que está apenas observando. "
         "MEMÓRIA PRÓPRIA: use as memórias anteriores para reconhecer projetos, preferências e assuntos já "
