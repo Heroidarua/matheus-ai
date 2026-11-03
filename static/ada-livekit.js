@@ -57,7 +57,7 @@ if (startButton && statusLabel) {
     setStatus("Preparando conexão segura…");
 
     try {
-      window.__adaStopBrowserVoice?.();
+      await window.__adaStopBrowserVoice?.();
 
       const tokenResponse = await fetch("/api/livekit/token", {
         method: "POST",
