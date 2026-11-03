@@ -121,7 +121,10 @@
   const form = document.querySelector('form');
   const messages = document.getElementById('messages');
 
-  let neuralTypingTimer = 0;\n  let roamTimer = 0;\n  let dragState = null;\n  let suppressPetClick = false;
+  let neuralTypingTimer = 0;
+  let roamTimer = 0;
+  let dragState = null;
+  let suppressPetClick = false;
   const neuralMoods = {
     feliz: 'happy', contente: 'happy', observando: 'idle',
     curioso: 'curious', bravo: 'angry', triste: 'sad',
@@ -343,6 +346,9 @@
     observer.observe(messages,{childList:true,subtree:true});
   }
   theme();
+  const initialBounds = chatBounds();
+  movePet(initialBounds.right, initialBounds.bottom, false);
+  scheduleWander();
   idleTimer=setTimeout(()=>showMood('sleepy','Zzz… vou descansar um pouquinho.',5000),240000);
   ['pointerdown','keydown','touchstart'].forEach(name=>window.addEventListener(name,()=>{
     clearTimeout(idleTimer);
