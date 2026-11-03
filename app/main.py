@@ -388,13 +388,13 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
         if not isinstance(content, str):
             return {"speak": False, "text": "", "reason": "invalid_model_output"}
-        match = re.search(r"\\{[\\s\\S]*\\}", content)
+        match = re.search(r"\{[\s\S]*\}", content)
         if not match:
             return {"speak": False, "text": "", "reason": "invalid_model_output"}
         decision = json.loads(match.group(0))
         if not isinstance(decision, dict) or decision.get("speak") is not True:
             return {"speak": False, "text": "", "reason": "silent"}
-        text = re.sub(r"\\s+", " ", str(decision.get("text", ""))).strip()[:160]
+        text = re.sub(r"\s+", " ", str(decision.get("text", ""))).strip()[:160]
         if not text:
             return {"speak": False, "text": "", "reason": "empty"}
         mood = decision.get("mood")
