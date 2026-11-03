@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ada-m-pwa-v5-pestinha-gemma';
+const CACHE_NAME = 'ada-m-pwa-v6-pestinha-free-roam';
 const APP_SHELL = [
   '/',
   '/static/manifest.webmanifest',
