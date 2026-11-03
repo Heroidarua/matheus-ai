@@ -1,4 +1,4 @@
-import { Room, RoomEvent, Track } from "https://cdn.jsdelivr.net/npm/livekit-client@2.9.6/dist/livekit-client.esm.mjs";
+import { Room, RoomEvent } from "https://cdn.jsdelivr.net/npm/livekit-client@2.9.6/dist/livekit-client.esm.mjs";
 
 const startButton = document.getElementById("livekit-voice-button");
 const statusLabel = document.getElementById("livekit-voice-status");
@@ -148,9 +148,9 @@ if (startButton && statusLabel) {
           const text = await reader.readAll();
           const attributes = reader.info?.attributes || {};
           const isTranscription = Boolean(attributes["lk.transcribed_track_id"]);
-          const isFinal = attributes["lk.transcription_final"] === "true";
+          
           // Ignora a transcrição da fala do usuário; só reproduz o texto produzido pelo agente.
-          if (isTranscription || participantInfo?.identity === activeRoom.localParticipant.identity || !isFinal || !text.trim()) return;
+          if (isTranscription || participantInfo?.identity === activeRoom.localParticipant.identity || !text.trim()) return;
           console.info("ADA-M LiveKit: resposta textual recebida para voz do navegador");
           statusLabel.dataset.diagnosticStage = "browser_tts";
           speakWithBrowserVoice(text);
