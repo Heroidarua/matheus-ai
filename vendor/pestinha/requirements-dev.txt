@@ -1,0 +1,5 @@
+# Para desenvolver: testes, análise estática e o executável (o CI instala o que precisa à parte)
+-r requirements.txt
+pytest==8.4.2
+pyflakes==4.1.0
+pyinstaller==6.22.3
