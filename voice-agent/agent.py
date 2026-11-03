@@ -43,7 +43,7 @@ def _chat_history(chat_ctx: ChatContext) -> list[dict[str, str]]:
 
 
 class AdaMVoiceAgent(Agent):
-    """Agente de voz: LiveKit faz mídia/STT/TTS; ADA-M continua gerando as respostas."""
+    """Agente de voz: LiveKit captura/STT; ADA-M gera texto para a voz nativa do navegador."""
 
     def __init__(self, client: httpx.AsyncClient, debug: Callable[..., Awaitable[None]]) -> None:
         super().__init__(
