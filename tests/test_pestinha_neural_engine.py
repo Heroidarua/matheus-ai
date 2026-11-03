@@ -1,4 +1,4 @@
-from app.pestinha_engine import PetNeuralSession, stimulate_session
+from app.pestinha_engine import PetNeuralSession, get_session_state, stimulate_session
 
 
 def test_original_lif_network_has_470_neurons():
@@ -25,3 +25,16 @@ def test_bryan_and_jorge_have_individual_neural_parameters():
     jorge = PetNeuralSession("jorge")
     assert bryan.brain.seed != jorge.brain.seed
     assert bryan.brain.temperament != jorge.brain.temperament
+
+
+
+def test_neural_state_can_be_read_without_creating_a_session():
+    session_id = "test-session-read-only-state"
+    assert get_session_state(session_id, "bryan") is None
+
+    stimulate_session(session_id, "bryan", "activity")
+    state = get_session_state(session_id, "bryan")
+
+    assert state is not None
+    assert state["neurons"] == 470
+    assert state["engine"] == "original-pestinha-lif"
