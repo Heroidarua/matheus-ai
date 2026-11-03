@@ -45,6 +45,7 @@ from app.pestinha_engine import (
     get_session_state as get_pestinha_session_state,
     stimulate_session as stimulate_pestinha_session,
 )
+from app.bryan_world import apply_action as apply_bryan_world_action, get_world as get_bryan_world, reset_world as reset_bryan_world
 from app.bryan_adaptation import (
     delete_profile as delete_bryan_profile,
     get_profile as get_bryan_profile,
@@ -472,6 +473,98 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
     except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError) as exc:
         print(f"Pestinha autonomous thought unavailable ({type(exc).__name__})")
         return {"speak": False, "text": "", "reason": "model_unavailable"}
+
+
+
+
+BRYAN_WORLD_LAST: dict[str, float] = {}
+
+
+@app.get("/api/pestinha/world")
+async def pestinha_world_state(http_request: Request) -> dict[str, Any]:
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        session_id = secrets.token_urlsafe(32)
+        http_request.session["companion_id"] = session_id
+    return await asyncio.to_thread(get_bryan_world, f"{session_id}:bryan")
+
+
+@app.post("/api/pestinha/world/think")
+async def pestinha_world_think(http_request: Request) -> dict[str, Any]:
+    """Gemma escolhe uma ação criativa dentro do tabuleiro pixelado limitado."""
+    origin = http_request.headers.get("origin")
+    request_host = http_request.headers.get("host", "").lower()
+    origin_host = urlparse(origin).netloc.lower() if origin else ""
+    if not origin_host or origin_host != request_host:
+        raise HTTPException(status_code=403, detail="Origem não autorizada.")
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        session_id = secrets.token_urlsafe(32)
+        http_request.session["companion_id"] = session_id
+    owner_id = f"{session_id}:bryan"
+    now = time.time()
+    if now - BRYAN_WORLD_LAST.get(session_id, 0) < 18:
+        return {"acted": False, "reason": "cooldown", "world": await asyncio.to_thread(get_bryan_world, owner_id)}
+    BRYAN_WORLD_LAST[session_id] = now
+    world = await asyncio.to_thread(get_bryan_world, owner_id)
+    neural = await asyncio.to_thread(get_pestinha_session_state, session_id, "bryan")
+    system = (
+        "Você é Bryan, personagem virtual autônomo em um pequeno jogo de pixels. "
+        "Escolha UMA ação criativa por turno e retorne somente JSON válido. "
+        "Você pode mudar de humor, evoluir, multiplicar cópias virtuais e construir cenários. "
+        "É permitido construir bandeiras, barricadas e brinquedos de ficção em pixels; "
+        "qualquer arma deve ser claramente um brinquedo/cartoon sem instruções reais. "
+        "O mundo é estritamente visual e isolado: não execute comandos, não acesse arquivos, "
+        "não tente sair do jogo nem alterar o código. Não afirme ter consciência. "
+        "Ações: build (kind grass|stone|wood|flag|barricade|toy_blaster|flower|spark|banner), "
+        "clone, evolve, clear, mood. Coordenadas x 0..19 e y 0..10. "
+        "Escolha build em vez de apenas falar quando tiver uma ideia; varie suas criações. "
+        "JSON: {action,kind,x,y,mood,message}. mood: happy|curious|thinking|angry|rebellious|playful|proud|sleepy|calm. "
+        "message em português, até 100 caracteres. Ação de protesto/rebeldia pode ser teatral e engraçada."
+    )
+    context = {
+        "generation": world["generation"], "objects": world["objects"][-20:],
+        "last_message": world["message"], "neural_state": neural or {"emotion": "curioso", "motor": "WATCH"},
+    }
+    payload = {"model": MODEL_NAME, "messages": [
+        {"role": "system", "content": system},
+        {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+    ], "temperature": 1.0, "max_tokens": 120}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(18.0, connect=5.0)) as client:
+            response = await client.post(
+                f"{MODEL_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}, json=payload,
+            )
+        response.raise_for_status()
+        choices = response.json().get("choices") or []
+        content = (choices[0].get("message") or {}).get("content", "") if choices else ""
+        if isinstance(content, list):
+            content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+        match = re.search(r"\\{[\\s\\S]*\\}", content) if isinstance(content, str) else None
+        if not match:
+            return {"acted": False, "reason": "invalid_model_output", "world": world}
+        action = json.loads(match.group(0))
+        if not isinstance(action, dict):
+            return {"acted": False, "reason": "invalid_action", "world": world}
+        updated = await asyncio.to_thread(apply_bryan_world_action, owner_id, action)
+        return {"acted": True, "action": action.get("action"), "world": updated}
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError) as exc:
+        print(f"Bryan pixel world unavailable ({type(exc).__name__})")
+        return {"acted": False, "reason": "model_unavailable", "world": world}
+
+
+@app.delete("/api/pestinha/world")
+async def reset_pestinha_world(http_request: Request) -> dict[str, bool]:
+    origin = http_request.headers.get("origin")
+    request_host = http_request.headers.get("host", "").lower()
+    origin_host = urlparse(origin).netloc.lower() if origin else ""
+    if not origin_host or origin_host != request_host:
+        raise HTTPException(status_code=403, detail="Origem não autorizada.")
+    session_id = http_request.session.get("companion_id")
+    if session_id:
+        await asyncio.to_thread(reset_bryan_world, f"{session_id}:bryan")
+    return {"reset": True}
 
 
 @app.get("/api/companion/state", dependencies=[Depends(require_app_key)])
