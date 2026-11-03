@@ -351,8 +351,8 @@
                 <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
                 <span id="voice-status" class="voice-status" aria-live="polite"></span>
                 <div class="livekit-voice-controls" role="group" aria-label="Conversa em tempo real">
-                  <button class="tool-btn" type="button" id="livekit-voice-button">🎙️ Conversar em tempo real</button>
-                  <span id="livekit-voice-status" aria-live="polite">Novo modo de voz LiveKit</span>
+                  <button class="tool-btn" type="button" id="livekit-voice-button">🎙️ Conversar por voz (navegador)</button>
+                  <span id="livekit-voice-status" aria-live="polite">Voz nativa do navegador + Gemma 4</span>
                 </div>
               </div>
             </div>
@@ -1343,6 +1343,27 @@
 
     // Libera todas as instâncias de SpeechRecognition antes de abrir o microfone WebRTC.
     // O ditado normal usa uma instância separada e antes não era encerrado pelo LiveKit.
+    // Conversa contínua com APIs nativas do navegador; mantém /api/chat e Gemma 4.
+    window.__adaStartBrowserVoiceSession = () => {
+      if (!SpeechRecognitionAPI) {
+        voiceStatus.textContent = 'Reconhecimento de voz não suportado. Use Chrome ou Edge atualizado.';
+        return false;
+      }
+      if (voiceSessionActive) return true;
+      stopVoiceRecognition();
+      stopBrowserSpeech();
+      voiceConversationToggle.checked = true;
+      voiceSessionActive = true;
+      voiceStatus.textContent = 'Preparando o microfone do navegador…';
+      startVoiceRecognition();
+      return true;
+    };
+
+    window.__adaEndBrowserVoiceSession = () => {
+      endVoiceSession('Conversa por voz encerrada.');
+      voiceConversationToggle.checked = false;
+    };
+
     window.__adaStopBrowserVoice = async () => {
       const activeRecognizers = [dictationRecognition, recognition, bargeInRecognition].filter(Boolean);
 
@@ -1671,7 +1692,7 @@
       }
     });
   </script>
-  <script type="module" src="/static/ada-livekit.js?v=20261102"></script>
+  <script type="module" src="/static/ada-livekit.js?v=20261103-browser"></script>
   <script>
     (() => {
 
