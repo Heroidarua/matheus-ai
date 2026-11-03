@@ -490,7 +490,7 @@ async def pestinha_world_state(http_request: Request) -> dict[str, Any]:
 
 
 @app.post("/api/pestinha/world/think")
-async def pestinha_world_think(http_request: Request) -> dict[str, Any]:
+async def pestinha_world_think(http_request: Request, intent: str = Query(default="auto", pattern="^(auto|clone|evolve)$")) -> dict[str, Any]:
     """Gemma escolhe uma ação criativa dentro do tabuleiro pixelado limitado."""
     origin = http_request.headers.get("origin")
     request_host = http_request.headers.get("host", "").lower()
@@ -507,6 +507,10 @@ async def pestinha_world_think(http_request: Request) -> dict[str, Any]:
         return {"acted": False, "reason": "cooldown", "world": await asyncio.to_thread(get_bryan_world, owner_id)}
     BRYAN_WORLD_LAST[session_id] = now
     world = await asyncio.to_thread(get_bryan_world, owner_id)
+    if intent in {"clone", "evolve"}:
+        mood = "playful" if intent == "clone" else "proud"
+        updated = await asyncio.to_thread(apply_bryan_world_action, owner_id, {"action": intent, "mood": mood, "message": "Decidi fazer isso por conta própria!"})
+        return {"acted": True, "action": intent, "world": updated}
     neural = await asyncio.to_thread(get_pestinha_session_state, session_id, "bryan")
     system = (
         "Você é Bryan, personagem virtual autônomo em um pequeno jogo de pixels. "
