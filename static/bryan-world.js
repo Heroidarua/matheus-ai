@@ -97,8 +97,12 @@
       return;
     }
     if(action==='clone'||action==='evolve'){
-      // As mesmas ações são escolhidas pelo modelo; o botão apenas pede uma nova decisão.
-      lastDecision=0;
+      pending=true; lastDecision=Date.now();
+      try{
+        const r=await fetch('/api/pestinha/world/think?intent='+action,{method:'POST',credentials:'same-origin'});
+        const data=await r.json(); if(data.world) draw(data.world);
+      }catch{}finally{pending=false;}
+      return;
     }
     await decide();
   }
