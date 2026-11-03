@@ -154,6 +154,40 @@
     } catch {}
   }
 
+
+  let autonomousRequestPending = false;
+  async function askGemmaForPestinhaReaction() {
+    if (autonomousRequestPending || document.visibilityState === 'hidden' || !messages) return;
+    const userBubbles = [...messages.querySelectorAll('.bubble.user')];
+    const assistantBubbles = [...messages.querySelectorAll('.bubble.assistant')];
+    const latestUser = userBubbles[userBubbles.length - 1];
+    const latestAssistant = assistantBubbles[assistantBubbles.length - 1];
+    if (!latestUser || !latestAssistant || latestAssistant.classList.contains('error')) return;
+    const userText = (latestUser.innerText || latestUser.textContent || '').trim().slice(0, 1200);
+    const assistantText = (latestAssistant.innerText || latestAssistant.textContent || '').trim().slice(0, 1800);
+    if (!userText || !assistantText) return;
+    autonomousRequestPending = true;
+    try {
+      const response = await fetch('/api/pestinha/think', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pet: petId, user_text: userText, assistant_text: assistantText})
+      });
+      if (!response.ok) return;
+      const decision = await response.json();
+      if (decision.speak && typeof decision.text === 'string' && decision.text.trim()) {
+        const allowedMoods = ['curious', 'happy', 'thinking', 'idle', 'sleepy'];
+        const nextMood = allowedMoods.includes(decision.mood) ? decision.mood : 'curious';
+        showMood(nextMood, decision.text.trim().slice(0, 160), 6500, false);
+      }
+    } catch {
+      // A camada autônoma é opcional: falhas nunca afetam o chat principal.
+    } finally {
+      autonomousRequestPending = false;
+    }
+  }
+
   function save(){try{localStorage.setItem(storageKey,JSON.stringify({pet:petId,affection}));}catch{}}
   function theme(){
     const t=themes[petId];
@@ -216,9 +250,13 @@
     notifyNeural('submit');
   },true);
   if(sendButton){
+    let wasSending = Boolean(sendButton.disabled);
     const observer=new MutationObserver(()=>{
-      if(sendButton.disabled) showMood('thinking','Processando… estou trabalhando junto!',0);
+      const isSending = Boolean(sendButton.disabled);
+      if(isSending) showMood('thinking','Processando… estou trabalhando junto!',0);
       else if(mood==='thinking') showMood('happy','Resposta pronta! Olha só! ✨',4500,Math.random()<.45);
+      if(wasSending && !isSending) setTimeout(askGemmaForPestinhaReaction, 350);
+      wasSending = isSending;
     });
     observer.observe(sendButton,{attributes:true,attributeFilter:['disabled']});
   }

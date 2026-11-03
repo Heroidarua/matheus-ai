@@ -92,6 +92,16 @@ class PetNeuralSession:
         }
 
 
+def get_session_state(session_id: str, pet_id: str) -> dict[str, Any] | None:
+    """Lê o estado neural da sessão sem criar ou alterar uma sessão inexistente."""
+    with _LOCK:
+        session = _SESSIONS.get(session_id)
+        if session is None or session.pet_id != pet_id:
+            return None
+    with session.lock:
+        return session.state()
+
+
 def stimulate_session(session_id: str, pet_id: str, event: str) -> dict[str, Any]:
     if pet_id not in {"bryan", "jorge"}:
         pet_id = "bryan"
