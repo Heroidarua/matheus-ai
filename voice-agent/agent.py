@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from collections.abc import AsyncIterable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -54,7 +56,7 @@ def _chat_history(chat_ctx: ChatContext) -> list[dict[str, str]]:
 class AdaMVoiceAgent(Agent):
     """Agente de voz: LiveKit faz mídia/STT/TTS; ADA-M continua gerando as respostas."""
 
-    def __init__(self, client: httpx.AsyncClient) -> None:
+    def __init__(self, client: httpx.AsyncClient, debug: Callable[..., Awaitable[None]]) -> None:
         super().__init__(
             instructions=(
                 "Você é a interface de voz da ADA-M. Responda em português brasileiro. "
@@ -63,6 +65,7 @@ class AdaMVoiceAgent(Agent):
             )
         )
         self._client = client
+        self._debug = debug
 
     async def llm_node(
         self,
@@ -72,6 +75,7 @@ class AdaMVoiceAgent(Agent):
     ) -> AsyncIterable[str | llm.ChatChunk]:
         messages = _chat_history(chat_ctx)
         logger.info("LLM node invoked; messages=%s last_role=%s", len(messages), messages[-1]["role"] if messages else "none")
+        await self._debug("llm_started", "Fala reconhecida; consultando o Gemma 4.")
         if not messages or messages[-1]["role"] != "user":
             yield "Não consegui identificar sua última fala. Pode repetir?"
             return
@@ -96,6 +100,7 @@ class AdaMVoiceAgent(Agent):
                 json=payload,
             ) as response:
                 logger.info("ADA-M /api/chat responded with HTTP %s", response.status_code)
+                await self._debug("backend_response", f"Backend respondeu HTTP {response.status_code}.")
                 response.raise_for_status()
                 first_token_logged = False
                 async for line in response.aiter_lines():
@@ -114,20 +119,25 @@ class AdaMVoiceAgent(Agent):
                         if not first_token_logged:
                             logger.info("ADA-M first response token received")
                             first_token_logged = True
+                            await self._debug("first_token", "Gemma 4 começou a responder; preparando o áudio.")
                         yield token
                     elif event.get("detail"):
                         logger.error("ADA-M stream emitted an error event")
                         yield "A ADA-M não conseguiu concluir a resposta. Tente novamente."
                         return
                 logger.info("ADA-M response stream finished; first_token=%s", first_token_logged)
+                await self._debug("llm_finished", "Resposta textual concluída.")
         except httpx.TimeoutException:
             logger.warning("Timeout calling ADA-M chat API")
+            await self._debug("backend_error", "O backend demorou mais que o limite de resposta.")
             yield "A ADA-M demorou para responder. Tente falar novamente."
         except httpx.HTTPStatusError as exc:
             logger.error("ADA-M chat API returned HTTP %s", exc.response.status_code)
+            await self._debug("backend_error", f"Backend retornou HTTP {exc.response.status_code}.")
             yield "Não consegui acessar o serviço de conversa da ADA-M agora."
         except httpx.HTTPError as exc:
             logger.error("ADA-M chat API connection failed: %s", type(exc).__name__)
+            await self._debug("backend_error", "Não foi possível conectar ao backend ADA-M.")
             yield "A conexão com a ADA-M foi interrompida. Tente novamente."
 
 
@@ -142,6 +152,16 @@ async def entrypoint(ctx: JobContext) -> None:
         timeout=httpx.Timeout(120.0, connect=10.0),
         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     )
+
+    async def publish_debug(stage: str, message: str) -> None:
+        try:
+            await ctx.room.local_participant.publish_data(
+                json.dumps({"type": "ada_m_debug", "stage": stage, "message": message}),
+                reliable=True,
+                topic="ada-m-debug",
+            )
+        except Exception as exc:
+            logger.warning("Could not publish browser diagnostic event: %s", type(exc).__name__)
 
     # Silero VAD detects speech start/end locally; Deepgram transcribes the audio.
     vad = silero.VAD.load()
@@ -171,10 +191,17 @@ async def entrypoint(ctx: JobContext) -> None:
             len(getattr(event, "transcript", "") or ""),
             getattr(event, "language", None) or "unknown",
         )
+        asyncio.create_task(publish_debug(
+            "stt_received" if getattr(event, "is_final", False) else "stt_partial",
+            "Transcrição recebida; encaminhando sua fala." if getattr(event, "is_final", False) else "Reconhecendo sua fala…",
+        ))
 
     @voice_session.on("user_state_changed")
     def on_user_state_changed(event: Any) -> None:
-        logger.info("User voice state: %s -> %s", getattr(event, "old_state", "unknown"), getattr(event, "new_state", "unknown"))
+        new_state = str(getattr(event, "new_state", "unknown"))
+        logger.info("User voice state: %s -> %s", getattr(event, "old_state", "unknown"), new_state)
+        if "speaking" in new_state.lower():
+            asyncio.create_task(publish_debug("speech_detected", "Microfone detectou sua voz; aguardando transcrição."))
 
     @voice_session.on("agent_state_changed")
     def on_agent_state_changed(event: Any) -> None:
@@ -182,7 +209,9 @@ async def entrypoint(ctx: JobContext) -> None:
 
     @voice_session.on("user_transcription_timeout")
     def on_user_transcription_timeout(event: Any) -> None:
-        logger.warning("Speech detected but STT transcript timed out; duration=%s", getattr(event, "duration", "unknown"))
+        duration = getattr(event, "speech_duration", "unknown")
+        logger.warning("Speech detected but STT transcript timed out; duration=%s", duration)
+        asyncio.create_task(publish_debug("stt_timeout", "Detectei sua fala, mas o serviço de transcrição não retornou texto."))
 
     logger.info(
         "Starting ADA-M voice session in room %s; STT=%s language=%s TTS=%s",
@@ -191,8 +220,9 @@ async def entrypoint(ctx: JobContext) -> None:
     try:
         await voice_session.start(
             room=ctx.room,
-            agent=AdaMVoiceAgent(client),
+            agent=AdaMVoiceAgent(client, publish_debug),
         )
+        await publish_debug("agent_ready", "Agente conectado e pronto para receber sua fala.")
         await ctx.wait_for_shutdown()
     finally:
         await voice_session.aclose()
