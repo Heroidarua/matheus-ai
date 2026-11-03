@@ -101,9 +101,7 @@ if (startButton && statusLabel) {
         if (speakers.some((speaker) => speaker.identity !== activeRoom.localParticipant.identity)) {
           setStatus("A ADA-M está respondendo em áudio…");
         } else if (activeRoom.state === "connected") {
-          setStatus(remoteAgent
-        ? "Agente conectado. Microfone ativo; pode falar."
-        : "Microfone ativo. Aguardando o agente entrar na sala…");
+          setStatus("Conectado. Pode falar; a ADA-M está ouvindo.");
         }
       });
 
@@ -149,7 +147,9 @@ if (startButton && statusLabel) {
       startButton.disabled = false;
       startButton.classList.add("livekit-active");
       startButton.textContent = "Encerrar conversa";
-      setStatus("Conectado. Pode falar; a ADA-M está ouvindo.");
+      setStatus(remoteAgent
+        ? "Agente conectado. Microfone ativo; pode falar."
+        : "Microfone ativo. Aguardando o agente entrar na sala…");
     } catch (error) {
       console.error("ADA-M LiveKit connection failed:", error);
       if (room) {
