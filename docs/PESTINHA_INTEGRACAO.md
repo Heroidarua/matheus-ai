@@ -4,7 +4,7 @@
 
 A pasta `vendor/pestinha/` contém o projeto Pestinha original, preservado em sua estrutura própria: entrada desktop, pacote Python, cérebro neural pulsado, emoções, memória, corpo, sentidos, controladores, plataformas, personagens, memes, assets, documentação, ferramentas e testes.
 
-A cópia acompanha a versão pública consultada em 2026-11-03. O executável pré-compilado de Windows (`executáveis/windows/Pestinha.exe`, aproximadamente 60 MB) foi omitido; ele é um artefato binário de distribuição, não necessário para manter o código-fonte e os recursos originais. Pode ser baixado no repositório upstream quando necessário.
+A cópia acompanha a versão pública consultada durante esta integração. O executável pré-compilado de Windows (`executáveis/windows/Pestinha.exe`, aproximadamente 60 MB) foi omitido; ele é um artefato binário de distribuição, não necessário para manter o código-fonte e os recursos originais. Pode ser baixado no repositório upstream quando necessário.
 
 ## Como executar o Pestinha original
 
