@@ -10,8 +10,8 @@ from typing import Any
 
 import httpx
 from dotenv import load_dotenv
-from livekit.agents import Agent, AgentServer, AgentSession, ChatContext, JobContext, cli, llm, inference
-from livekit.plugins import openai, silero
+from livekit.agents import Agent, AgentServer, AgentSession, ChatContext, JobContext, cli, llm, inference, room_io
+from livekit.plugins import silero
 
 load_dotenv()
 
@@ -20,22 +20,11 @@ logger = logging.getLogger("ada-m-livekit-agent")
 
 ADA_M_API_URL = os.getenv("ADA_M_API_URL", "").strip().rstrip("/")
 ADA_M_APP_API_KEY = os.getenv("ADA_M_APP_API_KEY", "").strip()
-ADA_M_TTS_BASE_URL = os.getenv("ADA_M_TTS_BASE_URL", "").strip().rstrip("/")
-ADA_M_TTS_API_KEY = os.getenv("ADA_M_TTS_API_KEY", "").strip()
-ADA_M_TTS_VOICE = os.getenv("ADA_M_TTS_VOICE", "pf_dora").strip() or "pf_dora"
-ADA_M_TTS_SPEED = float(os.getenv("ADA_M_TTS_SPEED", "1.19"))
 LIVEKIT_STT_MODEL = os.getenv("LIVEKIT_STT_MODEL", "deepgram/nova-3").strip()
 LIVEKIT_STT_LANGUAGE = os.getenv("LIVEKIT_STT_LANGUAGE", "pt-BR").strip()
 
 if not ADA_M_API_URL:
     raise RuntimeError("Configure ADA_M_API_URL com a URL HTTPS do backend ADA-M.")
-if not ADA_M_TTS_BASE_URL:
-    raise RuntimeError(
-        "Configure ADA_M_TTS_BASE_URL com a URL OpenAI-compatible do Kokoro, terminando em /v1."
-    )
-if not 0.7 <= ADA_M_TTS_SPEED <= 1.3:
-    raise RuntimeError("ADA_M_TTS_SPEED deve ficar entre 0.7 e 1.3.")
-
 
 def _chat_history(chat_ctx: ChatContext) -> list[dict[str, str]]:
     """Converte apenas mensagens textuais da sessão LiveKit para o contrato ADA-M."""
@@ -172,14 +161,8 @@ async def entrypoint(ctx: JobContext) -> None:
             model=LIVEKIT_STT_MODEL,
             language=LIVEKIT_STT_LANGUAGE,
         ),
-        tts=openai.TTS(
-            model="kokoro",
-            voice=ADA_M_TTS_VOICE,
-            base_url=ADA_M_TTS_BASE_URL,
-            api_key=ADA_M_TTS_API_KEY or "not-required",
-            speed=ADA_M_TTS_SPEED,
-            response_format="wav",
-        ),
+        # Sem TTS no servidor: o navegador reproduz a resposta via SpeechSynthesis.
+        tts=None,
     )
 
     @voice_session.on("user_input_transcribed")
@@ -214,13 +197,15 @@ async def entrypoint(ctx: JobContext) -> None:
         asyncio.create_task(publish_debug("stt_timeout", "Detectei sua fala, mas o serviço de transcrição não retornou texto."))
 
     logger.info(
-        "Starting ADA-M voice session in room %s; STT=%s language=%s TTS=%s",
-        ctx.room.name, LIVEKIT_STT_MODEL, LIVEKIT_STT_LANGUAGE, ADA_M_TTS_VOICE,
+        "Starting ADA-M voice session in room %s; STT=%s language=%s output=browser-speech-synthesis",
+        ctx.room.name, LIVEKIT_STT_MODEL, LIVEKIT_STT_LANGUAGE,
     )
     try:
         await voice_session.start(
             room=ctx.room,
             agent=AdaMVoiceAgent(client, publish_debug),
+            # Mantém áudio de entrada/STT do LiveKit, mas envia a resposta como texto.
+            room_options=room_io.RoomOptions(audio_input=True, audio_output=False, text_output=True),
         )
         await publish_debug("agent_ready", "Agente conectado e pronto para receber sua fala.")
         await ctx.wait_for_shutdown()
