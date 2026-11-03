@@ -21,6 +21,6 @@ A ADA-M continua usando seu backend e seu modelo de conversa Gemma 4; o companhe
 
 ## Licença e créditos
 
-O código e os recursos do projeto Pestinha original são mantidos sob a licença GPL-3.0-or-later conforme os avisos do repositório de origem. Consulte vendor/pestinha/LICENSE e vendor/pestinha/README.md.
+O código-fonte do Pestinha está sob GPL-3.0-or-later; consulte `vendor/pestinha/LICENSE`. O README upstream esclarece que imagens e textos de assets/personagens não estão cobertos por essa licença e têm condições próprias. Verifique essas permissões antes de redistribuir os conteúdos fora deste contexto.
 
 Projeto original: https://github.com/mille-okws/pestinha
