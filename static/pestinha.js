@@ -5,8 +5,8 @@
 
   const storageKey = 'ada-pestinha-v2';
   const themes = {
-    bryan: { name: 'Bryan', frame: '#63e56f', shell: '#101512', screen: '#171e19', eye: '#3ee877', shine: '#c8ffd8', tie: false },
-    jorge: { name: 'Jorge', frame: '#e2b13c', shell: '#14120c', screen: '#1c1a12', eye: '#ffd166', shine: '#fff3c4', tie: true }
+    bryan: { name: 'Bryan', frame: '#c8d2ce', shell: '#111416', screen: '#191e20', eye: '#d8fff0', shine: '#ffffff', tie: false },
+    jorge: { name: 'Jorge', frame: '#c8c2b5', shell: '#141414', screen: '#1d1d1d', eye: '#f5e5bf', shine: '#ffffff', tie: true }
   };
   const memes = {
     bryan: {
@@ -32,16 +32,16 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    #ada-pestinha{position:fixed;z-index:45;right:22px;bottom:102px;width:178px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font-family:Inter,ui-sans-serif,system-ui,sans-serif;pointer-events:none}
+    #ada-pestinha{position:fixed;z-index:45;left:calc(100vw - 200px);top:calc(100vh - 260px);right:auto;bottom:auto;width:178px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font-family:Inter,ui-sans-serif,system-ui,sans-serif;pointer-events:none;background:transparent!important;transition:left 1.8s cubic-bezier(.2,.75,.25,1),top 1.8s cubic-bezier(.2,.75,.25,1);will-change:left,top}
     #ada-pestinha *{box-sizing:border-box}
     #ada-pestinha .pet-bubble{display:flex;flex-direction:column;gap:7px;max-width:178px;padding:10px 11px;border:1px solid var(--border,#343434);border-radius:13px 13px 3px 13px;background:var(--panel,#151515);color:var(--text,#eee);box-shadow:0 8px 28px #0008;font-size:11px;line-height:1.4;opacity:0;transform:translateY(7px) scale(.97);transition:opacity .2s ease,transform .2s ease;pointer-events:none}
     #ada-pestinha.show .pet-bubble{opacity:1;transform:translateY(0) scale(1)}
     #ada-pestinha .pet-bubble img{display:none;width:100%;max-height:116px;object-fit:contain;border-radius:8px;background:#080808}
     #ada-pestinha .pet-bubble.has-meme img{display:block}
     #ada-pestinha .pet-row{display:flex;align-items:flex-end;gap:6px;pointer-events:auto}
-    #ada-pestinha .pet-stage{position:relative;width:154px;height:122px;display:grid;place-items:center;cursor:pointer;touch-action:manipulation;filter:drop-shadow(0 9px 8px #0007);outline:none}
+    #ada-pestinha .pet-stage{position:relative;width:154px;height:122px;display:grid;place-items:center;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;background:transparent!important;filter:drop-shadow(0 7px 7px #0005);outline:none}
     #ada-pestinha .pet-stage:focus-visible{outline:2px solid var(--accent,#63e56f);outline-offset:3px;border-radius:18px}
-    #ada-pestinha .pet-svg{width:154px;height:122px;overflow:visible}
+    #ada-pestinha .pet-svg{width:154px;height:122px;overflow:visible;background:transparent!important}\n    #ada-pestinha.dragging .pet-stage{cursor:grabbing}\n    #ada-pestinha[data-walking="true"] .pet-body{animation:adaPetWalk .28s ease-in-out infinite alternate}\n    @keyframes adaPetWalk{from{transform:translateY(1px) rotate(-3deg)}to{transform:translateY(-3px) rotate(3deg)}}
     #ada-pestinha .pet-body{transform-origin:50% 85%;animation:adaPetBob 3.2s ease-in-out infinite}
     #ada-pestinha .pet-shadow{transform-origin:center;animation:adaPetShadow 3.2s ease-in-out infinite}
     #ada-pestinha .pet-eyes{transform-origin:center;animation:adaPetBlink 5.1s infinite}
@@ -66,7 +66,7 @@
     @keyframes adaPetShadow{0%,100%{transform:scaleX(1);opacity:.23}50%{transform:scaleX(.84);opacity:.12}}
     @keyframes adaPetBlink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.1)}}
     @keyframes adaPetHop{0%,100%{transform:translateY(0) rotate(0)}35%{transform:translateY(-15px) rotate(-6deg)}68%{transform:translateY(-5px) rotate(5deg)}}
-    @media(max-width:600px){#ada-pestinha{right:8px;bottom:112px;transform:scale(.88);transform-origin:bottom right}}
+    @media(max-width:600px){#ada-pestinha{transform:scale(.82);transform-origin:top left}}
     @media(prefers-reduced-motion:reduce){#ada-pestinha *,#ada-pestinha *:before{animation:none!important;transition:none!important}}
   `;
   document.head.appendChild(style);
@@ -121,7 +121,7 @@
   const form = document.querySelector('form');
   const messages = document.getElementById('messages');
 
-  let neuralTypingTimer = 0;
+  let neuralTypingTimer = 0;\n  let roamTimer = 0;\n  let dragState = null;\n  let suppressPetClick = false;
   const neuralMoods = {
     feliz: 'happy', contente: 'happy', observando: 'idle',
     curioso: 'curious', bravo: 'angry', triste: 'sad',
@@ -190,6 +190,76 @@
     }
   }
 
+  function chatBounds() {
+    const rect = messages?.getBoundingClientRect();
+    const top = rect ? Math.max(72, rect.top + 8) : 72;
+    const bottom = rect ? Math.min(window.innerHeight - 170, rect.bottom - 150) : window.innerHeight - 190;
+    const left = rect ? Math.max(8, rect.left + 4) : 8;
+    const right = rect ? Math.min(window.innerWidth - 188, rect.right - 178) : window.innerWidth - 188;
+    return {left, right: Math.max(left, right), top, bottom: Math.max(top, bottom)};
+  }
+  function movePet(x, y, walking = true) {
+    const bounds = chatBounds();
+    const nextX = Math.max(bounds.left, Math.min(bounds.right, x));
+    const nextY = Math.max(bounds.top, Math.min(bounds.bottom, y));
+    root.style.left = nextX + 'px';
+    root.style.top = nextY + 'px';
+    root.dataset.walking = walking ? 'true' : 'false';
+    if (walking) {
+      clearTimeout(root._walkStopTimer);
+      root._walkStopTimer = setTimeout(() => { root.dataset.walking = 'false'; }, 1900);
+    }
+  }
+  function scheduleWander() {
+    clearTimeout(roamTimer);
+    roamTimer = setTimeout(() => {
+      if (!dragState && !document.hidden && root.isConnected && !root.classList.contains('menu-open')) {
+        const bounds = chatBounds();
+        const currentX = parseFloat(root.style.left) || bounds.right;
+        const currentY = parseFloat(root.style.top) || bounds.bottom;
+        const targetX = bounds.left + Math.random() * Math.max(0, bounds.right - bounds.left);
+        const targetY = bounds.top + Math.random() * Math.max(0, bounds.bottom - bounds.top);
+        if (Math.hypot(targetX - currentX, targetY - currentY) > 95) movePet(targetX, targetY, true);
+      }
+      scheduleWander();
+    }, 6500 + Math.random() * 6500);
+  }
+  function beginPetDrag(event) {
+    if (event.button !== undefined && event.button !== 0) return;
+    const rect = root.getBoundingClientRect();
+    dragState = {pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: rect.left, originY: rect.top, moved: false};
+    try { stage.setPointerCapture(event.pointerId); } catch {}
+  }
+  function movePetDrag(event) {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+    const dx = event.clientX - dragState.startX;
+    const dy = event.clientY - dragState.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 7) {
+      dragState.moved = true;
+      root.classList.add('dragging');
+      movePet(dragState.originX + dx, dragState.originY + dy, false);
+    }
+  }
+  function endPetDrag(event) {
+    if (!dragState || (event.pointerId !== undefined && event.pointerId !== dragState.pointerId)) return;
+    suppressPetClick = dragState.moved;
+    dragState = null;
+    root.classList.remove('dragging');
+    root.dataset.walking = 'false';
+    if (suppressPetClick) setTimeout(() => { suppressPetClick = false; }, 80);
+  }
+  stage.addEventListener('pointerdown', beginPetDrag);
+  stage.addEventListener('pointermove', movePetDrag);
+  stage.addEventListener('pointerup', endPetDrag);
+  stage.addEventListener('pointercancel', endPetDrag);
+  window.addEventListener('resize', () => {
+    const bounds = chatBounds();
+    movePet(parseFloat(root.style.left) || bounds.right, parseFloat(root.style.top) || bounds.bottom, false);
+  });
+  window.addEventListener('scroll', () => {
+    const bounds = chatBounds();
+    movePet(parseFloat(root.style.left) || bounds.right, parseFloat(root.style.top) || bounds.bottom, false);
+  }, {passive:true});
   function save(){try{localStorage.setItem(storageKey,JSON.stringify({pet:petId,affection}));}catch{}}
   function theme(){
     const t=themes[petId];
