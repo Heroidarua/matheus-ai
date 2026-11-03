@@ -1339,15 +1339,40 @@
       voiceStatus.textContent = message;
     }
 
-    window.__adaStopBrowserVoice = () => {
-      if (voiceSessionActive) endVoiceSession('Modo LiveKit ativo; voz do navegador pausada.');
-      else {
+    let dictationRecognition = null;
+
+    // Libera todas as instâncias de SpeechRecognition antes de abrir o microfone WebRTC.
+    // O ditado normal usa uma instância separada e antes não era encerrado pelo LiveKit.
+    window.__adaStopBrowserVoice = async () => {
+      const activeRecognizers = [dictationRecognition, recognition, bargeInRecognition].filter(Boolean);
+
+      if (voiceSessionActive) {
+        endVoiceSession('Modo LiveKit ativo; voz do navegador pausada.');
+      } else {
         stopVoiceRecognition();
         stopBrowserSpeech();
       }
-    };
 
-    let dictationRecognition = null;
+      if (dictationRecognition) {
+        const current = dictationRecognition;
+        dictationRecognition = null;
+        try { current.abort(); } catch {}
+      }
+      voiceButton.classList.remove('voice-active');
+
+      // Aguarda o navegador confirmar o fim da captura (ou até 900 ms por segurança).
+      await Promise.all(activeRecognizers.map(instance => new Promise(resolve => {
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          resolve();
+        };
+        try { instance.addEventListener('end', finish, { once: true }); } catch {}
+        setTimeout(finish, 900);
+      })));
+      stopBrowserSpeech();
+    };
     function startVoiceDictation() {
       if (!SpeechRecognitionAPI) {
         voiceStatus.textContent = 'Ditado por voz não é suportado neste navegador. Use Chrome ou Edge atualizado.';
