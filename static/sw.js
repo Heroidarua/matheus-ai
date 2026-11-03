@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ada-m-pwa-v7-pestinha-visible-fix';
+const CACHE_NAME = 'ada-m-pwa-v8-keepalive';
 const APP_SHELL = [
   '/',
   '/static/manifest.webmanifest',
