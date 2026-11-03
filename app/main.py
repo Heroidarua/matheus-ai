@@ -458,4 +458,5 @@ def requires_live_search(message: str) -> bool:
         r"\bele[ií]ç(?:ão|ões)\b", r"\bresultado(?:s)?\b.*\b(ele[ií]ç|vota|jogo|partida)",
         r"\bquem (?:ganhou|venceu|é o vencedor|foi eleito)\b", r"\bquem (?:é|foi) (?!você\b|voce\b|eu\b|ele\b|ela\b|isso\b|isto\b)[\wÀ-ÿ][\wÀ-ÿ .'-]{1,80}", r"\bapuraç(?:ão|ões)\b",
         r"\bnot[ií]cias?\b", r"\b(?:hoje|ontem|agora|atualmente|neste momento|últim[oa]s?)\b",
-        r"\baconteceu\b", r"\bquem (?:é|está como) (?:o|a) (?:atual|presidente|governador|prefeito)\b
+        r"\baconteceu\b", r"\bquem (?:é|está como) (?:o|a) (?:atual|presidente|governador|prefeito)\b",
+
