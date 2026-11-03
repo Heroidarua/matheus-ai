@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +31,7 @@ from pypdf import PdfReader
 from livekit import api as livekit_api
 
 from app.research_engine import build_search_query, classify_research_topic, is_relevant_result, rank_results
+from app.stt import transcribe_audio
 from app.google_search import google_grounded_search
 from app.google_workspace import router as google_workspace_router
 from app.file_library import router as file_library_router, search_library
@@ -235,6 +236,23 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
+
+@app.post("/api/stt")
+async def speech_to_text(audio: UploadFile = File(...)) -> dict[str, str]:
+    """Transcreve o turno de voz gravado pelo navegador (WebM/Opus ou WAV)."""
+    origin = ""
+    # origem verificada no middleware de sessão; aqui só limita tamanho e tipo
+    data = await audio.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Áudio excede 8 MB.")
+    try:
+        text = await asyncio.to_thread(transcribe_audio, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except Exception as exc:
+        print(f"STT unavailable ({type(exc).__name__})")
+        raise HTTPException(status_code=503, detail="Transcrição indisponível agora.") from exc
+    return {"text": text}
 
 
 @app.get("/api/tts/status", dependencies=[Depends(require_app_key)])
