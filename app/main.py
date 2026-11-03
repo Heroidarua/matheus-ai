@@ -541,7 +541,7 @@ async def pestinha_world_think(http_request: Request) -> dict[str, Any]:
         content = (choices[0].get("message") or {}).get("content", "") if choices else ""
         if isinstance(content, list):
             content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
-        match = re.search(r"\\{[\\s\\S]*\\}", content) if isinstance(content, str) else None
+        match = re.search(r"\{[\s\S]*\}", content) if isinstance(content, str) else None
         if not match:
             return {"acted": False, "reason": "invalid_model_output", "world": world}
         action = json.loads(match.group(0))
