@@ -174,10 +174,12 @@ async def entrypoint(ctx: JobContext) -> None:
             len(getattr(event, "transcript", "") or ""),
             getattr(event, "language", None) or "unknown",
         )
-        asyncio.create_task(publish_debug(
-            "stt_received" if getattr(event, "is_final", False) else "stt_partial",
-            "Transcrição recebida; encaminhando sua fala." if getattr(event, "is_final", False) else "Reconhecendo sua fala…",
-        ))
+        transcript = str(getattr(event, "transcript", "") or "").strip()
+        if getattr(event, "is_final", False) and transcript:
+            # Mostra ao usuário o que o STT realmente reconheceu; não grava o conteúdo em logs.
+            asyncio.create_task(publish_debug("stt_received", f"Ouvi: {transcript}"))
+        else:
+            asyncio.create_task(publish_debug("stt_partial", "Reconhecendo sua fala…"))
 
     @voice_session.on("user_state_changed")
     def on_user_state_changed(event: Any) -> None:
@@ -188,7 +190,30 @@ async def entrypoint(ctx: JobContext) -> None:
 
     @voice_session.on("agent_state_changed")
     def on_agent_state_changed(event: Any) -> None:
-        logger.info("Agent state: %s -> %s", getattr(event, "old_state", "unknown"), getattr(event, "new_state", "unknown"))
+        new_state = str(getattr(event, "new_state", "unknown"))
+        logger.info("Agent state: %s -> %s", getattr(event, "old_state", "unknown"), new_state)
+        stage = "agent_thinking" if "thinking" in new_state.lower() else "agent_speaking" if "speaking" in new_state.lower() else "agent_listening"
+        asyncio.create_task(publish_debug(stage, {
+            "agent_thinking": "A ADA-M está processando sua mensagem.",
+            "agent_speaking": "Resposta pronta; enviando texto para a voz do navegador.",
+            "agent_listening": "ADA-M pronta para ouvir."
+        }[stage]))
+
+    @voice_session.on("conversation_item_added")
+    def on_conversation_item_added(event: Any) -> None:
+        item = getattr(event, "item", None)
+        role = getattr(item, "role", None)
+        if role == "assistant":
+            text = str(getattr(item, "text_content", "") or "").strip()
+            if text:
+                logger.info("Assistant response committed; chars=%s", len(text))
+                asyncio.create_task(publish_debug("assistant_text_ready", "Resposta textual da ADA-M recebida."))
+
+    @voice_session.on("error")
+    def on_session_error(event: Any) -> None:
+        error = getattr(event, "error", event)
+        logger.exception("LiveKit voice session error: %s", type(error).__name__)
+        asyncio.create_task(publish_debug("session_error", f"Falha na sessão de voz: {type(error).__name__}."))
 
     @voice_session.on("user_transcription_timeout")
     def on_user_transcription_timeout(event: Any) -> None:
