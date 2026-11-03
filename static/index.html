@@ -303,7 +303,25 @@
     @media(max-width:520px){.library-dialog{padding:15px}.library-search{flex-wrap:wrap}.library-search button{width:100%}}
 
 
-</style>
+
+    /* Modo Supremo: identidade visual vermelha, sem alterar as proteções do assistente. */
+    body.supreme-mode {
+      color-scheme: dark;
+      --bg:#090203; --panel:#160709; --panel2:#240b10;
+      --text:#fff3f4; --muted:#d39a9f; --accent:#ff334f; --border:#68212c;
+      background:radial-gradient(ellipse at 50% 0%,rgba(190,12,38,.20),transparent 48%),var(--bg);
+    }
+    body.supreme-mode .app { filter:drop-shadow(0 0 26px rgba(255,35,65,.08)); }
+    body.supreme-mode header { border-color:#68212c; }
+    body.supreme-mode .status, body.supreme-mode .header-status { color:#ff5368; }
+    body.supreme-mode .input-wrap { border-color:#8f2637; background:#21090e; box-shadow:0 0 0 1px rgba(255,51,79,.12),0 5px 24px rgba(110,0,20,.22); }
+    body.supreme-mode .input-wrap:focus-within { border-color:#ff5368; box-shadow:0 0 0 2px rgba(255,51,79,.16); }
+    body.supreme-mode #send { background:#ff334f; color:#fff; }
+    body.supreme-mode .tool-btn { border-color:#68212c; }
+    body.supreme-mode .supreme-mode-button[aria-pressed="true"] { background:#ff334f; border-color:#ff6478; color:#fff; box-shadow:0 0 18px rgba(255,51,79,.28); }
+    body.supreme-mode .assistant { border-color:#68212c; }
+    body.supreme-mode .welcome { background:#160709; border-color:#8f2637; }
+  </style>
 </head>
 <body>
   <main class="app">
@@ -344,6 +362,7 @@
               <div class="tools primary-tools">
                 <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
                 <button class="tool-btn" type="button" id="camera-button"><span>📷</span>Tirar foto</button>
+                <button class="tool-btn supreme-mode-button" type="button" id="supreme-mode-button" aria-pressed="false" title="Alternar entre o modo normal e o Modo Supremo da ADA-M"><span>🔴</span>Modo Livre</button>
                 <button class="tool-btn" type="button" hidden id="image-studio-button"><span>✨</span>Criar imagem com IA</button>
                 <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
                 <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
@@ -421,7 +440,30 @@
     const webSearchToggle = document.getElementById('web-search-toggle');
     const stopButton = document.getElementById('stop-button');
     const voiceStatus = document.getElementById('voice-status');
+    const supremeModeButton = document.getElementById('supreme-mode-button');
+    let currentMode = 'normal';
     let activeController = null;
+
+    function setSupremeMode(enabled, persist = true) {
+      currentMode = enabled ? 'livre' : 'normal';
+      document.body.classList.toggle('supreme-mode', enabled);
+      supremeModeButton.setAttribute('aria-pressed', String(enabled));
+      supremeModeButton.innerHTML = enabled
+        ? '<span>🔴</span>Modo Supremo: ATIVO'
+        : '<span>🔴</span>Modo Livre';
+      supremeModeButton.title = enabled
+        ? 'Desativar o Modo Supremo e voltar ao modo normal'
+        : 'Ativar o Modo Supremo com visual vermelho';
+      if (persist) {
+        try { localStorage.setItem('ada-m-supreme-mode', enabled ? 'on' : 'off'); } catch {}
+      }
+    }
+    supremeModeButton.addEventListener('click', () => {
+      setSupremeMode(currentMode !== 'livre');
+    });
+    try {
+      setSupremeMode(localStorage.getItem('ada-m-supreme-mode') === 'on', false);
+    } catch { setSupremeMode(false, false); }
     document.getElementById('theme-button').addEventListener('click', () => {
       document.body.classList.toggle('light-theme');
       const light = document.body.classList.contains('light-theme');
@@ -1565,7 +1607,7 @@
           method: 'POST',
           signal: activeController.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, mode: "livre", response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true })
+          body: JSON.stringify({ messages: history, mode: currentMode, response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true })
         });
         if (!response.ok) {
           const failureText = await response.text();
