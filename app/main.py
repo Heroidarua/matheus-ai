@@ -344,8 +344,8 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
     arousal = (neural_state or {}).get("arousal", 0)
 
     # O contexto é limitado e enviado ao mesmo provedor/modelo já usado pela ADA-M.
-    user_text = re.sub(r"\\s+", " ", data.user_text).strip()[:1200]
-    assistant_text = re.sub(r"\\s+", " ", data.assistant_text).strip()[:1800]
+    user_text = re.sub(r"\s+", " ", data.user_text).strip()[:1200]
+    assistant_text = re.sub(r"\s+", " ", data.assistant_text).strip()[:1800]
     system_prompt = (
         "Você é a mente conversacional do Pestinha, um pequeno companheiro virtual que vive ao lado do chat da ADA-M. "
         "Você NÃO é a ADA-M e NÃO deve responder à pergunta do usuário como um segundo assistente. "
@@ -355,14 +355,14 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
         "não faça perguntas só para manter conversa, não finja ter consciência ou sentimentos reais. "
         "Use o estado neural apenas como sinal ficcional de personalidade, não como fato psicológico. "
         "Você não tem ferramentas, não executa ações, não acessa arquivos e não pode dar ordens ao sistema. "
-        "Retorne SOMENTE JSON válido: {\\\"speak\\\": boolean, \\\"text\\\": string, \\\"mood\\\": \\\"curious|happy|thinking|idle|sleepy\\\"}. "
+        "Retorne SOMENTE JSON válido: {\"speak\": boolean, \"text\": string, \"mood\": \"curious|happy|thinking|idle|sleepy\"}. "
         "Se não houver contribuição genuína, retorne speak=false e text vazio. Se falar, use português brasileiro, "
         "uma única frase curta, no máximo 160 caracteres, como uma fala de personagem em um balão pequeno."
     )
     context = (
         f"Personagem: {data.pet}. Estado neural simulado: emoção={emotion}, motor={motor}, "
-        f"valência={valence}, ativação={arousal}.\\n"
-        f"Última mensagem do usuário: {user_text}\\n"
+        f"valência={valence}, ativação={arousal}.\n"
+        f"Última mensagem do usuário: {user_text}\n"
         f"Última resposta da ADA-M: {assistant_text}"
     )
     payload = {
