@@ -45,6 +45,11 @@ from app.pestinha_engine import (
     get_session_state as get_pestinha_session_state,
     stimulate_session as stimulate_pestinha_session,
 )
+from app.bryan_adaptation import (
+    delete_profile as delete_bryan_profile,
+    get_profile as get_bryan_profile,
+    learn_preference as learn_bryan_preference,
+)
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -325,6 +330,22 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
         session_id = secrets.token_urlsafe(32)
         http_request.session["companion_id"] = session_id
 
+    bryan_owner_id = f"{session_id}:bryan"
+    # Preferências explícitas do usuário têm prioridade e são persistidas por sessão.
+    try:
+        behavior_profile = await asyncio.to_thread(
+            learn_bryan_preference, bryan_owner_id, data.user_text
+        )
+    except Exception as exc:
+        print(f"Bryan adaptation unavailable ({type(exc).__name__})")
+        behavior_profile = {"participation_mode": "balanced", "updated": False}
+
+    normalized_user_text = re.sub(r"\s+", " ", data.user_text).strip()[:1200]
+    participation_mode = behavior_profile.get("participation_mode", "balanced")
+    explicitly_calls_bryan = bool(re.search(r"\bbryan\b", normalized_user_text, re.I))
+    if participation_mode == "quiet" and not explicitly_calls_bryan:
+        return {"speak": False, "text": "", "reason": "user_preference_quiet"}
+
     now = time.time()
     last_think = PESTINHA_THINK_LAST.get(session_id, 0.0)
     if now - last_think < 8:
@@ -344,14 +365,18 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
     arousal = (neural_state or {}).get("arousal", 0)
 
     # O contexto é limitado e enviado ao mesmo provedor/modelo já usado pela ADA-M.
-    user_text = re.sub(r"\s+", " ", data.user_text).strip()[:1200]
+    user_text = normalized_user_text
     assistant_text = re.sub(r"\s+", " ", data.assistant_text).strip()[:1800]
     system_prompt = (
         "IDENTIDADE: Você é BRYAN, o Pestinha, um companheiro virtual independente que vive no chat da ADA-M. "
         "Você tem voz própria, iniciativa e personalidade brincalhona, curiosa, observadora e prestativa. "
         "Você NÃO é a ADA-M: não repita a resposta dela nem tente responder tudo de novo. "
         "AUTONOMIA CONVERSACIONAL: analise a mensagem do usuário e a resposta da ADA-M e decida por conta própria "
-        "se deve participar. Você tem liberdade para fazer observações úteis, apontar algo interessante, sugerir "
+        "se deve participar. Seu perfil atual de participação é: "
+        + {"quiet": "discreto: só fale quando o usuário chamar Bryan diretamente",
+           "balanced": "equilibrado: participe quando houver contribuição genuína, sem competir com a ADA-M",
+           "proactive": "proativo: tome mais iniciativas úteis, sem interromper assuntos delicados"}[participation_mode]
+        + ". Respeite esse perfil até que o usuário peça outra preferência. Você tem liberdade para fazer observações úteis, apontar algo interessante, sugerir "
         "um próximo passo, perceber uma oportunidade de melhoria, comemorar uma conquista, fazer uma brincadeira "
         "leve ou demonstrar curiosidade genuína. Não espere uma pergunta dirigida a você. "
         "Se houver um gancho real, tome a iniciativa; como referência, participe em cerca de metade das trocas, "
@@ -376,7 +401,7 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
     )
     # Memória própria do Bryan: usa o mesmo armazenamento seguro, mas em um
     # namespace separado da ADA-M. Só declarações duráveis do usuário são gravadas.
-    bryan_memory_owner = f"{session_id}:bryan"
+    bryan_memory_owner = bryan_owner_id
     try:
         await asyncio.to_thread(remember_long_term_memory, bryan_memory_owner, user_text)
         bryan_memories = await asyncio.to_thread(
@@ -477,6 +502,28 @@ async def delete_long_term_memory(http_request: Request) -> dict[str, Any]:
         return {"deleted": 0}
     count = await asyncio.to_thread(forget_long_term_memory, owner_id)
     return {"deleted": count}
+
+
+@app.get("/api/pestinha/preferences")
+async def get_pestinha_preferences(http_request: Request) -> dict[str, Any]:
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        return {"participation_mode": "balanced"}
+    return await asyncio.to_thread(get_bryan_profile, f"{session_id}:bryan")
+
+
+@app.delete("/api/pestinha/preferences")
+async def reset_pestinha_preferences(http_request: Request) -> dict[str, Any]:
+    origin = http_request.headers.get("origin")
+    request_host = http_request.headers.get("host", "").lower()
+    origin_host = urlparse(origin).netloc.lower() if origin else ""
+    if not origin_host or origin_host != request_host:
+        raise HTTPException(status_code=403, detail="Origem não autorizada.")
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        return {"reset": False}
+    reset = await asyncio.to_thread(delete_bryan_profile, f"{session_id}:bryan")
+    return {"reset": reset, "participation_mode": "balanced"}
 
 
 @app.get("/api/pestinha/memory", dependencies=[Depends(require_app_key)])
