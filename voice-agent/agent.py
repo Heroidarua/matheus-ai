@@ -71,6 +71,7 @@ class AdaMVoiceAgent(Agent):
         model_settings: Any,
     ) -> AsyncIterable[str | llm.ChatChunk]:
         messages = _chat_history(chat_ctx)
+        logger.info("LLM node invoked; messages=%s last_role=%s", len(messages), messages[-1]["role"] if messages else "none")
         if not messages or messages[-1]["role"] != "user":
             yield "Não consegui identificar sua última fala. Pode repetir?"
             return
@@ -94,7 +95,9 @@ class AdaMVoiceAgent(Agent):
                 headers=headers,
                 json=payload,
             ) as response:
+                logger.info("ADA-M /api/chat responded with HTTP %s", response.status_code)
                 response.raise_for_status()
+                first_token_logged = False
                 async for line in response.aiter_lines():
                     if not line.startswith("data:"):
                         continue
@@ -108,11 +111,15 @@ class AdaMVoiceAgent(Agent):
                         continue
                     token = event.get("token")
                     if isinstance(token, str) and token:
+                        if not first_token_logged:
+                            logger.info("ADA-M first response token received")
+                            first_token_logged = True
                         yield token
                     elif event.get("detail"):
-                        logger.warning("ADA-M stream returned an error event")
+                        logger.error("ADA-M stream emitted an error event")
                         yield "A ADA-M não conseguiu concluir a resposta. Tente novamente."
                         return
+                logger.info("ADA-M response stream finished; first_token=%s", first_token_logged)
         except httpx.TimeoutException:
             logger.warning("Timeout calling ADA-M chat API")
             yield "A ADA-M demorou para responder. Tente falar novamente."
@@ -137,6 +144,7 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     voice_session = AgentSession(
+        transcription_timeout=8.0,
         stt=inference.STT(
             model=LIVEKIT_STT_MODEL,
             language=LIVEKIT_STT_LANGUAGE,
@@ -151,7 +159,32 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
     )
 
-    logger.info("Starting ADA-M voice session in room %s", ctx.room.name)
+    @voice_session.on("user_input_transcribed")
+    def on_user_input_transcribed(event: Any) -> None:
+        # Never write the user's spoken content to logs.
+        logger.info(
+            "STT transcript received; final=%s chars=%s language=%s",
+            getattr(event, "is_final", False),
+            len(getattr(event, "transcript", "") or ""),
+            getattr(event, "language", None) or "unknown",
+        )
+
+    @voice_session.on("user_state_changed")
+    def on_user_state_changed(event: Any) -> None:
+        logger.info("User voice state: %s -> %s", getattr(event, "old_state", "unknown"), getattr(event, "new_state", "unknown"))
+
+    @voice_session.on("agent_state_changed")
+    def on_agent_state_changed(event: Any) -> None:
+        logger.info("Agent state: %s -> %s", getattr(event, "old_state", "unknown"), getattr(event, "new_state", "unknown"))
+
+    @voice_session.on("user_transcription_timeout")
+    def on_user_transcription_timeout(event: Any) -> None:
+        logger.warning("Speech detected but STT transcript timed out; duration=%s", getattr(event, "duration", "unknown"))
+
+    logger.info(
+        "Starting ADA-M voice session in room %s; STT=%s language=%s TTS=%s",
+        ctx.room.name, LIVEKIT_STT_MODEL, LIVEKIT_STT_LANGUAGE, ADA_M_TTS_VOICE,
+    )
     try:
         await voice_session.start(
             room=ctx.room,

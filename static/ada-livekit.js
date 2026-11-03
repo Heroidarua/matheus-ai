@@ -87,7 +87,26 @@ if (startButton && statusLabel) {
       });
       room = activeRoom;
 
-      activeRoom.on(RoomEvent.TrackSubscribed, (track) => {
+      activeRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+        console.info("ADA-M LiveKit: remote participant connected", participant.identity);
+        setStatus("Agente conectado. Microfone ativo; pode falar.");
+      });
+
+      activeRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        console.info("ADA-M LiveKit: remote participant disconnected", participant.identity);
+        setStatus("Agente desconectado. Aguardando reconexão…");
+      });
+
+      activeRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        if (speakers.some((speaker) => speaker.identity !== activeRoom.localParticipant.identity)) {
+          setStatus("A ADA-M está respondendo em áudio…");
+        } else if (activeRoom.state === "connected") {
+          setStatus("Conectado. Pode falar; a ADA-M está ouvindo.");
+        }
+      });
+
+      activeRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        console.info("ADA-M LiveKit: remote track subscribed", track.kind, participant.identity);
         if (track.kind !== Track.Kind.Audio) return;
         const element = track.attach();
         element.autoplay = true;
@@ -117,12 +136,20 @@ if (startButton && statusLabel) {
 
       setStatus("Conectando à sala de voz…");
       await activeRoom.connect(credentials.server_url, credentials.participant_token);
+      setStatus("Conectado à sala. Ativando microfone…");
       await activeRoom.localParticipant.setMicrophoneEnabled(true);
+      console.info("ADA-M LiveKit: microphone enabled", activeRoom.localParticipant.isMicrophoneEnabled);
+
+      const remoteAgent = Array.from(activeRoom.remoteParticipants.values()).find(
+        (participant) => participant.identity !== activeRoom.localParticipant.identity
+      );
 
       startButton.disabled = false;
       startButton.classList.add("livekit-active");
       startButton.textContent = "Encerrar conversa";
-      setStatus("Conectado. Pode falar; a ADA-M está ouvindo.");
+      setStatus(remoteAgent
+        ? "Agente conectado. Microfone ativo; pode falar."
+        : "Microfone ativo. Aguardando o agente entrar na sala…");
     } catch (error) {
       console.error("ADA-M LiveKit connection failed:", error);
       if (room) {
