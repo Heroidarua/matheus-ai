@@ -1,26 +1,58 @@
-import { Room, RoomEvent, Track } from "https://cdn.jsdelivr.net/npm/livekit-client@2.9.6/dist/livekit-client.esm.mjs";
+import { Room, RoomEvent } from "https://cdn.jsdelivr.net/npm/livekit-client@2.9.6/dist/livekit-client.esm.mjs";
 
 const startButton = document.getElementById("livekit-voice-button");
 const statusLabel = document.getElementById("livekit-voice-status");
 
 if (startButton && statusLabel) {
   let room = null;
-  let audioElements = new Set();
   let connecting = false;
+  let browserSpeechQueue = Promise.resolve();
+  let browserSpeechGeneration = 0;
 
   function setStatus(message) {
     statusLabel.textContent = message;
   }
 
-  function removeAudioElements() {
-    for (const element of audioElements) {
-      try {
-        element.pause();
-        element.srcObject = null;
-        element.remove();
-      } catch {}
+  function stopBrowserSpeech() {
+    browserSpeechGeneration += 1;
+    browserSpeechQueue = Promise.resolve();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
+
+  function speakWithBrowserVoice(text) {
+    const clean = String(text || "").replace(/https?:\\/\\/\\S+/g, "link").trim();
+    if (!clean || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      setStatus("Resposta recebida, mas a voz do navegador não está disponível.");
+      return;
     }
-    audioElements.clear();
+    const generation = browserSpeechGeneration;
+    const sentences = clean.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [clean];
+    browserSpeechQueue = browserSpeechQueue.then(async () => {
+      for (const sentence of sentences) {
+        if (generation !== browserSpeechGeneration) return;
+        const part = sentence.trim();
+        if (!part) continue;
+        await new Promise((resolve) => {
+          const utterance = new SpeechSynthesisUtterance(part);
+          utterance.lang = "pt-BR";
+          utterance.rate = 1.19;
+          utterance.pitch = 1.02;
+          utterance.volume = 1;
+          const voices = window.speechSynthesis.getVoices();
+          const voice = voices.find((item) => /^pt-BR$/i.test(item.lang)) || voices.find((item) => /^pt/i.test(item.lang));
+          if (voice) utterance.voice = voice;
+          utterance.onstart = () => setStatus("ADA-M falando com a voz do navegador…");
+          utterance.onend = resolve;
+          utterance.onerror = resolve;
+          window.speechSynthesis.speak(utterance);
+        });
+      }
+      if (generation === browserSpeechGeneration && room) setStatus("Sua vez. LiveKit está ouvindo…");
+    });
+  }
+
+  function removeAudioElements() {
+    stopBrowserSpeech();
   }
 
   function resetControls(message = "Conversa em tempo real encerrada.") {
@@ -111,6 +143,23 @@ if (startButton && statusLabel) {
         }
       });
 
+      activeRoom.registerTextStreamHandler("lk.transcription", async (reader, participantInfo) => {
+        try {
+          const text = await reader.readAll();
+          const attributes = reader.info?.attributes || {};
+          const isTranscription = Boolean(attributes["lk.transcribed_track_id"]);
+          
+          // Ignora a transcrição da fala do usuário; só reproduz o texto produzido pelo agente.
+          if (isTranscription || participantInfo?.identity === activeRoom.localParticipant.identity || !text.trim()) return;
+          console.info("ADA-M LiveKit: resposta textual recebida para voz do navegador");
+          statusLabel.dataset.diagnosticStage = "browser_tts";
+          speakWithBrowserVoice(text);
+        } catch (error) {
+          console.warn("ADA-M LiveKit: falha ao receber texto da resposta", error);
+          setStatus("Não consegui receber o texto da resposta do agente.");
+        }
+      });
+
       activeRoom.on(RoomEvent.ParticipantConnected, (participant) => {
         console.info("ADA-M LiveKit: remote participant connected", participant.identity);
         setStatus("Agente conectado. Microfone ativo; pode falar.");
@@ -124,31 +173,12 @@ if (startButton && statusLabel) {
       activeRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
         if (speakers.some((speaker) => speaker.identity !== activeRoom.localParticipant.identity)) {
           setStatus("A ADA-M está respondendo em áudio…");
-        } else if (activeRoom.state === "connected") {
+        } else if (activeRoom.state === "connected" && !window.speechSynthesis?.speaking) {
           setStatus("Conectado. Pode falar; a ADA-M está ouvindo.");
         }
       });
 
-      activeRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        console.info("ADA-M LiveKit: remote track subscribed", track.kind, participant.identity);
-        if (track.kind !== Track.Kind.Audio) return;
-        const element = track.attach();
-        element.autoplay = true;
-        element.setAttribute("playsinline", "");
-        element.style.display = "none";
-        document.body.appendChild(element);
-        audioElements.add(element);
-        element.play().catch(() => {
-          setStatus("Conectado. Se não ouvir a ADA-M, verifique o volume do navegador.");
-        });
-      });
-
-      activeRoom.on(RoomEvent.TrackUnsubscribed, (track) => {
-        for (const element of track.detach()) {
-          audioElements.delete(element);
-          element.remove();
-        }
-      });
+      // O agente não publica faixa de áudio: a resposta chega como texto e é falada pelo navegador.
 
       activeRoom.on(RoomEvent.Disconnected, () => {
         if (room === activeRoom) {
@@ -172,7 +202,7 @@ if (startButton && statusLabel) {
       startButton.classList.add("livekit-active");
       startButton.textContent = "Encerrar conversa";
       setStatus(remoteAgent
-        ? "Agente conectado. Microfone ativo; pode falar."
+        ? "Agente conectado. Microfone LiveKit ativo; respostas pela voz do navegador."
         : "Microfone ativo. Aguardando o agente entrar na sala…");
     } catch (error) {
       console.error("ADA-M LiveKit connection failed:", error);
@@ -190,6 +220,7 @@ if (startButton && statusLabel) {
   }
 
   startButton.addEventListener("click", connect);
+  if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
   window.addEventListener("beforeunload", () => {
     try { room?.disconnect(); } catch {}
   });
