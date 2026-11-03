@@ -41,6 +41,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
+from app.pestinha_engine import stimulate_session as stimulate_pestinha_session
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -121,6 +122,11 @@ class ImageEditRequest(BaseModel):
     image_data: str = Field(min_length=1)
     mime_type: str = Field(pattern="^(image/jpeg|image/png|image/webp)$")
     prompt: str = Field(min_length=3, max_length=2000)
+
+class PestinhaStimulusRequest(BaseModel):
+    pet: str = Field(default="bryan", pattern="^(bryan|jorge)$")
+    event: str = Field(pattern="^(pet|typing|submit|response|activity|idle)$")
+
 
 class TTSProxyRequest(BaseModel):
     text: str = Field(min_length=1, max_length=3000)
@@ -276,6 +282,23 @@ async def tts_speech(data: TTSProxyRequest) -> Response:
     except httpx.HTTPError as exc:
         print(f"TTS provider connection error ({type(exc).__name__})")
         raise HTTPException(status_code=502, detail="Não foi possível conectar ao serviço de voz.")
+
+
+@app.post("/api/pestinha/stimulus")
+async def pestinha_stimulus(data: PestinhaStimulusRequest, http_request: Request) -> dict[str, Any]:
+    """Executa um estímulo categórico na rede neural original, isolada por sessão."""
+    origin = http_request.headers.get("origin")
+    request_host = http_request.headers.get("host", "").lower()
+    origin_host = urlparse(origin).netloc.lower() if origin else ""
+    if not origin_host or not request_host or origin_host != request_host:
+        raise HTTPException(status_code=403, detail="Origem não autorizada.")
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        session_id = secrets.token_urlsafe(32)
+        http_request.session["companion_id"] = session_id
+    return await asyncio.to_thread(
+        stimulate_pestinha_session, session_id, data.pet, data.event
+    )
 
 
 @app.get("/api/companion/state", dependencies=[Depends(require_app_key)])
