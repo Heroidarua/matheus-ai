@@ -87,6 +87,30 @@ if (startButton && statusLabel) {
       });
       room = activeRoom;
 
+      activeRoom.on(RoomEvent.DataReceived, (payload, participant, kind, topic) => {
+        try {
+          const message = JSON.parse(new TextDecoder().decode(payload));
+          if (message?.type !== "ada_m_debug") return;
+          console.info("ADA-M LiveKit diagnóstico:", message.stage, message.message);
+          const labels = {
+            agent_ready: "Agente pronto. Pode falar.",
+            speech_detected: "Detectei sua voz; aguardando a transcrição…",
+            stt_partial: "Reconhecendo sua fala…",
+            stt_received: "Entendi sua fala. Enviando ao Gemma 4…",
+            stt_timeout: "Detectei sua voz, mas a transcrição falhou. Verifique a etapa de reconhecimento.",
+            llm_started: "Sua fala chegou ao Gemma 4; gerando resposta…",
+            backend_response: message.message,
+            first_token: "Gemma 4 respondeu. Preparando a voz…",
+            llm_finished: "Texto gerado. Aguardando o áudio…",
+            backend_error: message.message
+          };
+          setStatus(labels[message.stage] || message.message || "Diagnóstico recebido.");
+          statusLabel.dataset.diagnosticStage = message.stage || "";
+        } catch (error) {
+          console.warn("ADA-M LiveKit: diagnóstico inválido", error);
+        }
+      });
+
       activeRoom.on(RoomEvent.ParticipantConnected, (participant) => {
         console.info("ADA-M LiveKit: remote participant connected", participant.identity);
         setStatus("Agente conectado. Microfone ativo; pode falar.");
