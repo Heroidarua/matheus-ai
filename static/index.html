@@ -99,9 +99,6 @@
     .utility-row { display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0;align-items:center; }
     .utility-row select { background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px; }
     .voice-status { color:var(--muted);font-size:11px;align-self:center; }
-    .voice-live-button{width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0;background:var(--panel2);color:var(--text);border:1px solid var(--border);}
-    .voice-live-button.voice-live-active{background:#1d4ed8;border-color:#1d4ed8;color:#fff;animation:voice-live-pulse 1.6s ease-in-out infinite;}
-    @keyframes voice-live-pulse{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.45);}50%{box-shadow:0 0 0 7px rgba(59,130,246,0);}}
     .drawer-row { display:flex;align-items:flex-start;gap:8px;margin-top:5px; }
     .settings-drawer { flex:1;min-width:0;margin-top:0;border:0;border-radius:10px;background:transparent;overflow:visible; }
     .settings-drawer[open] { background:var(--panel);border:1px solid var(--border); }
@@ -335,8 +332,7 @@
       <div class="input-wrap">
         <button class="plus-button" type="button" id="plus-button" aria-label="Abrir ferramentas e preferências" aria-expanded="false" aria-controls="plus-menu" title="Ferramentas e preferências">+</button>
         <textarea id="prompt" rows="1" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
-        <button class="voice-live-button" type="button" id="voice-live-button" aria-label="Conversar por voz em tempo real" title="Conversar por voz em tempo real" style="display:grid;place-items:center"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/></svg></button>
-      <button class="tool-btn" type="button" id="voice-button" aria-label="Ditado por voz" title="Ditado por voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
+        <button class="tool-btn" type="button" id="voice-button" aria-label="Ditado por voz" title="Ditado por voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
         <button id="send" type="submit">Enviar</button>
       </div>
       <div class="plus-menu" id="plus-menu" hidden>
@@ -1208,233 +1204,125 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
+    let recognition = null;
     let voiceSessionActive = false;
+    let recognitionRestartTimer = null;
     const voiceButton = document.getElementById('voice-button');
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    // ------------------------------------------------------------------
-    // Conversa por voz em tempo real (v2)
-    // Pipeline: microfone -> VAD por energia (fim de turno) -> MediaRecorder
-    // grava o trecho -> POST /api/stt (Whisper local, pt-BR) -> /api/chat
-    // (Gemma 4 + memória + RAG) -> fala por frase (speechSynthesis ou TTS).
-    // Barge-in: qualquer som seu acima do limiar interrompe a fala da ADA-M.
-    // ------------------------------------------------------------------
-    const VOICE = {
-      silenceMs: 700,        // pausa que encerra o seu turno
-      minSpeechMs: 350,      // ignora cliques/ruídos curtos
-      maxTurnMs: 30000,      // corte de segurança do turno
-      threshold: 0.012,      // limiar de energia (suba para microfone sensível)
-      frameMs: 30            // janela do VAD
-    };
-    let voiceCtx = null;
-    let voiceStream = null;
-    let voiceAnalyser = null;
-    let voiceSourceNode = null;
-    let voiceRecorder = null;
-    let voiceChunks = [];
-    let voiceTurnActive = false;
-    let voiceTurnStartAt = 0;
-    let voiceLastSoundAt = 0;
-    let voiceSpeechMs = 0;
-    let voiceSilenceTimer = null;
-    let voiceMaxTimer = null;
-    let voiceWatchTimer = null;
-    let voiceBargeinSource = null;
-    let voiceBargeinAnalyser = null;
-    let voiceBargeinTimer = null;
-    let voiceBargeinHits = 0;
-    let voiceTranscribing = false;
+    let bargeInRecognition = null;
+    let bargeInRestartTimer = null;
+    let bargeInHandled = false;
+    const interruptionPattern = /\b(acessar\s+(?:o\s+)?youtube(?:\s+music)?|abrir\s+(?:o\s+)?youtube(?:\s+music)?|abra\s+(?:o\s+)?youtube(?:\s+music)?|abre\s+(?:o\s+)?youtube(?:\s+music)?|pare\s+de\s+falar|deixa\s+eu\s+falar|quero\s+perguntar|outra\s+pergunta|s[oó]\s+um\s+minuto|um\s+momento|interrompa|interromper|parar|pare|para|espera|espere|cala|calma|na\s+verdade)\b/i;
 
-    function voiceNow() { return performance.now(); }
-
-    function voiceStatusBusy() {
-      return !!(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))
-        || !!(serverTtsAudio && !serverTtsAudio.paused && !serverTtsAudio.ended);
+    function stopBargeInRecognition() {
+      clearTimeout(bargeInRestartTimer);
+      if (bargeInRecognition) {
+        const current = bargeInRecognition;
+        bargeInRecognition = null;
+        try { current.abort(); } catch {}
+      }
     }
 
-    function rmsFromBuffer(buffer) {
-      let sum = 0;
-      for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
-      return Math.sqrt(sum / buffer.length);
-    }
+    function startBargeInRecognition() {
+      if (!voiceSessionActive || !SpeechRecognitionAPI || bargeInRecognition || bargeInHandled) return;
+      const instance = new SpeechRecognitionAPI();
+      bargeInRecognition = instance;
+      instance.lang = 'pt-BR';
+      instance.continuous = true;
+      instance.interimResults = true;
+      instance.maxAlternatives = 1;
+      instance.onresult = event => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0]?.transcript || '')
+          .join(' ')
+          .trim();
+        if (!transcript || !interruptionPattern.test(transcript)) return;
+        bargeInHandled = true;
+        stopBargeInRecognition();
+        stopBrowserSpeech();
+        stopVoiceRecognition();
 
-    function stopVoiceBargeinWatch() {
-      clearTimeout(voiceBargeinTimer);
-      if (voiceBargeinSource) { try { voiceBargeinSource.disconnect(); } catch {} voiceBargeinSource = null; }
-      voiceBargeinAnalyser = null;
-      voiceBargeinHits = 0;
-    }
-
-    // Compatibilidade: nomes antigos usados pela fila de fala.
-    function startBargeInRecognition() { startVoiceBargeinWatch(); }
-    function stopBargeInRecognition() { stopVoiceBargeinWatch(); }
-
-    // Enquanto a ADA-M fala, qualquer som seu acima do limiar interrompe a fala.
-    function startVoiceBargeinWatch() {
-      if (!voiceCtx || !voiceStream || !voiceSessionActive) return;
-      stopVoiceBargeinWatch();
-      const src = voiceCtx.createMediaStreamSource(voiceStream);
-      const analyser = voiceCtx.createAnalyser();
-      analyser.fftSize = 512;
-      src.connect(analyser);
-      voiceBargeinSource = src;
-      voiceBargeinAnalyser = analyser;
-      const data = new Float32Array(analyser.fftSize);
-      const tick = () => {
-        if (!voiceSessionActive || !voiceStatusBusy()) { stopVoiceBargeinWatch(); return; }
-        analyser.getFloatTimeDomainData(data);
-        if (rmsFromBuffer(data) > VOICE.threshold * 1.6) voiceBargeinHits += 1;
-        else voiceBargeinHits = Math.max(0, voiceBargeinHits - 1);
-        if (voiceBargeinHits >= 3) {
-          stopBrowserSpeech();
-          voiceStatus.textContent = 'Interrompida. Estou ouvindo…';
-          setTimeout(() => { if (voiceSessionActive && !sendBtn.disabled) startVoiceListening(); }, 200);
+        const question = transcript.replace(interruptionPattern, '').replace(/^[,.:;\\s-]+/, '').trim();
+        voiceStatus.textContent = question ? 'Interrompendo. Vou ouvir sua pergunta…' : 'Interrompida. Pode continuar falando…';
+        if (question.length > 2) {
+          promptEl.value = question;
+          setTimeout(() => { if (voiceSessionActive) form.requestSubmit(); }, 120);
         } else {
-          voiceBargeinTimer = setTimeout(tick, 90);
+          bargeInHandled = false;
+          setTimeout(startVoiceRecognition, 250);
         }
       };
-      tick();
-    }
-
-    function onVoiceFrame(rms) {
-      if (!voiceSessionActive || !voiceTurnActive) return;
-      const now = voiceNow();
-      if (rms > VOICE.threshold) {
-        voiceLastSoundAt = now;
-        voiceSpeechMs += VOICE.frameMs;
-        clearTimeout(voiceSilenceTimer);
-        voiceSilenceTimer = setTimeout(() => finishVoiceTurn(false), VOICE.silenceMs);
-      } else if (now - voiceLastSoundAt >= VOICE.silenceMs) {
-        finishVoiceTurn(false);
-      }
-    }
-
-    async function ensureVoiceInput() {
-      if (!voiceCtx) voiceCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (voiceCtx.state === 'suspended') await voiceCtx.resume();
-      if (!voiceStream) {
-        voiceStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        });
-      }
-      if (!voiceAnalyser) {
-        voiceAnalyser = voiceCtx.createAnalyser();
-        voiceAnalyser.fftSize = 1024;
-        voiceSourceNode = voiceCtx.createMediaStreamSource(voiceStream);
-        voiceSourceNode.connect(voiceAnalyser);
-      }
-    }
-
-    async function startVoiceListening() {
-      if (!voiceSessionActive || sendBtn.disabled || voiceTranscribing) return;
-      if (voiceStatusBusy()) return; // ainda está falando; o watcher retoma depois
-      try {
-        await ensureVoiceInput();
-      } catch (error) {
-        if (error && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError')) {
-          voiceStatus.textContent = 'Permita o acesso ao microfone para conversar por voz.';
-          endVoiceSession('Microfone bloqueado.');
-        } else {
-          voiceStatus.textContent = 'Não foi possível abrir o microfone.';
-        }
-        return;
-      }
-      clearTimeout(voiceWatchTimer);
-      const data = new Float32Array(voiceAnalyser.fftSize);
-      const watch = () => {
-        if (!voiceSessionActive) return;
-        if (voiceTurnActive) {
-          voiceAnalyser.getFloatTimeDomainData(data);
-          onVoiceFrame(rmsFromBuffer(data));
-        } else if (!voiceStatusBusy() && !sendBtn.disabled && !voiceTranscribing) {
-          beginVoiceTurn();
-        }
-        voiceWatchTimer = setTimeout(watch, VOICE.frameMs);
+      instance.onerror = () => {
+        if (bargeInRecognition === instance) bargeInRecognition = null;
       };
-      watch();
-    }
-
-    function beginVoiceTurn() {
-      if (!voiceSessionActive || voiceTurnActive || voiceTranscribing || sendBtn.disabled) return;
-      if (voiceStatusBusy()) return;
-      try {
-        voiceChunks = [];
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
-        voiceRecorder = new MediaRecorder(voiceStream, mimeType ? { mimeType } : undefined);
-        voiceRecorder.ondataavailable = event => { if (event.data && event.data.size) voiceChunks.push(event.data); };
-        voiceRecorder.start(250);
-        voiceTurnActive = true;
-        voiceTurnStartAt = voiceNow();
-        voiceLastSoundAt = voiceNow();
-        voiceSpeechMs = 0;
-        voiceStatus.textContent = 'Ouvindo você…';
-        voiceMaxTimer = setTimeout(() => finishVoiceTurn(true), VOICE.maxTurnMs);
-      } catch {
-        voiceTurnActive = false;
-      }
-    }
-
-    function finishVoiceTurn(forced = false) {
-      if (!voiceTurnActive) return;
-      voiceTurnActive = false;
-      clearTimeout(voiceSilenceTimer);
-      clearTimeout(voiceMaxTimer);
-      const elapsed = voiceNow() - voiceTurnStartAt;
-      const recorder = voiceRecorder;
-      voiceRecorder = null;
-      const enoughSpeech = voiceSpeechMs >= VOICE.minSpeechMs || forced;
-      const blobPromise = new Promise(resolve => {
-        if (!recorder) { resolve(null); return; }
-        recorder.onstop = () => resolve(new Blob(voiceChunks, { type: recorder.mimeType || 'audio/webm' }));
-        try { recorder.stop(); } catch { resolve(null); }
-      });
-      if (!enoughSpeech || elapsed < VOICE.minSpeechMs) {
-        blobPromise.then(blob => { if (blob) URL.revokeObjectURL(URL.createObjectURL(blob)); });
-        if (voiceSessionActive && !sendBtn.disabled && !voiceStatusBusy()) beginVoiceTurn();
-        return;
-      }
-      voiceTranscribing = true;
-      voiceStatus.textContent = 'Entendi. Transcrevendo…';
-      blobPromise.then(blob => {
-        if (!blob || blob.size < 2000) {
-          voiceTranscribing = false;
-          if (voiceSessionActive && !sendBtn.disabled) startVoiceListening();
-          return;
+      instance.onend = () => {
+        if (bargeInRecognition === instance) bargeInRecognition = null;
+        if (voiceSessionActive && (window.speechSynthesis?.speaking || (serverTtsAudio && !serverTtsAudio.paused && !serverTtsAudio.ended)) && !bargeInHandled) {
+          bargeInRestartTimer = setTimeout(startBargeInRecognition, 450);
         }
-        const formData = new FormData();
-        formData.append('audio', blob, 'turno.webm');
-        fetch('/api/stt', { method: 'POST', credentials: 'same-origin', body: formData })
-          .then(response => response.json().then(data => ({ ok: response.ok, data })))
-          .then(({ ok, data }) => {
-            const text = (ok && data.text) ? String(data.text).trim() : '';
-            if (!text) {
-              voiceStatus.textContent = 'Não entendi bem. Pode repetir?';
-              if (voiceSessionActive && !sendBtn.disabled) startVoiceListening();
-              return;
-            }
-            promptEl.value = text;
-            voiceStatus.textContent = 'Entendi: ' + text;
-            form.requestSubmit();
-          })
-          .catch(() => {
-            voiceStatus.textContent = 'Falha na transcrição. Tente novamente.';
-            if (voiceSessionActive && !sendBtn.disabled) startVoiceListening();
-          })
-          .finally(() => { voiceTranscribing = false; });
-      });
+      };
+      try { instance.start(); }
+      catch {
+        if (bargeInRecognition === instance) bargeInRecognition = null;
+      }
     }
 
     function stopVoiceRecognition() {
-      // Encerra escuta, transcrição pendente e barge-in (nome mantido para a fila de fala).
-      clearTimeout(voiceWatchTimer);
-      stopVoiceBargeinWatch();
-      if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
-      if (voiceMaxTimer) clearTimeout(voiceMaxTimer);
-      voiceTurnActive = false;
-      if (voiceRecorder) {
-        const recorder = voiceRecorder;
-        voiceRecorder = null;
-        try { recorder.stop(); } catch {}
+      clearTimeout(recognitionRestartTimer);
+      stopBargeInRecognition();
+      if (recognition) {
+        const current = recognition;
+        recognition = null;
+        try { current.stop(); } catch {}
+      }
+    }
+
+    function startVoiceRecognition() {
+      if (!voiceSessionActive || !SpeechRecognitionAPI || sendBtn.disabled ||
+          (window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) return;
+      stopVoiceRecognition();
+      const instance = new SpeechRecognitionAPI();
+      recognition = instance;
+      instance.lang = 'pt-BR';
+      instance.continuous = false;
+      instance.interimResults = false;
+      instance.maxAlternatives = 1;
+      instance.onstart = () => { voiceStatus.textContent = 'Ouvindo você…'; };
+      instance.onresult = event => {
+        const transcript = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
+        if (!transcript || !voiceSessionActive) return;
+
+        // Executa comandos de mídia pelo dispatcher já usado no chat digitado.
+
+
+        // Os demais comandos seguem pelo pipeline normal do chat (/api/chat).
+        promptEl.value = transcript;
+        voiceStatus.textContent = 'Entendi: ' + transcript;
+        stopVoiceRecognition();
+        form.requestSubmit();
+      };
+      instance.onerror = event => {
+        if (!voiceSessionActive) return;
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          voiceStatus.textContent = 'Permita o acesso ao microfone para conversar por voz.';
+          voiceSessionActive = false;
+          voiceConversationToggle.checked = false;
+        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          voiceStatus.textContent = 'Falha no reconhecimento de voz. Tentando novamente…';
+        }
+      };
+      instance.onend = () => {
+        if (recognition === instance) recognition = null;
+        if (voiceSessionActive && !sendBtn.disabled &&
+            !(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) {
+          recognitionRestartTimer = setTimeout(startVoiceRecognition, 350);
+        }
+      };
+      try { instance.start(); }
+      catch {
+        if (recognition === instance) recognition = null;
+        if (voiceSessionActive) recognitionRestartTimer = setTimeout(startVoiceRecognition, 700);
       }
     }
 
@@ -1442,48 +1330,17 @@
       voiceSessionActive = false;
       clearTimeout(window.__adaLiveResumeTimer);
       voiceConversationToggle.checked = false;
-      setVoiceLiveUI();
       stopVoiceRecognition();
       stopBrowserSpeech();
       voiceStatus.textContent = message;
     }
 
-    // Botão visível de conversa em tempo real (alternativa ao toggle nas Preferências).
-    const voiceLiveButton = document.getElementById('voice-live-button');
-    function setVoiceLiveUI() {
-      if (!voiceLiveButton) return;
-      voiceLiveButton.classList.toggle('voice-live-active', voiceSessionActive);
-      voiceLiveButton.setAttribute('aria-pressed', String(voiceSessionActive));
-    }
-    function startVoiceConversation() {
-      if (voiceSessionActive) return;
-      voiceConversationToggle.checked = true;
-      voiceSessionActive = true;
-      setVoiceLiveUI();
-      voiceStatus.textContent = 'Abrindo microfone…';
-      startVoiceListening();
-    }
-    voiceLiveButton?.addEventListener('click', () => {
-      if (voiceSessionActive) endVoiceSession();
-      else startVoiceConversation();
-    });
-
-    // Marcar a preferência nas Preferências também inicia a sessão de voz.
-    voiceConversationToggle.addEventListener('change', () => {
-      if (voiceConversationToggle.checked) {
-        startVoiceConversation();
-      } else {
-        endVoiceSession();
-      }
-    });
-
-    // O botão de microfone continua sendo ditado pontual (transcreve para o campo).
     let dictationRecognition = null;
 
     // Libera todas as instâncias de SpeechRecognition antes de abrir o microfone WebRTC.
     // O ditado normal usa uma instância separada e antes não era encerrado pelo LiveKit.
     window.__adaStopBrowserVoice = async () => {
-      const activeRecognizers = [dictationRecognition].filter(Boolean);
+      const activeRecognizers = [dictationRecognition, recognition, bargeInRecognition].filter(Boolean);
 
       if (voiceSessionActive) {
         endVoiceSession('Modo LiveKit ativo; voz do navegador pausada.');
@@ -1536,7 +1393,7 @@
         const transcript = Array.from(event.results)
           .map(result => result[0]?.transcript || '')
           .join(' ')
-          .replace(/\s+/g, ' ')
+          .replace(/\\s+/g, ' ')
           .trim();
         if (transcript) {
           promptEl.value = [dictationBaseText, transcript].filter(Boolean).join(' ');
@@ -1800,7 +1657,7 @@
               return;
             }
             voiceStatus.textContent = 'Sua vez. Estou ouvindo…';
-            startVoiceListening();
+            startVoiceRecognition();
           };
           clearTimeout(window.__adaLiveResumeTimer);
           resumeListening();
