@@ -193,7 +193,7 @@
   function chatBounds() {
     const rect = messages?.getBoundingClientRect();
     const top = rect ? Math.max(72, rect.top + 8) : 72;
-    const bottom = rect ? Math.min(window.innerHeight - 170, rect.bottom - 150) : window.innerHeight - 190;
+    const bottom = rect ? Math.min(window.innerHeight - 170, rect.bottom - 210) : window.innerHeight - 190;
     const left = rect ? Math.max(8, rect.left + 4) : 8;
     const right = rect ? Math.min(window.innerWidth - 188, rect.right - 178) : window.innerWidth - 188;
     return {left, right: Math.max(left, right), top, bottom: Math.max(top, bottom)};
