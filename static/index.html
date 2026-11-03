@@ -99,6 +99,9 @@
     .utility-row { display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0;align-items:center; }
     .utility-row select { background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px; }
     .voice-status { color:var(--muted);font-size:11px;align-self:center; }
+    .voice-live-button{width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0;background:var(--panel2);color:var(--text);border:1px solid var(--border);}
+    .voice-live-button.voice-live-active{background:#1d4ed8;border-color:#1d4ed8;color:#fff;animation:voice-live-pulse 1.6s ease-in-out infinite;}
+    @keyframes voice-live-pulse{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.45);}50%{box-shadow:0 0 0 7px rgba(59,130,246,0);}}
     .drawer-row { display:flex;align-items:flex-start;gap:8px;margin-top:5px; }
     .settings-drawer { flex:1;min-width:0;margin-top:0;border:0;border-radius:10px;background:transparent;overflow:visible; }
     .settings-drawer[open] { background:var(--panel);border:1px solid var(--border); }
@@ -332,7 +335,8 @@
       <div class="input-wrap">
         <button class="plus-button" type="button" id="plus-button" aria-label="Abrir ferramentas e preferências" aria-expanded="false" aria-controls="plus-menu" title="Ferramentas e preferências">+</button>
         <textarea id="prompt" rows="1" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
-        <button class="tool-btn" type="button" id="voice-button" aria-label="Ditado por voz" title="Ditado por voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
+        <button class="voice-live-button" type="button" id="voice-live-button" aria-label="Conversar por voz em tempo real" title="Conversar por voz em tempo real" style="display:grid;place-items:center"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/></svg></button>
+      <button class="tool-btn" type="button" id="voice-button" aria-label="Ditado por voz" title="Ditado por voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
         <button id="send" type="submit">Enviar</button>
       </div>
       <div class="plus-menu" id="plus-menu" hidden>
@@ -1438,17 +1442,36 @@
       voiceSessionActive = false;
       clearTimeout(window.__adaLiveResumeTimer);
       voiceConversationToggle.checked = false;
+      setVoiceLiveUI();
       stopVoiceRecognition();
       stopBrowserSpeech();
       voiceStatus.textContent = message;
     }
 
-    // O gatilho que faltava: marcar a preferência agora inicia a sessão de voz.
+    // Botão visível de conversa em tempo real (alternativa ao toggle nas Preferências).
+    const voiceLiveButton = document.getElementById('voice-live-button');
+    function setVoiceLiveUI() {
+      if (!voiceLiveButton) return;
+      voiceLiveButton.classList.toggle('voice-live-active', voiceSessionActive);
+      voiceLiveButton.setAttribute('aria-pressed', String(voiceSessionActive));
+    }
+    function startVoiceConversation() {
+      if (voiceSessionActive) return;
+      voiceConversationToggle.checked = true;
+      voiceSessionActive = true;
+      setVoiceLiveUI();
+      voiceStatus.textContent = 'Abrindo microfone…';
+      startVoiceListening();
+    }
+    voiceLiveButton?.addEventListener('click', () => {
+      if (voiceSessionActive) endVoiceSession();
+      else startVoiceConversation();
+    });
+
+    // Marcar a preferência nas Preferências também inicia a sessão de voz.
     voiceConversationToggle.addEventListener('change', () => {
       if (voiceConversationToggle.checked) {
-        voiceSessionActive = true;
-        voiceStatus.textContent = 'Abrindo microfone…';
-        startVoiceListening();
+        startVoiceConversation();
       } else {
         endVoiceSession();
       }
