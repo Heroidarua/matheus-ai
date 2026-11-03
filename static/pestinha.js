@@ -150,7 +150,9 @@
       const state = await response.json();
       const next = neuralMoods[state.emotion] || 'idle';
       root.dataset.neuralEmotion = state.emotion;
-      showMood(next, neuralLines[state.emotion] || 'Estou reagindo ao que acontece.', 2600);
+      // O estado neural atualiza a personalidade visual, mas não substitui
+      // uma fala autônoma do Gemma por mensagens genéricas como "observando".
+      root.dataset.neuralEvent = event;
     } catch {}
   }
 
@@ -263,8 +265,10 @@
   if(messages){
     const observer=new MutationObserver(records=>{
       const added=records.some(record=>[...record.addedNodes].some(node=>node.nodeType===1&&(node.classList?.contains('assistant')||node.classList?.contains('user')||node.querySelector?.('.assistant,.user'))));
-      if(added&&sendButton&&!sendButton.disabled&&mood!=='thinking') showMood('happy','Estamos fazendo um bom trabalho juntos! 💚',3200);
-      if(added&&sendButton&&!sendButton.disabled) notifyNeural('response');
+      if(added&&sendButton&&!sendButton.disabled) {
+        notifyNeural('response');
+        setTimeout(askGemmaForPestinhaReaction, 1200);
+      }
     });
     observer.observe(messages,{childList:true,subtree:true});
   }
