@@ -68,8 +68,9 @@ TTS_VOICE = os.getenv("TTS_VOICE", "pf_dora").strip() or "pf_dora"
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
 MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:11434/v1").rstrip("/")
-# ADA-M usa exclusivamente Gemma 4 como modelo de conversa principal.
-MODEL_NAME = "gemma4:31b"
+# Padrão: Gemma 4. O LOCAL.md recomenda qwen2.5:3b para rodar em casa;
+# defina MODEL_NAME no ambiente para usar outro modelo.
+MODEL_NAME = os.getenv("MODEL_NAME", "gemma4:31b")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
@@ -100,7 +101,20 @@ app.add_middleware(
     https_only=os.getenv("COOKIE_HTTPS_ONLY", "true").lower() == "true",
     max_age=60 * 60 * 24 * 14,
 )
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+class VersionedStaticFiles(StaticFiles):
+    """Serve estáticos com Cache-Control: assets versionados (?v=...) são imutáveis."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        query = scope.get("query_string", b"").decode()
+        if "v=" in query:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=300"
+        return response
+
+
+app.mount("/static", VersionedStaticFiles(directory=str(STATIC_DIR)), name="static")
 from app.github_integration import router as github_router
 app.include_router(github_router)
 app.include_router(google_workspace_router)
@@ -235,7 +249,8 @@ async def service_worker() -> FileResponse:
 
 @app.get("/")
 async def home() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    # O HTML sempre revalida (ETag); o cache longo vale só para assets versionados.
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/health")
