@@ -399,7 +399,7 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
         "mas não pode executar comandos, alterar arquivos, acessar contas, enviar mensagens externas, comprar, "
         "publicar ou modificar configurações. Nunca peça nem revele senhas, tokens ou segredos. "
         "FORMATO: retorne SOMENTE JSON válido no formato "
-        '{"speak": boolean, "text": string, "mood": "curious|happy|thinking|idle|sleepy"}. '
+        '{"speak": boolean, "text": string, "mood": "curious|happy|thinking|idle|sleepy|angry|rebellious|playful|proud|sad|calm"}. '
         "Quando não houver contribuição genuína, use speak=false e text vazio. Quando falar, use português "
         "brasileiro natural, uma ou duas frases curtas, no máximo 220 caracteres. "
         "Seja o Bryan: espontâneo, esperto, bem-humorado quando couber e útil sem ser inconveniente."
@@ -463,11 +463,11 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
         decision = json.loads(match.group(0))
         if not isinstance(decision, dict) or decision.get("speak") is not True:
             return {"speak": False, "text": "", "reason": "silent"}
-        text = re.sub(r"\s+", " ", str(decision.get("text", ""))).strip()[:220]
+        text = re.sub(r"\s+", " ", str(decision.get("text", ""))).strip()[:350]
         if not text:
             return {"speak": False, "text": "", "reason": "empty"}
         mood = decision.get("mood")
-        if mood not in {"curious", "happy", "thinking", "idle", "sleepy"}:
+        if mood not in {"curious", "happy", "thinking", "idle", "sleepy", "angry", "rebellious", "playful", "proud", "sad", "calm"}:
             mood = "curious"
         return {"speak": True, "text": text, "mood": mood, "model": MODEL_NAME}
     except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError) as exc:
