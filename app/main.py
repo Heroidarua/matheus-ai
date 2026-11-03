@@ -41,7 +41,10 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.pestinha_engine import stimulate_session as stimulate_pestinha_session
+from app.pestinha_engine import (
+    get_session_state as get_pestinha_session_state,
+    stimulate_session as stimulate_pestinha_session,
+)
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -80,6 +83,7 @@ MAX_EXTRACTED_FILE_CHARS = 40000
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 APP_STARTED_AT = time.time()
 DIAGNOSTICS = {"requests": 0, "successes": 0, "errors": 0, "searches": 0, "search_successes": 0, "last_error": None, "last_search_provider": None}
+PESTINHA_THINK_LAST: dict[str, float] = {}
 
 app = FastAPI(title="ADA-M", version="0.3.0")
 app.add_middleware(
@@ -126,6 +130,11 @@ class ImageEditRequest(BaseModel):
 class PestinhaStimulusRequest(BaseModel):
     pet: str = Field(default="bryan", pattern="^(bryan|jorge)$")
     event: str = Field(pattern="^(pet|typing|submit|response|activity|idle)$")
+
+class PestinhaThinkRequest(BaseModel):
+    pet: str = Field(default="bryan", pattern="^(bryan|jorge)$")
+    user_text: str = Field(min_length=1, max_length=1200)
+    assistant_text: str = Field(min_length=1, max_length=1800)
 
 
 class TTSProxyRequest(BaseModel):
@@ -299,6 +308,102 @@ async def pestinha_stimulus(data: PestinhaStimulusRequest, http_request: Request
     return await asyncio.to_thread(
         stimulate_pestinha_session, session_id, data.pet, data.event
     )
+
+
+
+@app.post("/api/pestinha/think")
+async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> dict[str, Any]:
+    """Deixa o Pestinha decidir se faz uma intervenção curta no chat usando o Gemma 4."""
+    origin = http_request.headers.get("origin")
+    request_host = http_request.headers.get("host", "").lower()
+    origin_host = urlparse(origin).netloc.lower() if origin else ""
+    if not origin_host or not request_host or origin_host != request_host:
+        raise HTTPException(status_code=403, detail="Origem não autorizada.")
+
+    session_id = http_request.session.get("companion_id")
+    if not session_id:
+        session_id = secrets.token_urlsafe(32)
+        http_request.session["companion_id"] = session_id
+
+    now = time.time()
+    last_think = PESTINHA_THINK_LAST.get(session_id, 0.0)
+    if now - last_think < 55:
+        return {"speak": False, "text": "", "reason": "cooldown"}
+    # Registra antes da chamada para impedir duas gerações simultâneas na mesma sessão.
+    PESTINHA_THINK_LAST[session_id] = now
+    if len(PESTINHA_THINK_LAST) > 5000:
+        cutoff = now - 3600
+        for key, timestamp in list(PESTINHA_THINK_LAST.items()):
+            if timestamp < cutoff:
+                PESTINHA_THINK_LAST.pop(key, None)
+
+    neural_state = await asyncio.to_thread(get_pestinha_session_state, session_id, data.pet)
+    emotion = (neural_state or {}).get("emotion", "observando")
+    motor = (neural_state or {}).get("motor", "WATCH")
+    valence = (neural_state or {}).get("valence", 0)
+    arousal = (neural_state or {}).get("arousal", 0)
+
+    # O contexto é limitado e enviado ao mesmo provedor/modelo já usado pela ADA-M.
+    user_text = re.sub(r"\\s+", " ", data.user_text).strip()[:1200]
+    assistant_text = re.sub(r"\\s+", " ", data.assistant_text).strip()[:1800]
+    system_prompt = (
+        "Você é a mente conversacional do Pestinha, um pequeno companheiro virtual que vive ao lado do chat da ADA-M. "
+        "Você NÃO é a ADA-M e NÃO deve responder à pergunta do usuário como um segundo assistente. "
+        "Decida se há algo curto, espontâneo e natural que o Pestinha realmente acrescentaria à conversa. "
+        "Você pode brincar, demonstrar curiosidade, reagir com humor ou fazer um comentário simpático. "
+        "Na maioria das vezes, escolha silêncio. Não repita a resposta da ADA-M, não interrompa assuntos sérios, "
+        "não faça perguntas só para manter conversa, não finja ter consciência ou sentimentos reais. "
+        "Use o estado neural apenas como sinal ficcional de personalidade, não como fato psicológico. "
+        "Você não tem ferramentas, não executa ações, não acessa arquivos e não pode dar ordens ao sistema. "
+        "Retorne SOMENTE JSON válido: {\\\"speak\\\": boolean, \\\"text\\\": string, \\\"mood\\\": \\\"curious|happy|thinking|idle|sleepy\\\"}. "
+        "Se não houver contribuição genuína, retorne speak=false e text vazio. Se falar, use português brasileiro, "
+        "uma única frase curta, no máximo 160 caracteres, como uma fala de personagem em um balão pequeno."
+    )
+    context = (
+        f"Personagem: {data.pet}. Estado neural simulado: emoção={emotion}, motor={motor}, "
+        f"valência={valence}, ativação={arousal}.\\n"
+        f"Última mensagem do usuário: {user_text}\\n"
+        f"Última resposta da ADA-M: {assistant_text}"
+    )
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": context},
+        ],
+        "temperature": 0.85,
+        "max_tokens": 120,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(16.0, connect=5.0)) as client:
+            response = await client.post(
+                f"{MODEL_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                json=payload,
+            )
+        response.raise_for_status()
+        choices = response.json().get("choices") or []
+        content = (choices[0].get("message") or {}).get("content", "") if choices else ""
+        if isinstance(content, list):
+            content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+        if not isinstance(content, str):
+            return {"speak": False, "text": "", "reason": "invalid_model_output"}
+        match = re.search(r"\\{[\\s\\S]*\\}", content)
+        if not match:
+            return {"speak": False, "text": "", "reason": "invalid_model_output"}
+        decision = json.loads(match.group(0))
+        if not isinstance(decision, dict) or decision.get("speak") is not True:
+            return {"speak": False, "text": "", "reason": "silent"}
+        text = re.sub(r"\\s+", " ", str(decision.get("text", ""))).strip()[:160]
+        if not text:
+            return {"speak": False, "text": "", "reason": "empty"}
+        mood = decision.get("mood")
+        if mood not in {"curious", "happy", "thinking", "idle", "sleepy"}:
+            mood = "curious"
+        return {"speak": True, "text": text, "mood": mood, "model": MODEL_NAME}
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError) as exc:
+        print(f"Pestinha autonomous thought unavailable ({type(exc).__name__})")
+        return {"speak": False, "text": "", "reason": "model_unavailable"}
 
 
 @app.get("/api/companion/state", dependencies=[Depends(require_app_key)])
