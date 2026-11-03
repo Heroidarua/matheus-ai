@@ -182,7 +182,7 @@
       if (!response.ok) return;
       const decision = await response.json();
       if (decision.speak && typeof decision.text === 'string' && decision.text.trim()) {
-        const allowedMoods = ['curious', 'happy', 'thinking', 'idle', 'sleepy'];
+        const allowedMoods = ['curious', 'happy', 'thinking', 'idle', 'sleepy', 'angry', 'rebellious', 'playful', 'proud', 'sad', 'calm'];
         const nextMood = allowedMoods.includes(decision.mood) ? decision.mood : 'curious';
         showMood(nextMood, decision.text.trim().slice(0, 160), 6500, false);
       }
