@@ -121,6 +121,39 @@
   const form = document.querySelector('form');
   const messages = document.getElementById('messages');
 
+  let neuralTypingTimer = 0;
+  const neuralMoods = {
+    feliz: 'happy', contente: 'happy', observando: 'idle',
+    curioso: 'curious', bravo: 'angry', triste: 'sad',
+    assustado: 'curious', dramatico: 'angry', dormindo: 'sleepy'
+  };
+  const neuralLines = {
+    feliz: 'A rede neural ficou animada com você! 💚',
+    contente: 'Estou tranquilo por aqui. 😊',
+    observando: 'Estou observando o que acontece…',
+    curioso: 'Isso despertou minha curiosidade! 👀',
+    bravo: 'Ei! Não gostei muito disso…',
+    triste: 'Fiquei um pouquinho quieto agora.',
+    assustado: 'Opa! Que susto! 😳',
+    dramatico: 'Isso foi dramático demais!',
+    dormindo: 'Estou ficando com sono…'
+  };
+  async function notifyNeural(event) {
+    try {
+      const response = await fetch('/api/pestinha/stimulus', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pet: petId, event})
+      });
+      if (!response.ok) return;
+      const state = await response.json();
+      const next = neuralMoods[state.emotion] || 'idle';
+      root.dataset.neuralEmotion = state.emotion;
+      showMood(next, neuralLines[state.emotion] || 'Estou reagindo ao que acontece.', 2600);
+    } catch {}
+  }
+
   function save(){try{localStorage.setItem(storageKey,JSON.stringify({pet:petId,affection}));}catch{}}
   function theme(){
     const t=themes[petId];
@@ -154,6 +187,7 @@
   function setPet(id){
     petId=id==='jorge'?'jorge':'bryan';save();theme();
     showMood('happy',petId==='jorge'?'Jorge chegou! Agora é comigo. 😎':'Bryan voltou! Senti sua falta. 💚',3500,true);
+    notifyNeural('activity');
     root.classList.remove('menu-open');
   }
   function toggleMenu(){root.classList.toggle('menu-open');}
@@ -161,6 +195,7 @@
     affection=Math.min(9999,affection+1);save();
     const lines=petId==='jorge'?['Um carinho? Excelente investimento! 😎','Gostei. Pode repetir.','Sua atenção é meu ativo favorito.']:['Hehe! Carinho recebido! 💚','Mais um carinho, por favor!','Pulei de felicidade!'];
     showMood('happy',lines[Math.floor(Math.random()*lines.length)],3500);
+    notifyNeural('pet');
   });
   stage.addEventListener('contextmenu',event=>{event.preventDefault();toggleMenu();});
   menu.addEventListener('click',event=>{
@@ -173,9 +208,12 @@
 
   if(prompt) prompt.addEventListener('input',()=>{
     if(prompt.value.trim()&&mood!=='thinking')showMood('curious',petId==='jorge'?'Está preparando uma ideia genial?':'O que estamos aprontando?',1800);
+    clearTimeout(neuralTypingTimer);
+    if(prompt.value.trim()) neuralTypingTimer=setTimeout(()=>notifyNeural('typing'),900);
   });
   if(form) form.addEventListener('submit',()=>{
     if(prompt&&prompt.value.trim())showMood('thinking','A ADA-M está pensando… vou acompanhar de perto. 🤔',0);
+    notifyNeural('submit');
   },true);
   if(sendButton){
     const observer=new MutationObserver(()=>{
@@ -188,6 +226,7 @@
     const observer=new MutationObserver(records=>{
       const added=records.some(record=>[...record.addedNodes].some(node=>node.nodeType===1&&(node.classList?.contains('assistant')||node.classList?.contains('user')||node.querySelector?.('.assistant,.user'))));
       if(added&&sendButton&&!sendButton.disabled&&mood!=='thinking') showMood('happy','Estamos fazendo um bom trabalho juntos! 💚',3200);
+      if(added&&sendButton&&!sendButton.disabled) notifyNeural('response');
     });
     observer.observe(messages,{childList:true,subtree:true});
   }
