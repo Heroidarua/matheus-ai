@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 from dotenv import load_dotenv
 from livekit.agents import Agent, AgentServer, AgentSession, ChatContext, JobContext, cli, llm, inference
-from livekit.plugins import openai
+from livekit.plugins import openai, silero
 
 load_dotenv()
 
@@ -143,7 +143,10 @@ async def entrypoint(ctx: JobContext) -> None:
         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     )
 
+    # Silero VAD detects speech start/end locally; Deepgram transcribes the audio.
+    vad = silero.VAD.load()
     voice_session = AgentSession(
+        vad=vad,
         transcription_timeout=8.0,
         stt=inference.STT(
             model=LIVEKIT_STT_MODEL,
