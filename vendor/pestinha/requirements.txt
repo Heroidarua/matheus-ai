@@ -1,0 +1,14 @@
+# Para rodar o Pestinha (Python 3.11 ou mais novo). Windows 10/11, macOS ou Linux (X11).
+# CI Linux: 6.11.3 validado com 340 testes; 6.12.0 provoca abort nativo none_dealloc.
+PySide6==6.11.3; sys_platform == "linux"
+PySide6>=6.11.0; sys_platform != "linux"
+psutil>=7.2.2
+numpy>=2.4.6
+# Atalho global no Linux; Windows usa a API do sistema e macOS usa QuickMacHotKey
+pynput>=1.7.7; sys_platform == "linux"
+# Windows: leitura das janelas e do teclado
+pywin32>=305; sys_platform == "win32"
+# macOS: janelas (Quartz), programa em primeiro plano (AppKit) e atalho teclado
+pyobjc-framework-Quartz>=11; sys_platform == "darwin"
+pyobjc-framework-Cocoa>=11; sys_platform == "darwin"
+quickmachotkey==2025.7.28; sys_platform == "darwin"

@@ -1,0 +1,34 @@
+{
+  "_ajuda": "Jorge: coach de finanças e IA, trambiqueiro e confiante. Mesma rede do Bryan, outra semente e outro temperamento. Ignorado, insiste (tédio vira curiosidade e brincadeira); com atenção, se anima muito (cutucada e carinho viram alegria); quando dispensam as coisas dele, se desespera (dispensa e recusa viram frustração). Quase não fica triste: perder a bolinha vira raiva, não desânimo. aparencia: cores #rrggbb (moldura, casca, tela, olho, brilho) e acessórios (oculos, gravata) com a cor de cada um.",
+  "nome": "Jorge",
+  "seed": 1729,
+  "temperamento": {
+    "BOREDOM->CURIOUS": 1.5,
+    "BOREDOM->PLAYFUL": 1.4,
+    "LONELY->GLOOM": 0.6,
+    "POKE->PLAYFUL": 1.6,
+    "CARESS->PLAYFUL": 1.7,
+    "CARESS->CALM": 1.2,
+    "DISMISS->FRUSTRATION": 1.6,
+    "RECUSA->FRUSTRATION": 1.3,
+    "TOY_TAKEN->GLOOM": 0.5,
+    "TOY_TAKEN->FRUSTRATION": 1.3,
+    "NOVELTY->CURIOUS": 1.3
+  },
+  "brincadeira": {
+    "bola": 0.6,
+    "arremesso": 0.8,
+    "postit": 1.4
+  },
+  "reacao_notebook": "bravo",
+  "aparencia": {
+    "moldura": "#e2b13c",
+    "casca": "#14120c",
+    "tela": "#1c1a12",
+    "olho": "#ffd166",
+    "brilho": "#fff3c4",
+    "acessorios": {
+      "gravata": "#b3261e"
+    }
+  }
+}

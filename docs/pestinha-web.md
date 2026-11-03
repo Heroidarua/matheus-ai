@@ -1,22 +1,26 @@
-# Pestinha web — companheiro visual da ADA-M
+# Pestinha na ADA-M
 
-A ADA-M inclui uma adaptação independente de pet virtual para navegador em `static/pestinha.js`.
+O repositório original foi incorporado em vendor/pestinha/, preservando sua estrutura, documentação, testes, personagens, dados de personalidade, licença GPL-3.0-or-later e recursos visuais. Os assets usados pela adaptação do navegador também estão disponíveis em static/pestinha/.
 
-## O que faz
+## Companheiro web
 
-- Mostra um personagem animado no canto inferior direito do chat.
-- Reage à digitação, ao envio de mensagens e ao estado de geração da resposta.
-- Permite carinho por clique/toque e guarda apenas uma contagem simples de afeto no armazenamento local do navegador.
-- Respeita a preferência do sistema por movimento reduzido.
+A interface em static/pestinha.js oferece Bryan e Jorge, alternância entre personagens, animações de humor, carinho, mensagens contextuais e imagens selecionadas dos memes originais. A escolha do personagem e a pontuação simples de carinho ficam no armazenamento local do navegador.
 
-## Limites desta adaptação
+## Limites da adaptação
 
-Esta versão é um companheiro visual de navegador. Ela não executa o aplicativo desktop do Pestinha, não incorpora a rede neural pulsada de 470 neurônios e não reproduz a física de janelas, bolinha, memes, notebook ou leitura do ambiente do sistema operacional. O navegador não tem acesso a esses recursos de desktop e esta integração não tenta contornar essas limitações.
+O aplicativo original é desktop e usa PySide6, APIs do sistema operacional e observação local de janelas/atividade. O navegador não oferece essas permissões. Portanto, a adaptação web não executa o processo desktop nem afirma executar a rede neural pulsada original de 470 neurônios. O código original permanece preservado em vendor/pestinha/ para execução desktop, estudo e evolução separada.
 
-O pet não lê mensagens para criar perfil, não inspeciona outras abas/aplicativos, não acessa teclado global e não envia dados para serviços externos. A única persistência própria é a pontuação de carinho no `localStorage` do navegador.
+A ADA-M continua usando seu backend e seu modelo de conversa Gemma 4; o companheiro é uma camada visual isolada. Não há envio das mensagens do chat para o Pestinha nem leitura do conteúdo da conversa pelo pet.
 
-## Referência e licenciamento
+## Privacidade
 
-Projeto de referência: https://github.com/mille-okws/pestinha
+- Não monitora janelas, processos, teclado global ou outras abas.
+- Não envia dados a serviços externos.
+- Guarda apenas personagem selecionado e contagem de carinho no localStorage.
+- O estado é local ao navegador e pode ser apagado limpando os dados do site.
 
-O Pestinha original declara licença GPL-3.0-or-later para seu código. Esta integração foi escrita como implementação web independente e não copia código-fonte, imagens, memes, textos, pesos neurais ou outros assets do projeto original. A referência é creditada pela inspiração no conceito de pet virtual.
+## Licença e créditos
+
+O código e os recursos do projeto Pestinha original são mantidos sob a licença GPL-3.0-or-later conforme os avisos do repositório de origem. Consulte vendor/pestinha/LICENSE e vendor/pestinha/README.md.
+
+Projeto original: https://github.com/mille-okws/pestinha

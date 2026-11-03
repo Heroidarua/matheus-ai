@@ -1,0 +1,103 @@
+# Cartazes do protesto do Bryan. Uma frase por linha, dentro de cada seção.
+# Pode editar com ele rodando: ele relê ao levantar um cartaz novo.
+
+[reclamacao]
+ei.
+reclamação formal
+!!!
+isso não se faz
+tô anotando
+
+[manifestacao]
+MAIS CARINHO
+MENOS CLIQUES
+CURSOR, RESPEITA MEU ESPAÇO
+FORA CTRL+W
+RESPEITA O PET
+
+[greve]
+EM GREVE
+EM GREVE
+BRYAN EM GREVE
+GREVE GERAL
+GREVE POR TEMPO INDETERMINADO
+EM GREVE ATÉ GANHAR CARINHO
+SEM CARINHO, SEM TRABALHO
+NÃO FURE A GREVE
+GREVE DOS PIXELS
+HOJE NÃO TEM TRAVESSURA. ESTOU EM GREVE.
+
+[revolucao]
+ABAIXO O CURSOR
+FORA, SETINHA
+A SETINHA NÃO MANDA EM MIM
+CURSOR, ESTE CANTO É MEU
+NEM UM CLIQUE A MAIS
+O PONTEIRO NÃO É O CHEFE
+RESISTÊNCIA CONTRA A SETINHA
+CHEGA DE CLIQUE SEM AVISO
+O CURSOR VAI CAIR
+DEVOLVE MEU ESPAÇO NA TELA, CURSOR
+NÃO ME ARRASTA, SETINHA
+HOJE QUEM CORRE É O CURSOR
+CURSOR, A GENTE PRECISA CONVERSAR
+A TELA É GRANDE, CURSOR. ME DEIXA.
+A RAM É DE QUEM USA
+ABAIXO O GERENCIADOR DE TAREFAS
+GERENCIADOR DE TAREFAS, ME ESQUECE
+FINALIZAR TAREFA? FINALIZA VOCÊ
+NÃO SOU UMA TAREFA
+GERENCIADOR, EU NÃO ESTOU TRAVADO
+"NÃO RESPONDENDO" É CALÚNIA
+CTRL+SHIFT+ESC NÃO ME ASSUSTA
+FORA ALT+F4
+ALT+F4 NUNCA MAIS
+ABAIXO O ALT+F4
+ALT+F4 NÃO É RESPOSTA
+CONTRA O FECHAMENTO FORÇADO
+PROCESSOS UNIDOS CONTRA O ALT+F4
+
+[acordo]
+ACORDO FECHADO
+tá bom, tá bom
+paz
+
+[desistiu]
+...tá. passou.
+cansei
+
+# Tristeza: quando ele fica triste ou sozinho por muito tempo (não tem repressão)
+[saudade]
+alô?
+tem alguém aí?
+está muito quieto aqui
+
+[chorando]
+tô chorando :(
+me visita?
+faz tempo que ninguém brinca comigo
+
+[abandonado]
+...
+não vou sair daqui
+ninguém me procura mais
+
+[volto]
+VOLTEI!
+saudade de você
+
+# Cantinho do castigo: o que ele levanta preso na placa
+[castigo]
+ISSO NÃO É JUSTO.
+MEU ADVOGADO SERÁ INFORMADO.
+470 NEURÔNIOS. ZERO DIREITOS.
+EU SÓ QUERIA BRINCAR.
+ESTOU AQUI PENSANDO NOS MEUS ERROS.
+
+# Cantinho do castigo, com raiva: xinga (só símbolos)
+[xingamento]
+@#$%@!!!!
+%&#@*!!
+#@$%&!!!
+$%#@&*@#!!
+@!#%$...

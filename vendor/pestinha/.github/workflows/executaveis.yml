@@ -1,0 +1,40 @@
+name: executáveis
+# Gera o executável de Windows, macOS e Linux. Roda ao criar uma tag (v1.0.0...) ou manualmente.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  executavel:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pyinstaller==6.22.3
+      - name: Gerar o executável
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "$RUNNER_OS" = "Windows" ]; then EXTRA="--windowed --hidden-import win32timezone"; fi
+          python -m PyInstaller --noconfirm --onefile $EXTRA --name Pestinha \
+            --distpath dist --workpath build/work --specpath build main.py
+      - name: Montar a pasta de entrega (executável + assets + pets)
+        shell: bash
+        run: |
+          # Bash 3.2 no macOS não suporta a expansão ${VAR,,}.
+          SISTEMA="$(printf '%s' "$RUNNER_OS" | tr '[:upper:]' '[:lower:]')"
+          PASTA="executáveis/$SISTEMA"
+          mkdir -p "$PASTA"
+          cp -R dist/Pestinha* "$PASTA/"
+          cp -R assets pets "$PASTA/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pestinha-${{ runner.os }}
+          path: executáveis/

@@ -1,0 +1,33 @@
+name: testes
+on: [push, pull_request]
+
+jobs:
+  testes:
+    # Windows, macOS e Linux. Repositórios públicos têm minutos grátis nos três.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Instalar biblioteca EGL no Linux (PySide6)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1
+      # Só o necessário para os testes: sem PyInstaller (o executável é gerado à parte).
+      - run: pip install -r requirements.txt pytest==8.4.2 pyflakes==4.1.0
+      - run: python -m pyflakes pestinha tests main.py ferramentas conftest.py
+      - name: Verificar versão de PySide6 no Linux
+        if: runner.os == 'Linux'
+        run: |
+          python -c "import PySide6, shiboken6; assert PySide6.__version__ == '6.11.3' and shiboken6.__version__ == '6.11.3', (PySide6.__version__, shiboken6.__version__)"
+      - run: python -m pytest -q
