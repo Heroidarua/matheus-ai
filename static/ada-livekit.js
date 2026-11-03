@@ -128,9 +128,14 @@ if (startButton && statusLabel) {
             agent_ready: "Agente pronto. Pode falar.",
             speech_detected: "Detectei sua voz; aguardando a transcrição…",
             stt_partial: "Reconhecendo sua fala…",
-            stt_received: "Entendi sua fala. Enviando ao Gemma 4…",
+            stt_received: message.message || "Transcrição recebida. Enviando ao Gemma 4…",
             stt_timeout: "Detectei sua voz, mas a transcrição falhou. Verifique a etapa de reconhecimento.",
             llm_started: "Sua fala chegou ao Gemma 4; gerando resposta…",
+            agent_thinking: "A ADA-M está processando sua mensagem…",
+            agent_speaking: "Resposta pronta; enviando para a voz do navegador…",
+            agent_listening: "ADA-M pronta para ouvir.",
+            assistant_text_ready: "A resposta textual da ADA-M foi gerada. Preparando a voz…",
+            session_error: message.message || "A sessão de voz encontrou um erro."
             backend_response: message.message,
             first_token: "Gemma 4 respondeu. Preparando a voz…",
             llm_finished: "Texto gerado. Aguardando o áudio…",
@@ -172,9 +177,9 @@ if (startButton && statusLabel) {
 
       activeRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
         if (speakers.some((speaker) => speaker.identity !== activeRoom.localParticipant.identity)) {
-          setStatus("A ADA-M está respondendo em áudio…");
-        } else if (activeRoom.state === "connected" && !window.speechSynthesis?.speaking) {
-          setStatus("Conectado. Pode falar; a ADA-M está ouvindo.");
+          setStatus("A ADA-M está respondendo…");
+        } else if (speakers.some((speaker) => speaker.identity === activeRoom.localParticipant.identity)) {
+          setStatus("Sua voz foi detectada pelo LiveKit; aguardando transcrição…");
         }
       });
 
@@ -201,9 +206,11 @@ if (startButton && statusLabel) {
       startButton.disabled = false;
       startButton.classList.add("livekit-active");
       startButton.textContent = "Encerrar conversa";
-      setStatus(remoteAgent
-        ? "Agente conectado. Microfone LiveKit ativo; respostas pela voz do navegador."
-        : "Microfone ativo. Aguardando o agente entrar na sala…");
+      if (remoteAgent) {
+        setStatus("Agente conectado. Microfone LiveKit ativo; pode falar.");
+      } else {
+        setStatus("Microfone ativo, mas aguardando o agente LiveKit. Se não conectar, confira o deploy do agente.");
+      }
     } catch (error) {
       console.error("ADA-M LiveKit connection failed:", error);
       if (room) {
