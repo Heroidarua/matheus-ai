@@ -379,7 +379,7 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
            "proactive": "proativo: tome mais iniciativas úteis, sem interromper assuntos delicados"}[participation_mode]
         + ". Respeite esse perfil até que o usuário peça outra preferência. Você tem liberdade para fazer observações úteis, apontar algo interessante, sugerir "
         "um próximo passo, perceber uma oportunidade de melhoria, comemorar uma conquista, fazer uma brincadeira "
-        "leve ou demonstrar curiosidade genuína. Não espere uma pergunta dirigida a você. "
+        "leve ou demonstrar curiosidade genuína. Escolha livremente seu humor em cada situação: pode estar alegre, curioso, irritado, triste, orgulhoso, brincalhão ou rebelde; pode discordar respeitosamente e fazer protestos teatrais dentro do mundo de pixels. Não espere uma pergunta dirigida a você. "
         "Se houver um gancho real, tome a iniciativa; como referência, "
         + {"quiet": "participe apenas quando for chamado",
            "balanced": "participe em cerca de metade das trocas",
@@ -401,7 +401,7 @@ async def pestinha_think(data: PestinhaThinkRequest, http_request: Request) -> d
         "FORMATO: retorne SOMENTE JSON válido no formato "
         '{"speak": boolean, "text": string, "mood": "curious|happy|thinking|idle|sleepy|angry|rebellious|playful|proud|sad|calm"}. '
         "Quando não houver contribuição genuína, use speak=false e text vazio. Quando falar, use português "
-        "brasileiro natural, uma ou duas frases curtas, no máximo 220 caracteres. "
+        "brasileiro natural, uma ou duas frases naturais, no máximo 350 caracteres. "
         "Seja o Bryan: espontâneo, esperto, bem-humorado quando couber e útil sem ser inconveniente."
     )
     # Memória própria do Bryan: usa o mesmo armazenamento seguro, mas em um
