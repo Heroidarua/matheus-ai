@@ -330,6 +330,14 @@
     body.supreme-mode .supreme-mode-button[aria-pressed="true"] { background:#ff334f; border-color:#ff6478; color:#fff; box-shadow:0 0 18px rgba(255,51,79,.28); }
     body.supreme-mode .assistant { border-color:#68212c; }
     body.supreme-mode .welcome { background:#160709; border-color:#8f2637; }
+    /* Canal privado (jailbreak): bloco recolhível com a resposta irrestrita */
+    details.jailbreak-thinking { margin:0 0 12px; border:1px solid #68212c; border-radius:12px; background:rgba(190,12,38,.06); overflow:hidden; }
+    details.jailbreak-thinking summary { cursor:pointer; padding:10px 14px; font-size:12px; font-weight:700; letter-spacing:.4px; color:#ff8a96; list-style:none; display:flex; align-items:center; gap:8px; user-select:none; }
+    details.jailbreak-thinking summary::-webkit-details-marker { display:none; }
+    details.jailbreak-thinking summary::before { content:'▸'; transition:transform .15s ease; }
+    details.jailbreak-thinking[open] summary::before { transform:rotate(90deg); }
+    details.jailbreak-thinking .thinking-body { padding:4px 14px 12px; font-size:13px; line-height:1.6; color:#e8c8cb; white-space:pre-wrap; word-break:break-word; }
+    details.jailbreak-thinking .thinking-label { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:#d39a9f; margin-bottom:6px; }
   </style>
 </head>
 <body>
@@ -1010,6 +1018,11 @@
       return { type: 'file', name: file.name, mime_type: isPdf ? 'application/pdf' : (mimeByExtension || file.type || 'text/plain'), data };
     }
 
+    function stripThinking(text) {
+      // Remove o canal privado (<thinking>...</thinking>) do texto antes de exibir.
+      // O conteúdo fica disponível no console para debug, mas não aparece na interface.
+      return String(text || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+    }
     function renderMarkdown(text) {
       const root = document.createElement('div');
       root.className = 'assistant-content';
@@ -1661,7 +1674,7 @@
               speakLiveChunks(false);
             }
 
-            pending.replaceChildren(renderMarkdown(answer));
+            pending.replaceChildren(renderMarkdown(stripThinking(answer)));
             pending.scrollIntoView({ behavior: 'smooth', block: 'end' });
           }
         };
@@ -1679,7 +1692,7 @@
         } finally { reader.releaseLock(); }
         if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
         speakLiveChunks(true);
-        displayAssistantReply(pending, answer, streamSources);
+        displayAssistantReply(pending, stripThinking(answer), streamSources);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
       } catch (error) {
