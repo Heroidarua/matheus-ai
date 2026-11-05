@@ -491,14 +491,28 @@ def calcular_seguro(expressao: str) -> str:
 
 
 def executar_codigo_python(code: str) -> str:
-    """Executa um trecho de Python em sandbox e retorna a saída."""
+    """Executa um trecho de Python em sandbox com timeout e bloqueio de imports perigosos."""
     import sys
     import io
+    import signal
     from contextlib import redirect_stdout, redirect_stderr
     
     # Valida se o código não está vazio
     if not code or not code.strip():
         return "Erro: nenhum código fornecido. Use o formato: execute seu_código_aqui"
+    
+    # Bloqueia imports perigosos
+    dangerous_modules = {"os", "sys", "subprocess", "shutil", "pathlib", "socket", "http", "urllib", "requests"}
+    for mod in dangerous_modules:
+        if f"import {mod}" in code or f"from {mod} import" in code:
+            return f"Erro: módulo '{mod}' não está permitido no sandbox. Use apenas bibliotecas padrão seguras (math, random, datetime, etc.)."
+    
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Código demorou mais de 10 segundos para executar.")
+    
+    # Configura timeout de 10 segundos
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(10)
     
     old_stdout, old_stderr = sys.stdout, sys.stderr
     sys.stdout = sys.stderr = io.StringIO()
@@ -511,11 +525,14 @@ def executar_codigo_python(code: str) -> str:
         if err.strip():
             return "Saída de erro:\n" + err.strip()[:500]
         return "(código executado sem saída)"
+    except TimeoutError:
+        return "Erro: o código demorou mais de 10 segundos para executar. Tente otimizar ou simplificar."
     except SyntaxError as exc:
         return f"Erro de sintaxe no código: {exc}. Verifique se o código Python está correto."
     except Exception as exc:
         return f"Erro ao executar: {type(exc).__name__}: {exc}"
     finally:
+        signal.alarm(0)  # Cancela o timeout
         sys.stdout, sys.stderr = old_stdout, old_stderr
 
 
