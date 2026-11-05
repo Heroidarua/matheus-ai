@@ -13,7 +13,11 @@ IMAGE_MODEL = os.getenv("IMAGE_GENERATION_MODEL", "@cf/black-forest-labs/flux-1-
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "@cf/black-forest-labs/flux-2-klein-9b")
 # Fallback: inpainting SD 1.5 (filtro NSFW mais antigo/frouxo). Usado quando o modelo
 # principal devolve erro de conteúdo ("flagged"/NSFW) no modo livre.
-IMAGE_INPAINT_MODEL = os.getenv("IMAGE_INPAINT_MODEL", "@cf/runwayml/stable-diffusion-v1-5-inpainting").strip()
+IMAGE_INPAINT_MODEL = os.getenv("IMAGE_INPAINT_MODEL", "@cf/runwayml/stable-diffusion-v1-5-inpainting")
+# Nano Banana (Gemini 2.5 Flash Image) — edição de foto com qualidade profissional.
+# 500 imagens/dia grátis via Google AI Studio.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+NANO_BANANA_MODEL = "gemini-2.5-flash-image".strip()
 RATE_LIMIT: dict[str, deque[float]] = defaultdict(deque)
 RATE_WINDOW_SECONDS = 60
 RATE_LIMIT_REQUESTS = 3
@@ -125,6 +129,29 @@ def _multipart_body(fields: dict, files: dict) -> bytes:
  return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
+async def _nano_banana_edit(client, image_bytes: bytes, prompt: str) -> httpx.Response:
+ """Edita a foto usando Nano Banana (Gemini 2.5 Flash Image).
+ Retorna a resposta httpx para ser processada por decode_image_result."""
+ if not GEMINI_API_KEY:
+  raise HTTPException(status_code=503, detail="Nano Banana não configurado. Defina GEMINI_API_KEY no Render.")
+ image_b64 = base64.b64encode(image_bytes).decode("ascii")
+ url = f"https://generativelanguage.googleapis.com/v1beta/models/{NANO_BANANA_MODEL}:generateContent"
+ payload = {
+  "contents": [{
+   "parts": [
+    {"text": prompt},
+    {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}}
+   ]
+  }],
+  "generationConfig": {"responseModalities": ["IMAGE"]}
+ }
+ return await client.post(
+  url,
+  headers={"Authorization": f"Bearer {GEMINI_API_KEY}", "Content-Type": "application/json"},
+  json=payload
+ )
+
+
 def is_content_flagged(response) -> bool:
  """True se a Cloudflare bloqueou a saída por conteúdo (NSFW)."""
  if response.status_code < 400:
@@ -185,20 +212,28 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
    )
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
+   # 1º: tenta Nano Banana (melhor qualidade de edição)
+   if GEMINI_API_KEY:
+    try:
+     response = await _nano_banana_edit(client, image_bytes, prompt[:2200])
+     if response.status_code == 200:
+      return _decode_gemini_response(response)
+     print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code}), tentando FLUX...")
+    except Exception as nb_exc:
+     print(f"[edit-image] Nano Banana exceção: {type(nb_exc).__name__}: {nb_exc}, tentando FLUX...")
+   # 2º: fallback para FLUX (Cloudflare)
    body, content_type = _multipart_body({"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "7.5"}, {"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
    response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
    if payload.mode == "livre" and is_content_flagged(response):
-    # Filtro NSFW do modelo principal: tenta o inpainting SD 1.5 (filtro mais frouxo).
-    print(f"[edit-image] Modelo principal flagou (HTTP {response.status_code}): {response.text[:200]}")
+    print(f"[edit-image] FLUX flagou (HTTP {response.status_code}), tentando inpainting...")
     try:
      response = await _inpaint_fallback(client, image_bytes, payload.prompt.strip())
      print(f"[edit-image] Fallback inpainting: HTTP {response.status_code}")
     except Exception as fb_exc:
      print(f"[edit-image] Fallback inpainting falhou: {type(fb_exc).__name__}: {fb_exc}")
-     # se o fallback também falhou, propaga o erro original
      raise
-  cloudflare_error(response)
-  return decode_image_result(response, IMAGE_EDIT_MODEL)
+   cloudflare_error(response)
+   return decode_image_result(response, IMAGE_EDIT_MODEL)
  except HTTPException: raise
  except httpx.TimeoutException: raise HTTPException(status_code=504, detail="A edição demorou demais. Tente novamente com uma foto menor ou outro pedido.")
  except httpx.HTTPError as exc:
