@@ -230,11 +230,16 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
    # 1º: tenta FLUX (Cloudflare) — preserva melhor os pixels originais
    body, content_type = _multipart_body({"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "9.0"}, {"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
-   response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
-   if response.status_code == 200:
+   try:
+    response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
+   except Exception as cf_exc:
+    print(f"[edit-image] FLUX exceção: {type(cf_exc).__name__}: {cf_exc}, tentando Nano Banana...")
+    response = None
+   if response and response.status_code == 200:
     cloudflare_error(response)
     return decode_image_result(response, IMAGE_EDIT_MODEL)
-   print(f"[edit-image] FLUX falhou (HTTP {response.status_code}), tentando Nano Banana...")
+   if response:
+    print(f"[edit-image] FLUX falhou (HTTP {response.status_code}), tentando Nano Banana...")
    # 2º: fallback para Nano Banana (Google) — melhor qualidade, mas redesenha
    if GEMINI_API_KEY:
     try:
@@ -248,9 +253,11 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
      print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code})")
     except Exception as nb_exc:
      print(f"[edit-image] Nano Banana exceção: {type(nb_exc).__name__}: {nb_exc}")
-   # se ambos falharam, propaga o erro do FLUX
-   cloudflare_error(response)
-   return decode_image_result(response, IMAGE_EDIT_MODEL)
+   # se ambos falharam, propaga o erro do FLUX (ou erro genérico se response=None)
+   if response:
+    cloudflare_error(response)
+    return decode_image_result(response, IMAGE_EDIT_MODEL)
+   raise HTTPException(status_code=502, detail="Falha na edição de imagem. Tente novamente.")
  except HTTPException: raise
  except httpx.TimeoutException: raise HTTPException(status_code=504, detail="A edição demorou demais. Tente novamente com uma foto menor ou outro pedido.")
  except httpx.HTTPError as exc:
