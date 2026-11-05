@@ -129,7 +129,7 @@ def _multipart_body(fields: dict, files: dict) -> bytes:
  return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-async def _nano_banana_edit(client, image_bytes: bytes, prompt: str) -> httpx.Response:
+async def _nano_banana_edit(client, image_bytes: bytes, prompt: str, edit_strength: float = 0.5) -> httpx.Response:
  """Edita a foto usando Nano Banana (Gemini 2.5 Flash Image).
  Retorna a resposta httpx para ser processada por decode_image_result."""
  if not GEMINI_API_KEY:
@@ -143,7 +143,10 @@ async def _nano_banana_edit(client, image_bytes: bytes, prompt: str) -> httpx.Re
     {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}}
    ]
   }],
-  "generationConfig": {"responseModalities": ["IMAGE"]}
+  "generationConfig": {
+   "responseModalities": ["IMAGE"],
+   "editStrength": edit_strength
+  }
  }
  return await client.post(
   url,
@@ -214,7 +217,7 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
    # 1º: tenta Nano Banana (melhor qualidade de edição)
    if GEMINI_API_KEY:
     try:
-     response = await _nano_banana_edit(client, image_bytes, prompt[:2200])
+     response = await _nano_banana_edit(client, image_bytes, prompt[:2200], edit_strength=0.3)
      if response.status_code == 200:
       return _decode_gemini_response(response)
      print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code}), tentando FLUX...")
