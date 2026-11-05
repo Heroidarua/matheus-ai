@@ -112,8 +112,6 @@ async def generate_image(payload: ImageGenerationRequest, request: Request) -> I
   print(f"Image generation network error ({type(exc).__name__})")
   raise HTTPException(status_code=502, detail="Não foi possível conectar ao serviço de criação de imagens.")
 
-@router.post("/api/edit-image", response_model=ImageGenerationResponse)
-async 
 def is_content_flagged(response) -> bool:
  """True se a Cloudflare bloqueou a saída por conteúdo (NSFW)."""
  if response.status_code < 400:
@@ -125,9 +123,7 @@ def is_content_flagged(response) -> bool:
 async def _inpaint_fallback(client, image_bytes: bytes, user_prompt: str):
  """Retry com stable-diffusion-v1-5-inpainting: imagem inteira + máscara branca
  (redesenha a foto toda seguindo o prompt, filtro NSFW mais antigo/frouxo)."""
- import numpy as np
  from PIL import Image as PILImage
- # máscara branca 512x512 (região inteira a redesenhar)
  mask_bytes = io.BytesIO()
  PILImage.new("L", (512, 512), 255).save(mask_bytes, format="PNG")
  mask_bytes.seek(0)
@@ -144,7 +140,8 @@ async def _inpaint_fallback(client, image_bytes: bytes, user_prompt: str):
  )
 
 
-def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenerationResponse:
+@router.post("/api/edit-image", response_model=ImageGenerationResponse)
+async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenerationResponse:
  if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
   raise HTTPException(status_code=503, detail="Edição de imagens não configurada. Confira CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN no Render.")
  check_rate_limit(request)
