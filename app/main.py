@@ -516,21 +516,33 @@ def executar_codigo_python(code: str) -> str:
 async def ler_url_async(url: str, max_chars: int = 4000) -> str:
     """Baixa uma página web e extrai o texto principal."""
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=8.0), follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (MatheusAI/1.0)"})
-            resp.raise_for_status()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=10.0), follow_redirects=True) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code >= 400:
+                return f"Erro HTTP {resp.status_code} ao acessar a URL. A página pode não existir ou estar bloqueando robôs."
             html = resp.text
         text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<nav[^>]*>.*?</nav>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<footer[^>]*>.*?</footer>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<header[^>]*>.*?</header>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<[^>]+>", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
         return text[:max_chars] if text else "(página vazia ou sem texto)"
     except httpx.TimeoutException:
         return "Erro: a página demorou demais para carregar."
     except httpx.HTTPError as exc:
-        return f"Erro ao acessar a URL: {type(exc).__name__}"
+        return f"Erro ao acessar a URL: {type(exc).__name__}: {str(exc)[:200]}"
     except Exception as exc:
-        return f"Erro inesperado: {exc}"
+        return f"Erro inesperado: {type(exc).__name__}: {str(exc)[:200]}"
 
 
 def detectar_ferramenta(message: str) -> tuple[str, str] | None:
