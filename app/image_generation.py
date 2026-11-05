@@ -1,5 +1,6 @@
 from __future__ import annotations
-import base64, binascii, io, os, time
+import base64
+import io, binascii, io, os, time
 from collections import defaultdict, deque
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -129,7 +130,16 @@ def _multipart_body(fields: dict, files: dict) -> bytes:
  return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-async def _nano_banana_edit(client, image_bytes: bytes, prompt: str, edit_strength: float = 0.5) -> httpx.Response:
+def _get_image_dimensions(image_bytes: bytes) -> tuple[int, int]:
+ """Retorna (width, height) da imagem."""
+ try:
+  img = Image.open(io.BytesIO(image_bytes))
+  return img.size
+ except Exception:
+  return 1024, 1024
+
+
+async def _nano_banana_edit(client, image_bytes: bytes, prompt: str, edit_strength: float = 0.5, width: int = 1024, height: int = 1024) -> httpx.Response:
  """Edita a foto usando Nano Banana (Gemini 2.5 Flash Image).
  Retorna a resposta httpx para ser processada por decode_image_result."""
  if not GEMINI_API_KEY:
@@ -145,7 +155,11 @@ async def _nano_banana_edit(client, image_bytes: bytes, prompt: str, edit_streng
   }],
   "generationConfig": {
    "responseModalities": ["IMAGE"],
-   "editStrength": edit_strength
+   "editStrength": edit_strength,
+   "imageConfig": {
+    "width": width,
+    "height": height
+   }
   }
  }
  return await client.post(
@@ -217,7 +231,12 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
    # 1º: tenta Nano Banana (melhor qualidade de edição)
    if GEMINI_API_KEY:
     try:
-     response = await _nano_banana_edit(client, image_bytes, prompt[:2200], edit_strength=0.3)
+     orig_w, orig_h = _get_image_dimensions(image_bytes)
+     # Mantém proporção original, escala para no máximo 1024px
+     scale = min(1024 / orig_w, 1024 / orig_h)
+     target_w = int(orig_w * scale)
+     target_h = int(orig_h * scale)
+     response = await _nano_banana_edit(client, image_bytes, prompt[:2200], edit_strength=0.3, width=target_w, height=target_h)
      if response.status_code == 200:
       return _decode_gemini_response(response)
      print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code}), tentando FLUX...")
