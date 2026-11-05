@@ -1356,14 +1356,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 yield "event: done\ndata: " + json.dumps({"model": "ferramenta-local", "sources": []}, ensure_ascii=False) + "\n\n"
             return StreamingResponse(local_tool_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
         return ChatResponse(reply=tool_result, model="ferramenta-local")
-    
-    # Se foi pedido resumo, substitui a última mensagem do usuário pelo texto da página
-    if summary_requested and tool_result:
-        # Remove a última mensagem do usuário (que tinha "Leia a página...")
-        for i in range(len(messages) - 1, -1, -1):
-            if messages[i]["role"] == "user":
-                messages[i]["content"] = tool_result
-                break
 
     search_unavailable = False
     sources: list[dict[str, str]] = []
@@ -1455,6 +1447,15 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         })
     for message in request.messages:
         messages.append({"role": message.role, "content": provider_content(message.content)})
+    
+    # Se foi pedido resumo, substitui a última mensagem do usuário pelo texto da página
+    if summary_requested and tool_result:
+        # Remove a última mensagem do usuário (que tinha "Leia a página...")
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]["role"] == "user":
+                messages[i]["content"] = tool_result
+                break
+    
     print(f"[DEBUG] messages final: {len(messages)} mensagens")
     for i, msg in enumerate(messages):
         print(f"[DEBUG]   [{i}] role={msg['role']}, content={msg['content'][:100]}...")
