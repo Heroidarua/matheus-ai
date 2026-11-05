@@ -239,7 +239,7 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
     cloudflare_error(response)
     return decode_image_result(response, IMAGE_EDIT_MODEL)
    if response:
-    print(f"[edit-image] FLUX falhou (HTTP {response.status_code}), tentando Nano Banana...")
+    print(f"[edit-image] FLUX falhou (HTTP {response.status_code}): {response.text[:300]}, tentando Nano Banana...")
    # 2º: fallback para Nano Banana (Google) — melhor qualidade, mas redesenha
    if GEMINI_API_KEY:
     try:
