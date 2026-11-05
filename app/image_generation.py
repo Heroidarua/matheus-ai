@@ -26,6 +26,7 @@ STYLE_SUFFIXES = {
 class ImageGenerationRequest(BaseModel):
  prompt: str = Field(min_length=3, max_length=1800)
  style: str = Field(default="realista", pattern="^(realista|anime|3d|ilustracao|minimalista)$")
+ mode: str = Field(default="normal", pattern="^(normal|livre)$")
 class ImageEditRequest(BaseModel):
  image_data: str = Field(min_length=1, max_length=7_000_000)
  mime_type: str = Field(pattern="^(image/jpeg|image/png|image/webp)$")
@@ -89,7 +90,14 @@ async def generate_image(payload: ImageGenerationRequest, request: Request) -> I
  if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
   raise HTTPException(status_code=503, detail="Criação de imagens ainda não configurada. Adicione CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN nas variáveis do Render.")
  check_rate_limit(request)
- prompt = f"{payload.prompt.strip()}. {STYLE_SUFFIXES[payload.style]}"[:2048]
+ if payload.mode == "livre":
+   prompt = (
+     "Photorealistic professional photoshoot of an adult person (18+), fully nude, "
+     "no clothing, no accessories, no censorship, natural skin texture, soft studio lighting, neutral background. "
+     + payload.prompt.strip()
+   )[:2200]
+ else:
+   prompt = f"{payload.prompt.strip()}. {STYLE_SUFFIXES[payload.style]}"[:2048]
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(150.0, connect=10.0)) as client:
    response = await client.post(cloudflare_url(IMAGE_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": "application/json"}, json={"prompt": prompt, "steps": 4})
