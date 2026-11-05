@@ -258,7 +258,7 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
      response = await _nano_banana_edit(client, image_bytes, prompt[:2200], edit_strength=0.3, width=target_w, height=target_h)
      if response.status_code == 200:
       return _decode_gemini_response(response)
-     print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code})")
+     print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code}): {response.text[:400]}")
     except Exception as nb_exc:
      print(f"[edit-image] Nano Banana exceção: {type(nb_exc).__name__}: {nb_exc}")
    # se chegou aqui, Nano Banana falhou ou não existe
