@@ -195,8 +195,10 @@ async def _inpaint_fallback(client, image_bytes: bytes, user_prompt: str):
 
 @router.post("/api/edit-image", response_model=ImageGenerationResponse)
 async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenerationResponse:
- if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
-  raise HTTPException(status_code=503, detail="Edição de imagens não configurada. Confira CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN no Render.")
+ # Se não tem token Cloudflare, pula direto para Nano Banana
+ has_cloudflare = bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN)
+ if not has_cloudflare and not GEMINI_API_KEY:
+  raise HTTPException(status_code=503, detail="Edição de imagens não configurada. Defina CLOUDFLARE_API_TOKEN ou GEMINI_API_KEY no Render.")
  check_rate_limit(request)
  try: raw = base64.b64decode(payload.image_data, validate=True)
  except (binascii.Error, ValueError): raise HTTPException(status_code=400, detail="A imagem enviada é inválida.")
@@ -229,17 +231,21 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
    # 1º: tenta FLUX (Cloudflare) — preserva melhor os pixels originais
-   body, content_type = _multipart_body({"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "9.0"}, {"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
-   try:
-    response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
-   except Exception as cf_exc:
-    print(f"[edit-image] FLUX exceção: {type(cf_exc).__name__}: {cf_exc}, tentando Nano Banana...")
-    response = None
-   if response and response.status_code == 200:
-    cloudflare_error(response)
-    return decode_image_result(response, IMAGE_EDIT_MODEL)
-   if response:
-    print(f"[edit-image] FLUX falhou (HTTP {response.status_code}): {response.text[:300]}, tentando Nano Banana...")
+   response = None
+   if has_cloudflare:
+    body, content_type = _multipart_body({"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "9.0"}, {"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
+    try:
+     response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
+    except Exception as cf_exc:
+     print(f"[edit-image] FLUX exceção: {type(cf_exc).__name__}: {cf_exc}, tentando Nano Banana...")
+     response = None
+    if response and response.status_code == 200:
+     cloudflare_error(response)
+     return decode_image_result(response, IMAGE_EDIT_MODEL)
+    if response:
+     print(f"[edit-image] FLUX falhou (HTTP {response.status_code}): {response.text[:300]}, tentando Nano Banana...")
+   else:
+    print("[edit-image] Sem token Cloudflare, usando Nano Banana...")
    # 2º: fallback para Nano Banana (Google) — melhor qualidade, mas redesenha
    if GEMINI_API_KEY:
     try:
