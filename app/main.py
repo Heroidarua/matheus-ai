@@ -1651,6 +1651,21 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         print(f"Model provider completed in {time.perf_counter() - started_at:.2f}s")
         DIAGNOSTICS["successes"] += 1
         DIAGNOSTICS["last_error"] = None
+        
+        # Se o modelo gerou código, executa e retorna o resultado
+        if code_generation_needed:
+            generated_code = reply.strip()
+            # Remove cercas de código markdown se houver (```python ... ```)
+            if generated_code.startswith("```python"):
+                generated_code = generated_code[9:]
+            if generated_code.endswith("```"):
+                generated_code = generated_code[:-3]
+            generated_code = generated_code.strip()
+            
+            execution_result = executar_codigo_python(generated_code, mode=request.mode)
+            full_reply = f"Código gerado:\n```python\n{generated_code}\n```\n\nResultado da execução:\n{execution_result}"
+            return ChatResponse(reply=full_reply, model=str(data.get("model", MODEL_NAME)), sources=sources)
+        
         return ChatResponse(reply=reply.strip(), model=str(data.get("model", MODEL_NAME)), sources=sources)
     except httpx.TimeoutException:
         elapsed = time.perf_counter() - started_at
