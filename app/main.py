@@ -1338,11 +1338,13 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 tool_result = executar_codigo_python(tool_arg)
             elif tool_name == "ler_url":
                 raw_text = await ler_url_async(tool_arg)
-                # Se o usuário pediu resumo, adiciona instrução
+                tool_result = raw_text
+                # Se o usuário pediu resumo, adiciona mensagem de sistema
                 if any(w in last_user_message.lower() for w in ["resumo", "resuma", "resumir", "summarize"]):
-                    tool_result = f"Aqui está o conteúdo da página. Resuma-o de forma clara e objetiva:\n\n{raw_text}"
-                else:
-                    tool_result = raw_text
+                    messages.append({
+                        "role": "system",
+                        "content": "Você é um assistente que resume páginas web. Resuma o conteúdo abaixo de forma clara, objetiva e em português do Brasil. Use no máximo 3 parágrafos curtos."
+                    })
             else:
                 tool_result = None
         else:
