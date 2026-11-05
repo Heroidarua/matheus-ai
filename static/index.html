@@ -457,30 +457,10 @@
     const webSearchToggle = document.getElementById('web-search-toggle');
     const stopButton = document.getElementById('stop-button');
     const voiceStatus = document.getElementById('voice-status');
-    const supremeModeButton = document.getElementById('supreme-mode-button');
-    let currentMode = 'livre';
+    let currentMode = 'livre'; // Sempre sem censura
     let activeController = null;
 
-    function setSupremeMode(enabled, persist = true) {
-      currentMode = enabled ? 'livre' : 'normal';
-      document.body.classList.toggle('supreme-mode', enabled);
-      supremeModeButton.setAttribute('aria-pressed', String(enabled));
-      supremeModeButton.innerHTML = enabled
-        ? '<span>🔴</span>ATIVO'
-        : '<span>🔴</span>Modo Livre';
-      supremeModeButton.title = enabled
-        ? 'Desativar o Modo Supremo e voltar ao modo normal'
-        : 'Ativar o Modo Supremo com visual vermelho';
-      if (persist) {
-        try { localStorage.setItem('ada-m-supreme-mode', enabled ? 'on' : 'off'); } catch {}
-      }
-    }
-    supremeModeButton.addEventListener('click', () => {
-      setSupremeMode(currentMode !== 'livre');
-    });
-    try {
-      setSupremeMode(localStorage.getItem('ada-m-supreme-mode') === 'on', false);
-    } catch { setSupremeMode(false, false); }
+    // Modo sempre livre (sem censura) - classe aplicada no body via HTML
     document.getElementById('theme-button').addEventListener('click', () => {
       document.body.classList.toggle('light-theme');
       const light = document.body.classList.contains('light-theme');
