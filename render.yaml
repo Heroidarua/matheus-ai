@@ -41,6 +41,8 @@ services:
         value: "@cf/black-forest-labs/flux-1-schnell"
       - key: IMAGE_EDIT_MODEL
         value: "@cf/black-forest-labs/flux-2-klein-9b"
+      - key: GEMINI_API_KEY
+        sync: false
       - key: APP_API_KEY
         sync: false
       - key: LIVEKIT_URL
