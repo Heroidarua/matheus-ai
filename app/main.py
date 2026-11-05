@@ -1328,6 +1328,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         deleted = await asyncio.to_thread(forget_long_term_memory, session_id)
         tool_result = f"Apaguei {deleted} memória(s) de longo prazo desta sessão."
     else:
+        summary_requested = False
         # Tenta detectar ferramentas do agente (executar_codigo, ler_url, calcular)
         agent_tool = detectar_ferramenta(last_user_message)
         if agent_tool:
@@ -1339,12 +1340,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             elif tool_name == "ler_url":
                 raw_text = await ler_url_async(tool_arg)
                 tool_result = raw_text
-                # Se o usuário pediu resumo, adiciona mensagem de sistema
+                # Se o usuário pediu resumo, marca para adicionar instrução depois
                 if any(w in last_user_message.lower() for w in ["resumo", "resuma", "resumir", "summarize"]):
-                    messages.append({
-                        "role": "system",
-                        "content": "Você é um assistente que resume páginas web. Resuma o conteúdo abaixo de forma clara, objetiva e em português do Brasil. Use no máximo 3 parágrafos curtos."
-                    })
+                    summary_requested = True
             else:
                 tool_result = None
         else:
@@ -1439,6 +1437,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "<web_search_results>\n" + web_context[:7000] + "\n</web_search_results>"
         )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    # Se foi pedido resumo de URL, adiciona instrução específica
+    if summary_requested and tool_result:
+        messages.append({
+            "role": "system",
+            "content": "Você é um assistente que resume páginas web. Resuma o conteúdo abaixo de forma clara, objetiva e em português do Brasil. Use no máximo 3 parágrafos curtos."
+        })
     for message in request.messages:
         messages.append({"role": message.role, "content": provider_content(message.content)})
 
