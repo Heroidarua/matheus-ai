@@ -340,7 +340,7 @@
     details.jailbreak-thinking .thinking-label { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:#d39a9f; margin-bottom:6px; }
   </style>
 </head>
-<body>
+<body class="supreme-mode">
   <main class="app">
     <header class="app-header app-header-v2">
       <div class="brand-monogram" aria-hidden="true">
@@ -379,7 +379,7 @@
               <div class="tools primary-tools">
                 <button class="tool-btn" type="button" id="photo-button"><span>🖼️</span>Enviar fotos</button>
                 <button class="tool-btn" type="button" id="camera-button"><span>📷</span>Tirar foto</button>
-                <button class="tool-btn supreme-mode-button" type="button" id="supreme-mode-button" aria-pressed="false" title="Alternar entre o modo normal e o Modo Supremo da ADA-M"><span>🔴</span>Modo Livre</button>
+                <button class="tool-btn supreme-mode-button" type="button" id="supreme-mode-button" aria-pressed="true" title="Alternar entre o modo normal e o Modo Supremo da ADA-M"><span>🔴</span>ATIVO</button>
                 <button class="tool-btn" type="button" hidden id="image-studio-button"><span>✨</span>Criar imagem com IA</button>
                 <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
                 <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
@@ -458,7 +458,7 @@
     const stopButton = document.getElementById('stop-button');
     const voiceStatus = document.getElementById('voice-status');
     const supremeModeButton = document.getElementById('supreme-mode-button');
-    let currentMode = 'normal';
+    let currentMode = 'livre';
     let activeController = null;
 
     function setSupremeMode(enabled, persist = true) {
