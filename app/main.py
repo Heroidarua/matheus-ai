@@ -514,7 +514,7 @@ def executar_codigo_python(code: str) -> str:
 
 
 async def ler_url_async(url: str, max_chars: int = 8000) -> str:
-    """Baixa uma página web e extrai o texto principal, removendo ruído."""
+    """Baixa uma página web e extrai o texto principal dos parágrafos."""
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -530,24 +530,30 @@ async def ler_url_async(url: str, max_chars: int = 8000) -> str:
                 return f"Erro HTTP {resp.status_code} ao acessar a URL. A página pode não existir ou estar bloqueando robôs."
             html = resp.text
         
-        # Remove ruído do HTML
-        text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<nav[^>]*>.*?</nav>", "", text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<footer[^>]*>.*?</footer>", "", text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<header[^>]*>.*?</header>", "", text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<aside[^>]*>.*?</aside>", "", text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<form[^>]*>.*?</form>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        # Extrai todos os parágrafos <p> (contêm o texto real do artigo)
+        paragraphs = re.findall(r"<p[^>]*>(.*?)</p>", html, re.DOTALL | re.IGNORECASE)
         
-        # Remove tags restantes
-        text = re.sub(r"<[^>]+>", " ", text)
-        # Remove caracteres especiais e espaços excessivos
-        text = re.sub(r"\s+", " ", text).strip()
-        # Remove templates da Wikipedia ({{...}})
-        text = re.sub(r"\{\{.*?\}\}", "", text)
-        text = re.sub(r"\[\[.*?\]\]", "", text)  # Remove [[links]]
-        # Remove referências [1], [2], etc.
-        text = re.sub(r"\[\d+\]", "", text)
+        if not paragraphs:
+            # Fallback: remove tudo que não é <p>
+            text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r"<[^>]+>", " ", text)
+            text = re.sub(r"\s+", " ", text).strip()
+            return text[:max_chars] if text else "(página vazia ou sem texto)"
+        
+        # Limpa cada parágrafo
+        cleaned_paragraphs = []
+        for p in paragraphs:
+            # Remove tags internas (links, refs, etc.)
+            clean_p = re.sub(r"<[^>]+>", "", p)
+            # Remove espaços excessivos
+            clean_p = re.sub(r"\s+", " ", clean_p).strip()
+            # Ignora parágrafos muito curtos (< 20 chars)
+            if len(clean_p) >= 20:
+                cleaned_paragraphs.append(clean_p)
+        
+        # Junta os parágrafos com quebras de linha
+        text = "\n\n".join(cleaned_paragraphs)
         
         return text[:max_chars] if text else "(página vazia ou sem texto)"
     except httpx.TimeoutException:
