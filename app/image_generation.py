@@ -243,6 +243,7 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
      cloudflare_error(response)
      return decode_image_result(response, IMAGE_EDIT_MODEL)
     if response:
+     # 401/403 = token sem permissão de Workers AI → cai no fallback em vez de errar
      print(f"[edit-image] FLUX falhou (HTTP {response.status_code}): {response.text[:300]}, tentando Nano Banana...")
    else:
     print("[edit-image] Sem token Cloudflare, usando Nano Banana...")
