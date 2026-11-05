@@ -506,50 +506,60 @@ def calcular_seguro(expressao: str) -> str:
         return f"Não consegui calcular: {exc}"
 
 
-def executar_codigo_python(code: str) -> str:
-    """Executa um trecho de Python em sandbox com timeout e bloqueio de imports perigosos."""
-    import sys
-    import io
-    import signal
-    from contextlib import redirect_stdout, redirect_stderr
+def executar_codigo_python(code: str, mode: str = "normal") -> str:
+    """Executa um trecho de Python em sandbox seguro usando subprocess com timeout."""
+    import tempfile
     
     # Valida se o código não está vazio
     if not code or not code.strip():
         return "Erro: nenhum código fornecido. Use o formato: execute seu_código_aqui"
     
-    # Bloqueia imports perigosos
-    dangerous_modules = {"os", "sys", "subprocess", "shutil", "pathlib", "socket", "http", "urllib", "requests"}
-    for mod in dangerous_modules:
-        if f"import {mod}" in code or f"from {mod} import" in code:
-            return f"Erro: módulo '{mod}' não está permitido no sandbox. Use apenas bibliotecas padrão seguras (math, random, datetime, etc.)."
+    # Bloqueia imports perigosos (exceto no modo livre)
+    if mode != "livre":
+        dangerous_modules = {"os", "sys", "subprocess", "shutil", "pathlib", "socket", "http", "urllib", "requests"}
+        for mod in dangerous_modules:
+            if f"import {mod}" in code or f"from {mod} import" in code:
+                return f"Erro: módulo '{mod}' não está permitido no sandbox. Use apenas bibliotecas padrão seguras (math, random, datetime, etc.) ou ative o Modo Livre."
     
-    def timeout_handler(signum, frame):
-        raise TimeoutError("Código demorou mais de 10 segundos para executar.")
+    # Cria um arquivo temporário com o código
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+        f.write(code)
+        temp_file = f.name
     
-    # Configura timeout de 10 segundos
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(10)
-    
-    old_stdout, old_stderr = sys.stdout, sys.stderr
-    sys.stdout = sys.stderr = io.StringIO()
     try:
-        exec(compile(code, "<sandbox>", "exec"), {"__name__": "__sandbox__"})
-        out = sys.stdout.getvalue()
-        err = sys.stderr.getvalue()
-        if out.strip():
-            return out.strip()[:2000]
-        if err.strip():
-            return "Saída de erro:\n" + err.strip()[:500]
+        # Executa o código em um subprocess com timeout de 10 segundos
+        result = subprocess.run(
+            ["python3", temp_file],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env={**os.environ, "PYTHONPATH": ""}  # Limpa PYTHONPATH para isolar
+        )
+        
+        out = result.stdout.strip()
+        err = result.stderr.strip()
+        
+        if result.returncode != 0:
+            if err:
+                return f"Erro ao executar:\n{err[:1000]}"
+            return "Erro ao executar o código."
+        
+        if out:
+            return out[:2000]
+        if err:
+            return f"Avisos:\n{err[:500]}"
         return "(código executado sem saída)"
-    except TimeoutError:
+        
+    except subprocess.TimeoutExpired:
         return "Erro: o código demorou mais de 10 segundos para executar. Tente otimizar ou simplificar."
-    except SyntaxError as exc:
-        return f"Erro de sintaxe no código: {exc}. Verifique se o código Python está correto."
     except Exception as exc:
-        return f"Erro ao executar: {type(exc).__name__}: {exc}"
+        return f"Erro inesperado: {type(exc).__name__}: {exc}"
     finally:
-        signal.alarm(0)  # Cancela o timeout
-        sys.stdout, sys.stderr = old_stdout, old_stderr
+        # Remove o arquivo temporário
+        try:
+            os.unlink(temp_file)
+        except:
+            pass
 
 
 async def ler_url_async(url: str, max_chars: int = 8000) -> str:
