@@ -65,7 +65,6 @@ def check_rate_limit(ip: str) -> bool:
         return False
     rate_limit_store[ip].append(now)
     return True
-)
 
 load_dotenv()
 
