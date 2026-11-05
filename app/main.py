@@ -513,8 +513,8 @@ def executar_codigo_python(code: str) -> str:
         sys.stdout, sys.stderr = old_stdout, old_stderr
 
 
-async def ler_url_async(url: str, max_chars: int = 4000) -> str:
-    """Baixa uma página web e extrai o texto principal."""
+async def ler_url_async(url: str, max_chars: int = 6000) -> str:
+    """Baixa uma página web e extrai o texto principal, removendo ruído."""
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -529,13 +529,30 @@ async def ler_url_async(url: str, max_chars: int = 4000) -> str:
             if resp.status_code >= 400:
                 return f"Erro HTTP {resp.status_code} ao acessar a URL. A página pode não existir ou estar bloqueando robôs."
             html = resp.text
+        
+        # Remove ruído do HTML
         text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<nav[^>]*>.*?</nav>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<footer[^>]*>.*?</footer>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<header[^>]*>.*?</header>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<aside[^>]*>.*?</aside>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<form[^>]*>.*?</form>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<table[^>]*>.*?</table>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Extrai o conteúdo principal (Wikipedia usa <div id="mw-content-text">)
+        content_match = re.search(r'<div[^>]*id="mw-content-text"[^>]*>(.*?)</div>\s*<div', text, re.DOTALL | re.IGNORECASE)
+        if content_match:
+            text = content_match.group(1)
+        
+        # Remove tags restantes
         text = re.sub(r"<[^>]+>", " ", text)
+        # Remove caracteres especiais e espaços excessivos
         text = re.sub(r"\s+", " ", text).strip()
+        # Remove templates da Wikipedia ({{...}})
+        text = re.sub(r"\{\{.*?\}\}", "", text)
+        text = re.sub(r"\[\[.*?\]\]", "", text)  # Remove [[links]]
+        
         return text[:max_chars] if text else "(página vazia ou sem texto)"
     except httpx.TimeoutException:
         return "Erro: a página demorou demais para carregar."
@@ -1318,7 +1335,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             elif tool_name == "executar_codigo":
                 tool_result = executar_codigo_python(tool_arg)
             elif tool_name == "ler_url":
-                tool_result = await ler_url_async(tool_arg)
+                raw_text = await ler_url_async(tool_arg)
+                # Se o usuário pediu resumo, adiciona instrução
+                if any(w in last_user_message.lower() for w in ["resumo", "resuma", "resumir", "summarize"]):
+                    tool_result = f"Aqui está o conteúdo da página. Resuma-o de forma clara e objetiva:\n\n{raw_text}"
+                else:
+                    tool_result = raw_text
             else:
                 tool_result = None
         else:
