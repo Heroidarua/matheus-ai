@@ -63,7 +63,7 @@
     return source && (EDIT_RE.test(source) || (hasImage && CREATE_RE.test(source))) ? source : null;
   };
 
-  window.ADAEditImageInChat = async (file, prompt, bubble) => {
+  window.ADAEditImageInChat = async (file, prompt, bubble, mode = 'normal') => {
     bubble.replaceChildren();
     const status = document.createElement('p');
     status.textContent = '🪄 Editando sua foto… A imagem original será usada como referência.';
@@ -71,7 +71,7 @@
     const response = await fetch('/api/edit-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_data: await fileToBase64(file), mime_type: file.type, prompt })
+      body: JSON.stringify({ image_data: await fileToBase64(file), mime_type: file.type, prompt, mode })
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || 'Não foi possível editar a foto.');

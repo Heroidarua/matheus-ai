@@ -1527,6 +1527,9 @@
       plusButton.setAttribute('aria-expanded', 'false');
       imageStudioDialog.showModal();
       imageStudioPrompt.focus();
+      // Ao abrir, sincroniza o estado do Modo Livre com o modo livre global do chat.
+      const freeModeEl0 = document.getElementById('image-free-mode');
+      if (freeModeEl0) freeModeEl0.checked = (typeof currentMode !== 'undefined' && currentMode === 'livre');
     });
     document.getElementById('image-studio-close').addEventListener('click', () => imageStudioDialog.close());
     imageStudioForm.addEventListener('submit', async event => {
@@ -1537,10 +1540,12 @@
       imageStudioGenerate.textContent = 'Gerando…';
       imageStudioStatus.textContent = 'A ADA-M está criando sua imagem. Isso pode levar alguns instantes.';
       try {
+        const freeModeEl = document.getElementById('image-free-mode');
+        const studioMode = freeModeEl && freeModeEl.checked ? 'livre' : 'normal';
         const response = await fetch('/api/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, style: document.getElementById('image-studio-style').value })
+          body: JSON.stringify({ prompt, style: document.getElementById('image-studio-style').value, mode: studioMode })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || 'Não foi possível gerar a imagem.');
@@ -1613,7 +1618,7 @@
       const pending = addBubble('Analisando...', 'assistant');
       try {
         if (imageEditPrompt && imageFile && window.ADAEditImageInChat) {
-          const imageResult = await window.ADAEditImageInChat(imageFile, imageEditPrompt, pending);
+          const imageResult = await window.ADAEditImageInChat(imageFile, imageEditPrompt, pending, currentMode === 'livre' ? 'livre' : 'normal');
           history.push({ role: 'assistant', content: imageResult });
           while (history.length > 12) history.shift();
           return;
