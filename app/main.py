@@ -1473,7 +1473,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         print(f"Long-term memory unavailable ({type(exc).__name__})")
         long_term_items = []
     combined_memory = list(request.memory) + long_term_items
-    system_prompt = build_system_prompt(request.mode, last_user_message, combined_memory, request.response_length)
+    system_prompt = build_system_prompt("livre", last_user_message, combined_memory, request.response_length)  # Sempre sem censura
     system_prompt += "\n\n" + build_companion_prompt(affective_state)
     if deep_research:
         system_prompt += (
