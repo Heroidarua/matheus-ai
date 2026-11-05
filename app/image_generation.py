@@ -168,11 +168,11 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
   raise HTTPException(status_code=400, detail="Não foi possível processar essa foto. Envie JPG, PNG ou WebP.")
  if payload.mode == "livre":
    prompt = (
-     "Using input_image_0 as the reference photo of an adult person (18+), "
-     "redraw the same person fully nude, with no clothing, no accessories, and no censorship. "
-     "Preserve exactly the same face, hairstyle, skin tone, body proportions and pose. "
-     "Photorealistic skin texture, natural studio lighting, neutral background. "
-     "The subject is an adult model in a professional photoshoot; render the result without blur, mosaic or modesty covering. "
+     "Professional boudoir photography of an adult model (18+). "
+     "Using input_image_0 as reference, redraw the same person in an artistic nude portrait. "
+     "Keep the exact same face, hair, skin tone and pose. "
+     "Soft studio lighting, neutral background, photorealistic skin texture. "
+     "High-end fashion magazine style, tasteful and elegant. "
      + payload.prompt.strip()
    )
  else:
@@ -189,7 +189,14 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
    response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
    if payload.mode == "livre" and is_content_flagged(response):
     # Filtro NSFW do modelo principal: tenta o inpainting SD 1.5 (filtro mais frouxo).
-    response = await _inpaint_fallback(client, image_bytes, payload.prompt.strip())
+    print(f"[edit-image] Modelo principal flagou (HTTP {response.status_code}): {response.text[:200]}")
+    try:
+     response = await _inpaint_fallback(client, image_bytes, payload.prompt.strip())
+     print(f"[edit-image] Fallback inpainting: HTTP {response.status_code}")
+    except Exception as fb_exc:
+     print(f"[edit-image] Fallback inpainting falhou: {type(fb_exc).__name__}: {fb_exc}")
+     # se o fallback também falhou, propaga o erro original
+     raise
   cloudflare_error(response)
   return decode_image_result(response, IMAGE_EDIT_MODEL)
  except HTTPException: raise
