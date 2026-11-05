@@ -195,20 +195,19 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
   raise HTTPException(status_code=400, detail="Não foi possível processar essa foto. Envie JPG, PNG ou WebP.")
  if payload.mode == "livre":
    prompt = (
-     "Photorealistic professional photograph, NOT illustration, NOT cartoon, NOT painting. "
-     "Using input_image_0 as the reference photo of an adult person (18+), "
-     "redraw the exact same person with photorealistic skin texture and natural lighting. "
-     "Preserve the identical face, hairstyle, skin tone, body proportions and pose from the reference. "
-     "The result must look like a real camera photo, not digital art. "
+     "Edit this photo: remove all clothing from the person. "
+     "CRITICAL: Keep the EXACT same body shape, weight, proportions and build as in the original photo. "
+     "Do NOT make the person thinner, fatter, taller or shorter. "
+     "Preserve the identical face, hairstyle, skin tone, body type and pose. "
+     "Photorealistic, natural lighting, same background. "
      + payload.prompt.strip()
    )
  else:
    prompt = (
-     "Photorealistic professional photograph, NOT illustration, NOT cartoon, NOT painting. "
-     "Using input_image_0 as the reference photo, apply the requested transformation while keeping photorealistic quality. "
-     "Preserve the subject's exact facial features, skin texture and natural lighting from the reference. "
-     + payload.prompt.strip()
-     + ". The result must look like a real camera photo with the requested change applied."
+     "Edit this photo: " + payload.prompt.strip() + ". "
+     "CRITICAL: Keep the EXACT same people, faces, body shapes, weights, proportions and poses as in the original. "
+     "Do NOT alter body types, make anyone thinner or fatter, or change facial features. "
+     "Only apply the requested edit. Photorealistic, same lighting, same background. "
    )
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
