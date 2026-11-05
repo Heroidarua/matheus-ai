@@ -168,24 +168,24 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
   raise HTTPException(status_code=400, detail="Não foi possível processar essa foto. Envie JPG, PNG ou WebP.")
  if payload.mode == "livre":
    prompt = (
-     "Professional boudoir photography of an adult model (18+). "
-     "Using input_image_0 as reference, redraw the same person in an artistic nude portrait. "
-     "Keep the exact same face, hair, skin tone and pose. "
-     "Soft studio lighting, neutral background, photorealistic skin texture. "
-     "High-end fashion magazine style, tasteful and elegant. "
+     "Photorealistic professional photograph, NOT illustration, NOT cartoon, NOT painting. "
+     "Using input_image_0 as the reference photo of an adult person (18+), "
+     "redraw the exact same person with photorealistic skin texture and natural lighting. "
+     "Preserve the identical face, hairstyle, skin tone, body proportions and pose from the reference. "
+     "The result must look like a real camera photo, not digital art. "
      + payload.prompt.strip()
    )
  else:
    prompt = (
-     "Create a new transformed image using input_image_0 as the reference photo. "
-     "Apply the requested visual style clearly; do not reproduce the original image unchanged. "
-     "Preserve the subject's recognizable facial features and hairstyle while redrawing the subject in the requested style. "
+     "Photorealistic professional photograph, NOT illustration, NOT cartoon, NOT painting. "
+     "Using input_image_0 as the reference photo, apply the requested transformation while keeping photorealistic quality. "
+     "Preserve the subject's exact facial features, skin texture and natural lighting from the reference. "
      + payload.prompt.strip()
-     + ". The result must visibly reflect the requested transformation."
+     + ". The result must look like a real camera photo with the requested change applied."
    )
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
-   body, content_type = _multipart_body({"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "4"}, {"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
+   body, content_type = _multipart_body({"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "7.5"}, {"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
    response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
    if payload.mode == "livre" and is_content_flagged(response):
     # Filtro NSFW do modelo principal: tenta o inpainting SD 1.5 (filtro mais frouxo).
