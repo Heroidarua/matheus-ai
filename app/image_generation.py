@@ -228,31 +228,27 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
    )
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
-   # 1º: tenta Nano Banana (melhor qualidade de edição)
+   # 1º: tenta FLUX (Cloudflare) — preserva melhor os pixels originais
+   body, content_type = _multipart_body({"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "9.0"}, {"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
+   response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
+   if response.status_code == 200:
+    cloudflare_error(response)
+    return decode_image_result(response, IMAGE_EDIT_MODEL)
+   print(f"[edit-image] FLUX falhou (HTTP {response.status_code}), tentando Nano Banana...")
+   # 2º: fallback para Nano Banana (Google) — melhor qualidade, mas redesenha
    if GEMINI_API_KEY:
     try:
      orig_w, orig_h = _get_image_dimensions(image_bytes)
-     # Mantém proporção original, escala para no máximo 1024px
      scale = min(1024 / orig_w, 1024 / orig_h)
      target_w = int(orig_w * scale)
      target_h = int(orig_h * scale)
      response = await _nano_banana_edit(client, image_bytes, prompt[:2200], edit_strength=0.3, width=target_w, height=target_h)
      if response.status_code == 200:
       return _decode_gemini_response(response)
-     print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code}), tentando FLUX...")
+     print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code})")
     except Exception as nb_exc:
-     print(f"[edit-image] Nano Banana exceção: {type(nb_exc).__name__}: {nb_exc}, tentando FLUX...")
-   # 2º: fallback para FLUX (Cloudflare)
-   body, content_type = _multipart_body({"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "7.5"}, {"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
-   response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
-   if payload.mode == "livre" and is_content_flagged(response):
-    print(f"[edit-image] FLUX flagou (HTTP {response.status_code}), tentando inpainting...")
-    try:
-     response = await _inpaint_fallback(client, image_bytes, payload.prompt.strip())
-     print(f"[edit-image] Fallback inpainting: HTTP {response.status_code}")
-    except Exception as fb_exc:
-     print(f"[edit-image] Fallback inpainting falhou: {type(fb_exc).__name__}: {fb_exc}")
-     raise
+     print(f"[edit-image] Nano Banana exceção: {type(nb_exc).__name__}: {nb_exc}")
+   # se ambos falharam, propaga o erro do FLUX
    cloudflare_error(response)
    return decode_image_result(response, IMAGE_EDIT_MODEL)
  except HTTPException: raise
