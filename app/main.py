@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import ipaddress
 import asyncio
+import subprocess
 import csv
 import json
 import base64
@@ -439,6 +440,127 @@ def safe_calculate(expression: str) -> int | float:
         raise ValueError("A expressão contém operações não permitidas.")
 
     return visit(tree)
+
+
+
+
+# ============================================================
+# FERRAMENTAS DO AGENTE (execução de código, leitura de URL, cálculo)
+# ============================================================
+
+def _safe_eval_node(node):
+    """Avalia uma expressão Python de forma segura (sem chamadas de função arbitrárias)."""
+    if isinstance(node, ast.Expression):
+        return _safe_eval_node(node.body)
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.BinOp):
+        ops = {ast.Add: lambda a,b: a+b, ast.Sub: lambda a,b: a-b, ast.Mult: lambda a,b: a*b,
+               ast.Div: lambda a,b: a/b, ast.FloorDiv: lambda a,b: a//b, ast.Mod: lambda a,b: a%b,
+               ast.Pow: lambda a,b: a**b}
+        op = ops.get(type(node.op))
+        if op is None:
+            raise ValueError("Operador não permitido")
+        return op(_safe_eval_node(node.left), _safe_eval_node(node.right))
+    if isinstance(node, ast.UnaryOp):
+        ops = {ast.UAdd: lambda a: +a, ast.USub: lambda a: -a}
+        op = ops.get(type(node.op))
+        if op is None:
+            raise ValueError("Operador unário não permitido")
+        return op(_safe_eval_node(node.operand))
+    if isinstance(node, ast.Call):
+        allowed = {"abs", "round", "min", "max", "sum", "len"}
+        if isinstance(node.func, ast.Name) and node.func.id in allowed:
+            args = [_safe_eval_node(a) for a in node.args]
+            builtins_dict = __builtins__ if isinstance(__builtins__, dict) else __builtins__.__builtins__
+            return getattr(builtins_dict, node.func.id)(*args)
+        raise ValueError(f"Função não permitida: {getattr(node.func, 'id', '?')}")
+    raise ValueError(f"Tipo de nó não permitido: {type(node).__name__}")
+
+
+def calcular_seguro(expressao: str) -> str:
+    """Calcula uma expressão matemática de forma segura."""
+    try:
+        tree = ast.parse(expressao.strip(), mode="eval")
+        resultado = _safe_eval_node(tree)
+        return f"Resultado: {resultado}"
+    except ZeroDivisionError:
+        return "Erro: divisão por zero."
+    except Exception as exc:
+        return f"Não consegui calcular: {exc}"
+
+
+def executar_codigo_python(code: str) -> str:
+    """Executa um trecho de Python em sandbox e retorna a saída."""
+    import sys
+    import io
+    from contextlib import redirect_stdout, redirect_stderr
+    
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    sys.stdout = sys.stderr = io.StringIO()
+    try:
+        exec(compile(code, "<sandbox>", "exec"), {"__name__": "__sandbox__"})
+        out = sys.stdout.getvalue()
+        err = sys.stderr.getvalue()
+        if out.strip():
+            return out.strip()[:2000]
+        if err.strip():
+            return "Saída de erro:\n" + err.strip()[:500]
+        return "(código executado sem saída)"
+    except Exception as exc:
+        return f"Erro ao executar: {type(exc).__name__}: {exc}"
+    finally:
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+
+
+async def ler_url_async(url: str, max_chars: int = 4000) -> str:
+    """Baixa uma página web e extrai o texto principal."""
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=8.0), follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (MatheusAI/1.0)"})
+            resp.raise_for_status()
+            html = resp.text
+        text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:max_chars] if text else "(página vazia ou sem texto)"
+    except httpx.TimeoutException:
+        return "Erro: a página demorou demais para carregar."
+    except httpx.HTTPError as exc:
+        return f"Erro ao acessar a URL: {type(exc).__name__}"
+    except Exception as exc:
+        return f"Erro inesperado: {exc}"
+
+
+def detectar_ferramenta(message: str) -> tuple[str, str] | None:
+    """Detecta se a mensagem pede para usar uma ferramenta. Retorna (nome_ferramenta, argumento) ou None."""
+    lowered = message.strip().lower()
+    
+    # /calc ou "calcule"
+    if lowered.startswith("/calc ") or lowered.startswith("calcule "):
+        expr = message.strip()[6:].strip() if lowered.startswith("/calc") else message.strip()[7:].strip()
+        return ("calcular", expr)
+    
+    # "execute" / "rode" / "corra" código
+    if any(lowered.startswith(p) for p in ["execute ", "rode ", "corra ", "run "]):
+        code = message.strip().split(" ", 1)[1].strip() if " " in message else ""
+        if code:
+            return ("executar_codigo", code)
+    
+    # "leia a url" / "abra a página" / "veja o site"
+    url_match = None
+    for pattern in [r"(?:leia|abra|veja|acesse|lea|abre|vejo|acesso)\s+(?:a\s+)?(?:url\s+|pagina\s+|site\s+)?(https?://\S+)",
+                    r"(https?://\S+)"]:
+        m = re.search(pattern, message, re.IGNORECASE)
+        if m:
+            url_match = m.group(1).rstrip(".,;!?")
+            break
+    if url_match and any(w in lowered for w in ["leia", "abra", "veja", "acesse", "lea", "abre", "vejo", "acesso", "conteudo", "texto"]):
+        return ("ler_url", url_match)
+    
+    return None
+
 
 
 def content_as_text(content: str | list[dict[str, Any]]) -> str:
