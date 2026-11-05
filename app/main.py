@@ -580,7 +580,7 @@ def detectar_ferramenta(message: str) -> tuple[str, str] | None:
         return ("calcular", expr)
     
     # "execute" / "rode" / "corra" código
-    # O código deve vir depois de ":" ou em uma nova linha
+    # Agora retorna o pedido original (o modelo vai gerar o código)
     if any(lowered.startswith(p) for p in ["execute", "rode", "corra", "run"]):
         rest = message.strip()
         # Remove o prefixo (execute/rode/corra/run)
@@ -593,7 +593,7 @@ def detectar_ferramenta(message: str) -> tuple[str, str] | None:
             rest = rest[1:].strip()
         elif rest.startswith("\n"):
             rest = rest[1:].strip()
-        # Se sobrou algo, é o código
+        # Se sobrou algo, é o pedido (o modelo vai gerar o código)
         if rest:
             return ("executar_codigo", rest)
     
@@ -1347,6 +1347,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         tool_result = f"Apaguei {deleted} memória(s) de longo prazo desta sessão."
     else:
         summary_requested = False
+        code_generation_needed = False
         # Tenta detectar ferramentas do agente (executar_codigo, ler_url, calcular)
         agent_tool = detectar_ferramenta(last_user_message)
         if agent_tool:
@@ -1354,7 +1355,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             if tool_name == "calcular":
                 tool_result = calcular_seguro(tool_arg)
             elif tool_name == "executar_codigo":
-                tool_result = executar_codigo_python(tool_arg)
+                # O modelo vai gerar o código baseado no pedido
+                code_generation_needed = True
+                tool_result = None  # Será preenchido depois
             elif tool_name == "ler_url":
                 raw_text = await ler_url_async(tool_arg)
                 tool_result = raw_text
@@ -1456,6 +1459,14 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "<web_search_results>\n" + web_context[:7000] + "\n</web_search_results>"
         )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    
+    # Se precisa gerar código, adiciona instrução específica
+    if code_generation_needed:
+        messages.append({
+            "role": "system",
+            "content": "Você é um programador Python avançado. Gere um script Python completo e funcional para atender ao pedido do usuário. O código deve ser executável, sem erros de sintaxe, e deve imprimir o resultado no stdout. Não use input() nem bibliotecas externas que não estejam instaladas. Responda APENAS com o código Python, sem explicações."
+        })
+    
     # Se foi pedido resumo de URL, adiciona instrução específica
     if summary_requested and tool_result:
         print(f"[DEBUG] summary_requested=True, adicionando mensagem de sistema")
