@@ -1439,12 +1439,16 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     # Se foi pedido resumo de URL, adiciona instrução específica
     if summary_requested and tool_result:
+        print(f"[DEBUG] summary_requested=True, adicionando mensagem de sistema")
         messages.append({
             "role": "system",
             "content": "Você é um assistente que resume páginas web. Resuma o conteúdo abaixo de forma clara, objetiva e em português do Brasil. Use no máximo 3 parágrafos curtos."
         })
     for message in request.messages:
         messages.append({"role": message.role, "content": provider_content(message.content)})
+    print(f"[DEBUG] messages final: {len(messages)} mensagens")
+    for i, msg in enumerate(messages):
+        print(f"[DEBUG]   [{i}] role={msg['role']}, content={msg['content'][:100]}...")
 
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     # Limites adaptativos reduzem a geração excessiva e aceleram respostas longas.
