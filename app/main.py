@@ -496,6 +496,10 @@ def executar_codigo_python(code: str) -> str:
     import io
     from contextlib import redirect_stdout, redirect_stderr
     
+    # Valida se o código não está vazio
+    if not code or not code.strip():
+        return "Erro: nenhum código fornecido. Use o formato: execute seu_código_aqui"
+    
     old_stdout, old_stderr = sys.stdout, sys.stderr
     sys.stdout = sys.stderr = io.StringIO()
     try:
@@ -507,6 +511,8 @@ def executar_codigo_python(code: str) -> str:
         if err.strip():
             return "Saída de erro:\n" + err.strip()[:500]
         return "(código executado sem saída)"
+    except SyntaxError as exc:
+        return f"Erro de sintaxe no código: {exc}. Verifique se o código Python está correto."
     except Exception as exc:
         return f"Erro ao executar: {type(exc).__name__}: {exc}"
     finally:
@@ -574,10 +580,22 @@ def detectar_ferramenta(message: str) -> tuple[str, str] | None:
         return ("calcular", expr)
     
     # "execute" / "rode" / "corra" código
-    if any(lowered.startswith(p) for p in ["execute ", "rode ", "corra ", "run "]):
-        code = message.strip().split(" ", 1)[1].strip() if " " in message else ""
-        if code:
-            return ("executar_codigo", code)
+    # O código deve vir depois de ":" ou em uma nova linha
+    if any(lowered.startswith(p) for p in ["execute", "rode", "corra", "run"]):
+        rest = message.strip()
+        # Remove o prefixo (execute/rode/corra/run)
+        for prefix in ["execute", "rode", "corra", "run"]:
+            if rest.lower().startswith(prefix):
+                rest = rest[len(prefix):].strip()
+                break
+        # Remove dois-pontos e espaços iniciais
+        if rest.startswith(":"):
+            rest = rest[1:].strip()
+        elif rest.startswith("\n"):
+            rest = rest[1:].strip()
+        # Se sobrou algo, é o código
+        if rest:
+            return ("executar_codigo", rest)
     
     # "leia a url" / "abra a página" / "veja o site"
     url_match = None
