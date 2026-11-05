@@ -513,7 +513,7 @@ def executar_codigo_python(code: str) -> str:
         sys.stdout, sys.stderr = old_stdout, old_stderr
 
 
-async def ler_url_async(url: str, max_chars: int = 6000) -> str:
+async def ler_url_async(url: str, max_chars: int = 8000) -> str:
     """Baixa uma página web e extrai o texto principal, removendo ruído."""
     try:
         headers = {
@@ -538,12 +538,6 @@ async def ler_url_async(url: str, max_chars: int = 6000) -> str:
         text = re.sub(r"<header[^>]*>.*?</header>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<aside[^>]*>.*?</aside>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<form[^>]*>.*?</form>", "", text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r"<table[^>]*>.*?</table>", "", text, flags=re.DOTALL | re.IGNORECASE)
-        
-        # Extrai o conteúdo principal (Wikipedia usa <div id="mw-content-text">)
-        content_match = re.search(r'<div[^>]*id="mw-content-text"[^>]*>(.*?)</div>\s*<div', text, re.DOTALL | re.IGNORECASE)
-        if content_match:
-            text = content_match.group(1)
         
         # Remove tags restantes
         text = re.sub(r"<[^>]+>", " ", text)
@@ -552,6 +546,8 @@ async def ler_url_async(url: str, max_chars: int = 6000) -> str:
         # Remove templates da Wikipedia ({{...}})
         text = re.sub(r"\{\{.*?\}\}", "", text)
         text = re.sub(r"\[\[.*?\]\]", "", text)  # Remove [[links]]
+        # Remove referências [1], [2], etc.
+        text = re.sub(r"\[\d+\]", "", text)
         
         return text[:max_chars] if text else "(página vazia ou sem texto)"
     except httpx.TimeoutException:
