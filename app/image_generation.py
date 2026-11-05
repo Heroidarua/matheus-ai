@@ -180,6 +180,9 @@ def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenerationRe
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
    response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"}, data={"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "4"}, files={"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
+   if payload.mode == "livre" and is_content_flagged(response):
+    # Filtro NSFW do modelo principal: tenta o inpainting SD 1.5 (filtro mais frouxo).
+    response = await _inpaint_fallback(client, image_bytes, payload.prompt.strip())
   cloudflare_error(response)
   return decode_image_result(response, IMAGE_EDIT_MODEL)
  except HTTPException: raise
