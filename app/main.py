@@ -1297,7 +1297,20 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         deleted = await asyncio.to_thread(forget_long_term_memory, session_id)
         tool_result = f"Apaguei {deleted} memória(s) de longo prazo desta sessão."
     else:
-        tool_result = local_tool(last_user_message)
+        # Tenta detectar ferramentas do agente (executar_codigo, ler_url, calcular)
+        agent_tool = detectar_ferramenta(last_user_message)
+        if agent_tool:
+            tool_name, tool_arg = agent_tool
+            if tool_name == "calcular":
+                tool_result = calcular_seguro(tool_arg)
+            elif tool_name == "executar_codigo":
+                tool_result = executar_codigo_python(tool_arg)
+            elif tool_name == "ler_url":
+                tool_result = await ler_url_async(tool_arg)
+            else:
+                tool_result = None
+        else:
+            tool_result = local_tool(last_user_message)
     if tool_result is not None:
         if request.stream:
             async def local_tool_stream():
