@@ -132,11 +132,12 @@ async def _inpaint_fallback(client, image_bytes: bytes, user_prompt: str):
   "soft studio lighting, neutral background, photorealistic skin texture. "
   + (user_prompt or "")
  )[:1500]
+ img_b64 = base64.b64encode(image_bytes).decode("ascii")
+ mask_b64 = base64.b64encode(mask_bytes.getvalue()).decode("ascii")
  return await client.post(
   cloudflare_url(IMAGE_INPAINT_MODEL),
-  headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"},
-  data={"prompt": prompt, "width": "1024", "height": "1024", "guidance": "7.5", "num_steps": "20", "strength": "1"},
-  files={"image_b64": ("ref.jpg", image_bytes, "image/jpeg"), "mask": ("mask.png", mask_bytes.getvalue(), "image/png")},
+  headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": "application/json"},
+  json={"prompt": prompt, "width": 1024, "height": 1024, "guidance": 7.5, "num_steps": 20, "strength": 1, "image_b64": img_b64, "mask_b64": mask_b64},
  )
 
 
@@ -176,7 +177,8 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
    )
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
-   response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"}, data={"prompt": prompt[:2200], "width": "1024", "height": "1024", "guidance": "4"}, files={"input_image_0": ("reference.jpg", image_bytes, "image/jpeg")})
+   image_b64 = base64.b64encode(image_bytes).decode("ascii")
+   response = await client.post(cloudflare_url(IMAGE_EDIT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": "application/json"}, json={"prompt": prompt[:2200], "width": 1024, "height": 1024, "guidance": 4, "input_image_0": image_b64})
    if payload.mode == "livre" and is_content_flagged(response):
     # Filtro NSFW do modelo principal: tenta o inpainting SD 1.5 (filtro mais frouxo).
     response = await _inpaint_fallback(client, image_bytes, payload.prompt.strip())
