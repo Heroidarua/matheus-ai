@@ -230,6 +230,7 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
    )
  try:
   async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=10.0)) as client:
+   print(f"[edit-image] has_cloudflare={has_cloudflare}, GEMINI_API_KEY={'sim' if GEMINI_API_KEY else 'NÃO'}")
    # 1º: tenta FLUX (Cloudflare) — preserva melhor os pixels originais
    response = None
    if has_cloudflare:
@@ -260,10 +261,7 @@ async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenera
      print(f"[edit-image] Nano Banana falhou (HTTP {response.status_code})")
     except Exception as nb_exc:
      print(f"[edit-image] Nano Banana exceção: {type(nb_exc).__name__}: {nb_exc}")
-   # se ambos falharam, propaga o erro do FLUX (ou erro genérico se response=None)
-   if response:
-    cloudflare_error(response)
-    return decode_image_result(response, IMAGE_EDIT_MODEL)
+   # se chegou aqui, Nano Banana falhou ou não existe
    raise HTTPException(status_code=502, detail="Falha na edição de imagem. Tente novamente.")
  except HTTPException: raise
  except httpx.TimeoutException: raise HTTPException(status_code=504, detail="A edição demorou demais. Tente novamente com uma foto menor ou outro pedido.")
