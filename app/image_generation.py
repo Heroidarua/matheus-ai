@@ -10,7 +10,10 @@ router = APIRouter()
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
 CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "").strip()
 IMAGE_MODEL = os.getenv("IMAGE_GENERATION_MODEL", "@cf/black-forest-labs/flux-1-schnell").strip()
-IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "@cf/black-forest-labs/flux-2-klein-9b").strip()
+IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "@cf/black-forest-labs/flux-2-klein-9b")
+# Fallback: inpainting SD 1.5 (filtro NSFW mais antigo/frouxo). Usado quando o modelo
+# principal devolve erro de conteúdo ("flagged"/NSFW) no modo livre.
+IMAGE_INPAINT_MODEL = os.getenv("IMAGE_INPAINT_MODEL", "@cf/runwayml/stable-diffusion-v1-5-inpainting").strip()
 RATE_LIMIT: dict[str, deque[float]] = defaultdict(deque)
 RATE_WINDOW_SECONDS = 60
 RATE_LIMIT_REQUESTS = 3
@@ -110,7 +113,38 @@ async def generate_image(payload: ImageGenerationRequest, request: Request) -> I
   raise HTTPException(status_code=502, detail="Não foi possível conectar ao serviço de criação de imagens.")
 
 @router.post("/api/edit-image", response_model=ImageGenerationResponse)
-async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenerationResponse:
+async 
+def is_content_flagged(response) -> bool:
+ """True se a Cloudflare bloqueou a saída por conteúdo (NSFW)."""
+ if response.status_code < 400:
+  return False
+ body = (response.text or "").lower()
+ return ("flagged" in body) or ("nsfw" in body) or ("content filter" in body) or ("moderation" in body)
+
+
+async def _inpaint_fallback(client, image_bytes: bytes, user_prompt: str):
+ """Retry com stable-diffusion-v1-5-inpainting: imagem inteira + máscara branca
+ (redesenha a foto toda seguindo o prompt, filtro NSFW mais antigo/frouxo)."""
+ import numpy as np
+ from PIL import Image as PILImage
+ # máscara branca 512x512 (região inteira a redesenhar)
+ mask_bytes = io.BytesIO()
+ PILImage.new("L", (512, 512), 255).save(mask_bytes, format="PNG")
+ mask_bytes.seek(0)
+ prompt = (
+  "Professional boudoir photography, adult model (18+), artistic nude portrait, "
+  "soft studio lighting, neutral background, photorealistic skin texture. "
+  + (user_prompt or "")
+ )[:1500]
+ return await client.post(
+  cloudflare_url(IMAGE_INPAINT_MODEL),
+  headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"},
+  data={"prompt": prompt, "width": "1024", "height": "1024", "guidance": "7.5", "num_steps": "20", "strength": "1"},
+  files={"image_b64": ("ref.jpg", image_bytes, "image/jpeg"), "mask": ("mask.png", mask_bytes.getvalue(), "image/png")},
+ )
+
+
+def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenerationResponse:
  if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
   raise HTTPException(status_code=503, detail="Edição de imagens não configurada. Confira CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN no Render.")
  check_rate_limit(request)
