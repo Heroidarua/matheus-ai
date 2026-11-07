@@ -1380,6 +1380,152 @@ async def search_web(query: str) -> list[dict[str, str]]:
         diverse.append(source)
     return diverse[:6]
 
+# ── Loop de pesquisa web em tempo real (ferramentas) ─────────────────────────
+WEB_FETCH_TIMEOUT = 15.0        # segundos por página
+WEB_SEARCH_TIMEOUT = 30.0       # segundos por busca
+WEB_MAX_TURNS = 10              # voltas máximas do modelo
+WEB_MAX_FETCHES = 5             # URLs lidas por pergunta
+WEB_FIELD_LIMIT = 8000          # corte por campo
+
+WEB_TOOLS_SPEC = """
+FERRAMENTAS DE PESQUISA (disponíveis nesta conversa):
+Você pode usar duas ferramentas respondendo APENAS com um objeto JSON numa linha, sem texto antes ou depois:
+{"tool": "web_search", "args": {"query": "termo de busca", "limit": 10}}
+{"tool": "web_fetch", "args": {"url": "https://..."}}
+Regras de uso:
+- Use web_search para encontrar páginas; use web_fetch para ler o conteúdo completo de uma URL específica.
+- Você pode chamar quantas vezes precisar (máximo de 10 rodadas no total e 5 páginas lidas).
+- Quando tiver material suficiente — ou quando as ferramentas não ajudarem — responda normalmente ao usuário, sem JSON.
+Formatos que você vai receber de volta das ferramentas:
+- Busca sem resultado: {"found": false, "note": "corpus consultado, nada encontrado"} — significa que PROCURAMOS e não achou. Nesses casos diga isso claramente ao usuário em vez de responder do conhecimento próprio.
+- Falha técnica: {"ok": false, "error": "motivo"} — significa que DEU ERRO (site fora, timeout, bloqueio). Informe qual página falhou.
+- Nunca confunda os dois formatos: "não achou" e "deu erro" são coisas diferentes.
+- Campos longos vêm cortados em 8000 caracteres com a marca "[cortado]".
+Comportamento na resposta final:
+- Se usou a web, cite as fontes com [1], [2] etc. e coloque os links ao final da resposta.
+- Se a busca não achou nada, diga isso claramente em vez de responder do conhecimento próprio.
+- Se a página falhou de carregar, diga qual falhou.
+- Responda no idioma da pergunta.
+"""
+
+def _truncate_field(value: str, limit: int = WEB_FIELD_LIMIT) -> str:
+    value = value or ""
+    if len(value) <= limit:
+        return value
+    return value[:limit] + f" [cortado: {len(value) - limit} caracteres omitidos]"
+
+async def tool_web_search(query: str, limit: int = 10) -> dict:
+    """Busca na web via SearXNG (SEARXNG_URL) com fallback para Brave Search."""
+    try:
+        limit = max(1, min(int(limit or 10), 20))
+    except (ValueError, TypeError):
+        limit = 10
+    query = re.sub(r"\s+", " ", str(query or "")).strip()[:400]
+    if not query:
+        return {"ok": False, "error": "Query vazia"}
+    headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36"}
+    async with httpx.AsyncClient(timeout=httpx.Timeout(WEB_SEARCH_TIMEOUT, connect=8.0),
+                                 headers=headers, follow_redirects=True) as client:
+        searx_url = os.getenv("SEARXNG_URL", "").strip().rstrip("/")
+        if searx_url and _public_http_url(searx_url):
+            try:
+                r = await client.get(searx_url + "/search",
+                                     params={"q": query, "format": "json", "language": "pt-BR"})
+                r.raise_for_status()
+                data = r.json()
+                results = [
+                    {"title": _truncate_field(str(i.get("title") or "")),
+                     "url": str(i.get("url") or "")[:2000],
+                     "snippet": _truncate_field(str(i.get("content") or i.get("snippet") or ""))}
+                    for i in (data.get("results") or [])[:limit]
+                    if _public_http_url(str(i.get("url") or ""))
+                ]
+                if results:
+                    return {"found": True, "results": results}
+                return {"found": False, "note": f"SearXNG consultado para '{query}', nada encontrado"}
+            except (httpx.HTTPError, ValueError) as exc:
+                print(f"tool_web_search SearXNG failed ({type(exc).__name__})")
+        brave_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
+        if brave_key:
+            try:
+                r = await client.get("https://api.search.brave.com/res/v1/web/search",
+                                     params={"q": query, "count": limit, "country": "BR"},
+                                     headers={"X-Subscription-Token": brave_key})
+                r.raise_for_status()
+                data = r.json()
+                results = [
+                    {"title": _truncate_field(str(i.get("title") or "")),
+                     "url": str(i.get("url") or "")[:2000],
+                     "snippet": _truncate_field(str(i.get("description") or ""))}
+                    for i in ((data.get("web") or {}).get("results") or [])[:limit]
+                    if _public_http_url(str(i.get("url") or ""))
+                ]
+                if results:
+                    return {"found": True, "results": results}
+                return {"found": False, "note": f"Brave Search consultado para '{query}', nada encontrado"}
+            except (httpx.HTTPError, ValueError) as exc:
+                return {"ok": False, "error": f"Brave Search falhou: {type(exc).__name__}"}
+        return {"ok": False, "error": "Nenhum provedor de busca configurado (SEARXNG_URL ou BRAVE_SEARCH_API_KEY)"}
+
+async def tool_web_fetch(url: str) -> dict:
+    """Baixa a página e devolve o texto principal (trafilatura, fallback por parágrafos)."""
+    url = str(url or "").strip()
+    if not _public_http_url(url):
+        return {"ok": False, "error": f"URL inválida: {url[:200]}"}
+    headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36",
+               "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.7"}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(WEB_FETCH_TIMEOUT, connect=8.0),
+                                     headers=headers, follow_redirects=True) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            html = r.text
+    except httpx.TimeoutException:
+        return {"ok": False, "error": f"Timeout de {int(WEB_FETCH_TIMEOUT)}s ao carregar {url[:200]}"}
+    except (httpx.HTTPError, ValueError) as exc:
+        return {"ok": False, "error": f"Falha ao carregar {url[:200]}: {type(exc).__name__}"}
+    text = ""
+    try:
+        from trafilatura import extract
+        text = extract(html, url=url) or ""
+    except Exception:
+        pass
+    if not text.strip():
+        paras = re.findall(r"<p[^>]*>(.*?)</p>", html, re.DOTALL | re.IGNORECASE)
+        text = "\n\n".join(re.sub(r"<[^>]+>", "", p).strip() for p in paras)
+        text = "\n\n".join(t for t in text.split("\n\n") if len(t) >= 20)
+    if not text.strip():
+        return {"found": False, "note": f"Página carregada ({url[:200]}) mas nenhum texto principal foi extraído"}
+    return {"ok": True, "url": url[:2000], "text": _truncate_field(text)}
+
+_TOOL_CALL_RE = re.compile(r'\{[^{}]*"tool"\s*:\s*"(?:web_search|web_fetch)"[^{}]*\}', re.DOTALL)
+
+def parse_tool_call(reply: str):
+    """Extrai um chamado de ferramenta do texto do modelo (JSON em bloco opcional)."""
+    candidates = []
+    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", reply or "", re.DOTALL)
+    if m:
+        candidates.append(m.group(1))
+    candidates += _TOOL_CALL_RE.findall(reply or "")
+    for cand in candidates:
+        try:
+            obj = json.loads(cand)
+        except (ValueError, TypeError):
+            continue
+        name = obj.get("tool")
+        args = obj.get("args") or {}
+        if not isinstance(args, dict):
+            continue
+        if name == "web_search" and args.get("query"):
+            try:
+                lim = int(args.get("limit", 10))
+            except (ValueError, TypeError):
+                lim = 10
+            return "web_search", {"query": str(args["query"])[:400], "limit": lim}
+        if name == "web_fetch" and args.get("url"):
+            return "web_fetch", {"url": str(args["url"]).strip()}
+    return None
+
 @app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
 async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     # Verifica rate limit
@@ -1489,6 +1635,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if explicit_external_search and not sources:
         system_prompt += (
             "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
+        )
+    if should_search and not search_unavailable:
+        system_prompt += (
+            "\n\n" + WEB_TOOLS_SPEC +
+            "\n\nPESQUISA ATIVA: o usuário ativou a pesquisa na internet. Use as ferramentas web_search/web_fetch acima para responder com dados atuais. "
+            "Não busque por perguntas que você responde com certeza do conhecimento geral (ex.: matemática simples, definições estáveis); busque para fatos recentes, números, eventos, cotações e qualquer coisa que mude com o tempo."
         )
     if search_unavailable:
         system_prompt += (
@@ -1601,27 +1753,119 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         return StreamingResponse(stream_reply(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
     started_at = time.perf_counter()
+    web_loop_active = bool(should_search and not search_unavailable and not code_generation_needed and not summary_requested)
+    fetched_urls: set[str] = set()
+    loop_messages: list[dict[str, Any]] = list(messages)
+    loop_status: dict[str, str] = {"status": ""}
+
+    async def _model_post(client, msgs: list[dict], use_tools: bool):
+        p = dict(payload)
+        p["messages"] = msgs
+        if use_tools:
+            p["max_tokens"] = 512
+        response = None
+        for attempt in range(3):
+            response = await client.post(
+                f"{MODEL_BASE_URL}/chat/completions",
+                headers=headers,
+                json=p,
+            )
+            if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
+                break
+            retry_after = response.headers.get("retry-after")
+            try:
+                delay = min(max(float(retry_after), 0.5), 4.0) if retry_after else (1.0 * (2 ** attempt))
+            except ValueError:
+                delay = 1.0 * (2 ** attempt)
+            print(f"Model provider HTTP {response.status_code}; retry {attempt + 1}/2 in {delay:.1f}s")
+            await asyncio.sleep(delay)
+        return response
+
+    async def _run_web_loop() -> tuple[str, dict]:
+        """Loop de ferramentas: o modelo chama web_search/web_fetch até responder."""
+        nonlocal sources, fetched_urls
+        for turn in range(1, WEB_MAX_TURNS + 1):
+            use_tools = turn < WEB_MAX_TURNS  # na volta 9 retira as ferramentas
+            loop_status["status"] = "Pesquisando…" if turn == 1 else "Processando…"
+            async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
+                resp = await _model_post(client, loop_messages, use_tools)
+            resp.raise_for_status()
+            data = resp.json()
+            choices = data.get("choices") or []
+            if not choices:
+                raise ValueError("O modelo não retornou escolhas")
+            msg = choices[0].get("message") or {}
+            content_out = msg.get("content", "")
+            if isinstance(content_out, list):
+                content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
+            call = parse_tool_call(content_out) if use_tools else None
+            if not call:
+                return (content_out or "").strip(), data
+            name, args = call
+            loop_messages.append({"role": "assistant", "content": content_out})
+            if name == "web_search":
+                loop_status["status"] = "Pesquisando…"
+                result = await tool_web_search(args["query"], args["limit"])
+                for item in result.get("results", []):
+                    if item["url"] not in {s.get("url") for s in sources}:
+                        sources.append(item)
+            else:
+                if len(fetched_urls) >= WEB_MAX_FETCHES:
+                    result = {"ok": False, "error": "Limite de 5 páginas lidas nesta pergunta atingido"}
+                else:
+                    loop_status["status"] = "Lendo a página…"
+                    fetched_urls.add(args["url"])
+                    result = await tool_web_fetch(args["url"])
+            print(f"[webloop] turn={turn} tool={name} -> {str(result)[:160]}")
+            loop_messages.append({
+                "role": "user",
+                "content": "Resultado da ferramenta:\n" + json.dumps(result, ensure_ascii=False),
+            })
+        # Esgotou as voltas: força resposta final sem ferramentas
+        loop_messages.append({
+            "role": "system",
+            "content": "Limite de rodadas de pesquisa atingido. Responda agora ao usuário com o material que você tem, citando as fontes.",
+        })
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=8.0)) as client:
+            resp = await _model_post(client, loop_messages, use_tools=False)
+        resp.raise_for_status()
+        data = resp.json()
+        choices = data.get("choices") or []
+        content_out = (choices[0].get("message") or {}).get("content", "") if choices else ""
+        if isinstance(content_out, list):
+            content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
+        return (content_out or "").strip(), data
+
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
+        if web_loop_active:
             response = None
-            # Erros 429/5xx podem ser temporários. Fazer no máximo 2 novas
-            # tentativas com espera progressiva, sem repetir erros de configuração.
-            for attempt in range(3):
-                response = await client.post(
-                    f"{MODEL_BASE_URL}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-                if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
-                    break
-                retry_after = response.headers.get("retry-after")
-                try:
-                    delay = min(max(float(retry_after), 0.5), 4.0) if retry_after else (1.0 * (2 ** attempt))
-                except ValueError:
-                    delay = 1.0 * (2 ** attempt)
-                print(f"Model provider HTTP {response.status_code}; retry {attempt + 1}/2 in {delay:.1f}s")
-                await asyncio.sleep(delay)
-        assert response is not None
+            data = None
+            reply, data = await _run_web_loop()
+            # resposta já obtida pelo loop; pula para o pós-processamento
+            DIAGNOSTICS["successes"] += 1
+            DIAGNOSTICS["last_error"] = None
+            print(f"Web loop completed in {time.perf_counter() - started_at:.2f}s")
+        else:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
+                response = None
+                # Erros 429/5xx podem ser temporários. Fazer no máximo 2 novas
+                # tentativas com espera progressiva, sem repetir erros de configuração.
+                for attempt in range(3):
+                    response = await client.post(
+                        f"{MODEL_BASE_URL}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                    )
+                    if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
+                        break
+                    retry_after = response.headers.get("retry-after")
+                    try:
+                        delay = min(max(float(retry_after), 0.5), 4.0) if retry_after else (1.0 * (2 ** attempt))
+                    except ValueError:
+                        delay = 1.0 * (2 ** attempt)
+                    print(f"Model provider HTTP {response.status_code}; retry {attempt + 1}/2 in {delay:.1f}s")
+                    await asyncio.sleep(delay)
+            assert response is not None
 
         # Se o modelo principal continuar indisponível após as tentativas,
         # tenta um modelo Flash-Lite como contingência para manter o chat utilizável.
