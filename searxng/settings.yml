@@ -1,0 +1,30 @@
+use_default_settings: true
+
+search:
+  formats:
+    - html
+    - json
+  autocompleter: ""
+
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: wikipedia
+    disabled: false
+  - name: brave
+    disabled: false
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  secret_key: "matheus-ai-searxng-secret-2026"
+  limiter: false
+  public_instance: true
+  image_proxy: false
+
+ui:
+  static_use_hash: true
