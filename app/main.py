@@ -79,6 +79,8 @@ MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:11434/v1").rstrip
 # defina MODEL_NAME no ambiente para usar outro modelo.
 MODEL_NAME = os.getenv("MODEL_NAME", "gemma4:31b")
 MODEL_FALLBACK_NAME = os.getenv("MODEL_FALLBACK_NAME", "openai/gpt-oss-20b").strip()
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1").rstrip("/")
+OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL_NAME", "llama3.2:3b").strip()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
@@ -1912,6 +1914,20 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 )
             if response.status_code >= 400:
                 print(f"Fallback model HTTP {response.status_code}: {response.text[:800]}")
+                # Se o fallback Groq também falhar, tenta Ollama local
+                if response.status_code in {429, 503}:
+                    print(f"Trying Ollama local at {OLLAMA_BASE_URL} with model {OLLAMA_MODEL_NAME}")
+                    ollama_payload = dict(payload)
+                    ollama_payload["model"] = OLLAMA_MODEL_NAME
+                    ollama_payload.pop("reasoning_effort", None)
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=5.0)) as ollama_client:
+                        response = await ollama_client.post(
+                            f"{OLLAMA_BASE_URL}/chat/completions",
+                            headers={"Content-Type": "application/json"},
+                            json=ollama_payload,
+                        )
+                    if response.status_code >= 400:
+                        print(f"Ollama model HTTP {response.status_code}: {response.text[:800]}")
 
         response.raise_for_status()
         data = response.json()
