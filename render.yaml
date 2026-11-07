@@ -69,5 +69,3 @@ services:
         sync: false
       - key: COOKIE_HTTPS_ONLY
         value: "true"
-
-  - type: web
