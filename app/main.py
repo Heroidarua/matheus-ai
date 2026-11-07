@@ -1708,6 +1708,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         "max_tokens": max_output_tokens,
     }
 
+    web_loop_active = bool(should_search and not search_unavailable and not code_generation_needed and not summary_requested)
+    fetched_urls: set[str] = set()
+    loop_messages: list[dict[str, Any]] = list(messages)
+    loop_status: dict[str, str] = {"status": ""}
+
     if request.stream:
         async def stream_reply():
             import json
@@ -1757,10 +1762,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         return StreamingResponse(stream_reply(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
     started_at = time.perf_counter()
-    web_loop_active = bool(should_search and not search_unavailable and not code_generation_needed and not summary_requested)
-    fetched_urls: set[str] = set()
-    loop_messages: list[dict[str, Any]] = list(messages)
-    loop_status: dict[str, str] = {"status": ""}
 
     async def _model_post(client, msgs: list[dict], use_tools: bool):
         p = dict(payload)
