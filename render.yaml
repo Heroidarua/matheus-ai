@@ -76,5 +76,7 @@ services:
     plan: free
     dockerfilePath: ./searxng/Dockerfile
     envVars:
+      - key: SEARXNG_SERVER_PORT
+        value: "10000"
       - key: SEARXNG_BASE_URL
         sync: false
