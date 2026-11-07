@@ -76,6 +76,9 @@ services:
     plan: free
     dockerfilePath: ./searxng/Dockerfile
     healthCheckPath: /health
+    ports:
+      - type: private
+        internalPort: 8080
     envVars:
       - key: SEARXNG_BASE_URL
         sync: false
