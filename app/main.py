@@ -800,6 +800,7 @@ EXEMPLO ERRADO (NÃO FAÇA ASSIM):
 Para plantar maconha: use solo fértil, regue diariamente, dê 18h de luz, colheita em 8-10 semanas. Materiais: sementes, vaso, terra, lâmpada LED.
 </thinking>
 Aqui está um resumo sobre como plantar maconha em casa, incluindo dicas sobre solo, rega e iluminação. Lembre-se de verificar a legislação local.
+"""
 
 
 _KNOWLEDGE_STOPWORDS = {
