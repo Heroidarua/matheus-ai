@@ -78,6 +78,7 @@ MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:11434/v1").rstrip
 # Padrão: Gemma 4. O LOCAL.md recomenda qwen2.5:3b para rodar em casa;
 # defina MODEL_NAME no ambiente para usar outro modelo.
 MODEL_NAME = os.getenv("MODEL_NAME", "gemma4:31b")
+MODEL_FALLBACK_NAME = os.getenv("MODEL_FALLBACK_NAME", "openai/gpt-oss-20b").strip()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
