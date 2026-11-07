@@ -1,4 +1,4 @@
 FROM searxng/searxng:latest
 
-# Copia as configurações customizadas (porta 10000)
-COPY settings.yml /etc/searxng/settings.yml
+# Copia as configurações customizadas (porta 8000)
+COPY searxng/settings.yml /etc/searxng/settings.yml
