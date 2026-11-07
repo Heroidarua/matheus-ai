@@ -69,3 +69,13 @@ services:
         sync: false
       - key: COOKIE_HTTPS_ONLY
         value: "true"
+
+  - type: web
+    name: matheus-searxng
+    runtime: docker
+    plan: free
+    dockerfilePath: ./searxng/Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: SEARXNG_BASE_URL
+        sync: false
