@@ -3,7 +3,7 @@ FROM searxng/searxng:latest
 # Copia as configurações customizadas
 COPY searxng/settings.yml /etc/searxng/settings.yml
 
-# Instala socat (redirecionador de portas)
+# Instala socat (Alpine usa apk, não apt-get)
 RUN apk add --no-cache socat
 
 # Inicia socat (10000 -> 8080) + SearXNG
