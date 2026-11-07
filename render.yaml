@@ -6,9 +6,9 @@ services:
     healthCheckPath: /health
     envVars:
       - key: MODEL_BASE_URL
-        sync: false
+        value: "https://api.groq.com/openai/v1"
       - key: MODEL_NAME
-        value: gemma4:31b
+        value: "llama-3.3-70b-versatile"
       - key: GOOGLE_GEMINI_API_KEY
         sync: false
       - key: GOOGLE_SEARCH_MODEL
