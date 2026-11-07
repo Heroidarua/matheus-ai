@@ -1711,6 +1711,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if request.stream:
         async def stream_reply():
             import json
+            nonlocal web_loop_active, loop_status
             # Se o loop de web rodou, envia o status final antes dos tokens
             if web_loop_active and loop_status.get("status"):
                 yield "data: " + json.dumps({"status": "Pesquisa concluída"}, ensure_ascii=False) + "\n\n"
