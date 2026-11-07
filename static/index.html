@@ -1000,8 +1000,13 @@
 
     function stripThinking(text) {
       // Remove o canal privado (<thinking>...</thinking>) do texto antes de exibir.
-      // O conteúdo fica disponível no console para debug, mas não aparece na interface.
-      return String(text || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+      // Também remove <thinking> sem fechamento (durante stream).
+      let result = String(text || '');
+      // Remove pares completos
+      result = result.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+      // Remove <thinking> sem </thinking> (stream em andamento)
+      result = result.replace(/<thinking>[\s\S]*$/gi, '');
+      return result.trim();
     }
     function renderMarkdown(text) {
       const root = document.createElement('div');
