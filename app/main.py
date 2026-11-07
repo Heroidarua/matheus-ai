@@ -1894,10 +1894,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             assert response is not None
 
         # Se o modelo principal continuar indisponível após as tentativas,
-        # tenta um modelo Flash-Lite como contingência para manter o chat utilizável.
-        fallback_model = os.getenv("MODEL_FALLBACK_NAME", "gemini-3.5-flash-lite").strip()
-        if response.status_code == 503 and fallback_model and fallback_model != MODEL_NAME:
-            print(f"Primary model {MODEL_NAME} returned HTTP 503; trying fallback {fallback_model}")
+        # tenta um modelo fallback como contingência para manter o chat utilizável.
+        # Funciona para 429 (rate limit) e 503 (service unavailable).
+        fallback_model = MODEL_FALLBACK_NAME
+        if response.status_code in {429, 503} and fallback_model and fallback_model != MODEL_NAME:
+            print(f"Primary model {MODEL_NAME} returned HTTP {response.status_code}; trying fallback {fallback_model}")
             fallback_payload = dict(payload)
             fallback_payload["model"] = fallback_model
             fallback_payload.pop("reasoning_effort", None)
