@@ -75,7 +75,7 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./searxng/Dockerfile
-    healthCheckPath: /healthz
+    healthCheckPath: /health
     envVars:
       - key: SEARXNG_BASE_URL
         sync: false
