@@ -55,6 +55,8 @@ services:
         value: ada-m-voice
       - key: SEARXNG_URL
         sync: false
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false
       - key: GITHUB_APP_ID
         sync: false
       - key: GITHUB_APP_SLUG
