@@ -1,10 +1,6 @@
 FROM searxng/searxng:latest
 
-# Copia as configurações customizadas
+# Copia as configurações customizadas para dentro da imagem
 COPY settings.yml /etc/searxng/settings.yml
 
-# Garante que a porta 8080 está exposta
-EXPOSE 8080
-
-# Comando padrão da imagem oficial
-CMD ["python", "/usr/local/searxng/webapp.py"]
+# A imagem oficial já tem o CMD padrão, não precisa redefinir
