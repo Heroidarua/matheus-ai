@@ -1652,6 +1652,12 @@
           try { payload = JSON.parse(dataText); } catch { return; }
           if (eventName === 'error') throw new Error(payload.detail || 'A geração falhou.');
           if (eventName === 'done') { streamSources = Array.isArray(payload.sources) ? payload.sources : []; return; }
+          if (typeof payload.status === 'string' && !answer) {
+            // Status de pesquisa: mostra indicador na bolha
+            pending.replaceChildren(renderMarkdown('⏳ ' + payload.status));
+            pending.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            return;
+          }
           if (typeof payload.token === 'string') {
             answer += payload.token;
             if (voiceConversationToggle.checked) {
