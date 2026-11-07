@@ -2,8 +2,5 @@ FROM ollama/ollama:latest
 
 EXPOSE 11434
 
-# Script de entrada que inicia o servidor e puxa o modelo
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
+# Iniciar servidor e puxar modelo em runtime
+CMD ["sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2:1b && wait"]
