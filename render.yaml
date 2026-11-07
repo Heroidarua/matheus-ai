@@ -69,3 +69,13 @@ services:
         sync: false
       - key: COOKIE_HTTPS_ONLY
         value: "true"
+
+  - type: web
+    name: matheus-ollama
+    runtime: docker
+    plan: free
+    dockerfilePath: ./ollama/Dockerfile
+    healthCheckPath: /api/tags
+    envVars:
+      - key: OLLAMA_MODEL
+        value: llama3.2:3b
