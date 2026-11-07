@@ -22,7 +22,6 @@ server:
   port: 8000
   bind_address: "0.0.0.0"
   secret_key: "matheus-ai-searxng-secret-2026"
-  limiter: false
   public_instance: true
   image_proxy: false
 
