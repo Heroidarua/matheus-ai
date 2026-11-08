@@ -1842,8 +1842,10 @@ const history = [];
 
       if ('serviceWorker' in navigator && location.protocol === 'https:') {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(error => {
-            console.warn('Não foi possível ativar o modo PWA:', error);
+          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(registration => {
+            registration.update();
+          }).catch(error => {
+            console.warn('Não foi possível atualizar o modo PWA:', error);
           });
         });
       }
