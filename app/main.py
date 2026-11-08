@@ -74,13 +74,17 @@ TTS_VOICE = os.getenv("TTS_VOICE", "pf_dora").strip() or "pf_dora"
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
-MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", "http://localhost:11434/v1").rstrip("/")
-# Padrão: Gemma 4. O LOCAL.md recomenda qwen2.5:3b para rodar em casa;
-# defina MODEL_NAME no ambiente para usar outro modelo.
-MODEL_NAME = os.getenv("MODEL_NAME", "gemma4:31b")
-MODEL_FALLBACK_NAME = os.getenv("MODEL_FALLBACK_NAME", "openai/gpt-oss-20b").strip()
+# Ordem de prioridade: Ollama local primeiro (sem rate limit), Groq como fallback
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1").rstrip("/")
-OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL_NAME", "llama3.2:3b").strip()
+OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL_NAME", "llama3.2:1b").strip()
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
+GROQ_MODEL_NAME = os.getenv("GROQ_MODEL_NAME", "openai/gpt-oss-120b").strip()
+GROQ_FALLBACK_NAME = os.getenv("GROQ_FALLBACK_NAME", "openai/gpt-oss-20b").strip()
+
+# Modelo primário: Ollama local (se disponível)
+MODEL_BASE_URL = OLLAMA_BASE_URL
+MODEL_NAME = OLLAMA_MODEL_NAME
+MODEL_FALLBACK_NAME = GROQ_MODEL_NAME  # Fallback: Groq
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
