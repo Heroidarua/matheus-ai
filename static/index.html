@@ -552,7 +552,7 @@ const history = [];
     function openConversation(id) {
       const chat=conversations.find(item=>item.id===id); if(!chat)return;
       if(activeController) activeController.abort();
-      stopBrowserSpeech(); activeConversationId=id; history.splice(0); chatTranscript.splice(0,...(chat.messages||[]).map(item=>({...item})));
+      stopBrowserSpeech(); activeConversationId=id; history.splice(0); chatTranscript.splice(0,...(chat.messages||[]).map(item=>({...item}))); chatTranscript.slice(-12).forEach(item=>history.push({role:item.role,content:item.role==='user'?[{type:'text',text:item.text}]:item.text}));
       messagesEl.replaceChildren();
       if(!chatTranscript.length) showWelcome();
       chatTranscript.forEach(item=>{const bubble=addBubble(item.text,item.role);if(item.role==='assistant')displayAssistantReply(bubble,item.text,[]);});
