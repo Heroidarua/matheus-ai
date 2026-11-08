@@ -360,8 +360,19 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
 .sidebar-delete:hover{background:rgba(220,70,70,.16);color:#ff7777}
 .sidebar-empty{padding:10px;color:var(--muted);font-size:13px;line-height:1.5}
 .sidebar-backdrop{display:none}
-@media(min-width:900px){body.sidebar-open .app{margin-left:280px;margin-right:auto}.chat-sidebar{box-shadow:none}}
-@media(max-width:899px){.sidebar-backdrop{position:fixed;z-index:99;inset:0;background:rgba(0,0,0,.48)}body.sidebar-open .sidebar-backdrop{display:block}.app{width:100%}}
+@media(min-width:900px){
+  .chat-sidebar{transform:translateX(0);box-shadow:none}
+  .app{width:min(900px,calc(100% - 300px));margin-left:280px;margin-right:auto}
+  body.sidebar-collapsed .chat-sidebar{transform:translateX(-101%)}
+  body.sidebar-collapsed .app{width:min(900px,100%);margin-left:auto;margin-right:auto}
+}
+@media(max-width:899px){
+  .chat-sidebar{transform:translateX(-101%)}
+  body.sidebar-open .chat-sidebar{transform:translateX(0)}
+  .sidebar-backdrop{position:fixed;z-index:99;inset:0;background:rgba(0,0,0,.48)}
+  body.sidebar-open .sidebar-backdrop{display:block}
+  .app{width:100%;margin:0 auto}
+}
 @media(max-width:520px){.chat-sidebar{width:min(300px,86vw)}}
   </style>
 </head>
@@ -543,11 +554,19 @@ const history = [];
       if(firstUser && chat.title==='Nova conversa') chat.title=firstUser.text.replace(/\s+/g,' ').slice(0,42)||'Nova conversa';
       saveConversations();
     }
+    function closeSidebar() {
+      if (window.matchMedia('(min-width: 900px)').matches) document.body.classList.add('sidebar-collapsed');
+      else document.body.classList.remove('sidebar-open');
+    }
+    function toggleSidebar() {
+      if (window.matchMedia('(min-width: 900px)').matches) document.body.classList.toggle('sidebar-collapsed');
+      else document.body.classList.toggle('sidebar-open');
+    }
     function startNewConversation() {
       if(activeController) activeController.abort();
       stopBrowserSpeech(); history.splice(0); chatTranscript.splice(0);
       activeConversationId=null; messagesEl.replaceChildren(); promptEl.value=''; showWelcome();
-      document.body.classList.remove('sidebar-open'); renderConversationList();
+      closeSidebar(); renderConversationList();
     }
     function openConversation(id) {
       const chat=conversations.find(item=>item.id===id); if(!chat)return;
@@ -556,15 +575,15 @@ const history = [];
       messagesEl.replaceChildren();
       if(!chatTranscript.length) showWelcome();
       chatTranscript.forEach(item=>{const bubble=addBubble(item.text,item.role);if(item.role==='assistant')displayAssistantReply(bubble,item.text,[]);});
-      document.body.classList.remove('sidebar-open'); renderConversationList(); promptEl.value=''; promptEl.focus();
+      closeSidebar(); renderConversationList(); promptEl.value=''; promptEl.focus();
     }
     try {
       const saved=JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY)||'[]');
       if(Array.isArray(saved)) conversations=saved.filter(item=>item&&typeof item.id==='string'&&Array.isArray(item.messages));
     } catch {}
-    document.getElementById('sidebar-toggle').addEventListener('click',()=>document.body.classList.toggle('sidebar-open'));
-    document.getElementById('sidebar-close').addEventListener('click',()=>document.body.classList.remove('sidebar-open'));
-    document.getElementById('sidebar-backdrop').addEventListener('click',()=>document.body.classList.remove('sidebar-open'));
+    document.getElementById('sidebar-toggle').addEventListener('click',toggleSidebar);
+    document.getElementById('sidebar-close').addEventListener('click',closeSidebar);
+    document.getElementById('sidebar-backdrop').addEventListener('click',closeSidebar);
     document.getElementById('sidebar-new-chat').addEventListener('click',startNewConversation);
     renderConversationList();
 
