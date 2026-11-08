@@ -5,10 +5,16 @@ services:
     plan: free
     healthCheckPath: /health
     envVars:
-      - key: MODEL_BASE_URL
+      - key: OLLAMA_BASE_URL
+        value: "https://matheus-ollama.onrender.com/v1"
+      - key: OLLAMA_MODEL_NAME
+        value: "llama3.2:1b"
+      - key: GROQ_BASE_URL
         value: "https://api.groq.com/openai/v1"
-      - key: MODEL_NAME
+      - key: GROQ_MODEL_NAME
         value: "openai/gpt-oss-120b"
+      - key: GROQ_FALLBACK_NAME
+        value: "openai/gpt-oss-20b"
       - key: GOOGLE_GEMINI_API_KEY
         sync: false
       - key: GOOGLE_SEARCH_MODEL
