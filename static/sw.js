@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ada-m-pwa-v8-keepalive';
+const CACHE_NAME = 'ada-m-pwa-v9-cache-refresh';
 const APP_SHELL = [
   '/',
   '/static/manifest.webmanifest',
