@@ -338,11 +338,44 @@
     details.jailbreak-thinking[open] summary::before { transform:rotate(90deg); }
     details.jailbreak-thinking .thinking-body { padding:4px 14px 12px; font-size:13px; line-height:1.6; color:#e8c8cb; white-space:pre-wrap; word-break:break-word; }
     details.jailbreak-thinking .thinking-label { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:#d39a9f; margin-bottom:6px; }
+
+/* Chat history sidebar */
+body{justify-content:flex-start}
+.app{margin-left:auto;margin-right:auto}
+.sidebar-toggle{width:40px;height:40px;min-width:40px;padding:0;display:grid;place-items:center;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:11px;font-size:20px}
+.sidebar-toggle:hover{background:var(--panel2)}
+.chat-sidebar{position:fixed;z-index:100;inset:0 auto 0 0;width:280px;padding:16px 12px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;gap:12px;transform:translateX(-101%);transition:transform .2s ease;box-shadow:12px 0 35px rgba(0,0,0,.22)}
+body.sidebar-open .chat-sidebar{transform:translateX(0)}
+.sidebar-top{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 8px}
+.sidebar-brand{font-weight:700;letter-spacing:.02em}
+.sidebar-close{width:36px;height:36px;padding:0;background:transparent;color:var(--text);font-size:22px}
+.sidebar-new{width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:12px;padding:11px 12px;font-weight:550}
+.sidebar-new:hover,.sidebar-item:hover{background:var(--panel2)}
+.sidebar-section{font-size:11px;color:var(--muted);padding:8px 8px 2px;text-transform:uppercase;letter-spacing:.07em}
+.sidebar-list{overflow:auto;flex:1;display:flex;flex-direction:column;gap:3px}
+.sidebar-item{display:flex;align-items:center;gap:7px;padding:5px 6px;border-radius:10px;color:var(--text);border:1px solid transparent;min-width:0}
+.sidebar-item.active{background:var(--panel2);border-color:var(--border)}
+.sidebar-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:13px;background:transparent;color:var(--text);padding:8px}
+.sidebar-delete{flex:0 0 28px;width:28px;height:28px;padding:0;background:transparent;color:var(--muted);font-size:15px;border-radius:7px}
+.sidebar-delete:hover{background:rgba(220,70,70,.16);color:#ff7777}
+.sidebar-empty{padding:10px;color:var(--muted);font-size:13px;line-height:1.5}
+.sidebar-backdrop{display:none}
+@media(min-width:900px){body.sidebar-open .app{margin-left:280px;margin-right:auto}.chat-sidebar{box-shadow:none}}
+@media(max-width:899px){.sidebar-backdrop{position:fixed;z-index:99;inset:0;background:rgba(0,0,0,.48)}body.sidebar-open .sidebar-backdrop{display:block}.app{width:100%}}
+@media(max-width:520px){.chat-sidebar{width:min(300px,86vw)}}
   </style>
 </head>
 <body class="supreme-mode">
+  <aside class="chat-sidebar" id="chat-sidebar" aria-label="Histórico de conversas">
+    <div class="sidebar-top"><div class="sidebar-brand">ADA-M</div><button type="button" class="sidebar-close" id="sidebar-close" aria-label="Fechar menu">×</button></div>
+    <button type="button" class="sidebar-new" id="sidebar-new-chat"><span aria-hidden="true">＋</span> Nova conversa</button>
+    <div class="sidebar-section">Conversas</div>
+    <div class="sidebar-list" id="sidebar-list"><div class="sidebar-empty">Suas conversas aparecerão aqui.</div></div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
   <main class="app">
     <header class="app-header app-header-v2">
+      <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Abrir histórico de conversas" title="Histórico de conversas">☰</button>
       <div class="brand-monogram" aria-hidden="true">
         <span class="monogram-plus" aria-hidden="true">+</span>
       </div>
@@ -475,7 +508,66 @@
       }
     } catch {}
     const selectedFiles = [];
-    const history = [];
+const history = [];
+    const CHAT_STORAGE_KEY = 'ada-m-conversations-v1';
+    const sidebarList = document.getElementById('sidebar-list');
+    let conversations = [];
+    let activeConversationId = null;
+    const chatTranscript = [];
+    function makeConversation() {
+      return { id: 'chat-' + Date.now() + '-' + Math.random().toString(36).slice(2,8), title: 'Nova conversa', updatedAt: Date.now(), messages: [] };
+    }
+    function saveConversations() {
+      try { localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(conversations)); }
+      catch (error) { console.warn('Não foi possível salvar o histórico local.', error); }
+      renderConversationList();
+    }
+    function renderConversationList() {
+      sidebarList.replaceChildren();
+      if (!conversations.length) {
+        const empty = document.createElement('div'); empty.className='sidebar-empty'; empty.textContent='Suas conversas aparecerão aqui.'; sidebarList.appendChild(empty); return;
+      }
+      [...conversations].sort((a,b)=>b.updatedAt-a.updatedAt).forEach(chat => {
+        const row=document.createElement('div'); row.className='sidebar-item'+(chat.id===activeConversationId?' active':'');
+        const open=document.createElement('button'); open.type='button'; open.className='sidebar-title'; open.textContent=chat.title||'Nova conversa';
+        open.addEventListener('click',()=>openConversation(chat.id));
+        const del=document.createElement('button'); del.type='button'; del.className='sidebar-delete'; del.textContent='×'; del.title='Excluir conversa'; del.setAttribute('aria-label','Excluir conversa');
+        del.addEventListener('click',event=>{event.stopPropagation();if(!confirm('Excluir esta conversa permanentemente?'))return;conversations=conversations.filter(item=>item.id!==chat.id);if(activeConversationId===chat.id){activeConversationId=null;history.splice(0);chatTranscript.splice(0);messagesEl.replaceChildren();showWelcome();}saveConversations();});
+        row.append(open,del); sidebarList.appendChild(row);
+      });
+    }
+    function persistCurrentConversation() {
+      const chat=conversations.find(item=>item.id===activeConversationId); if(!chat)return;
+      chat.messages=chatTranscript.slice(-100); chat.updatedAt=Date.now();
+      const firstUser=chat.messages.find(item=>item.role==='user');
+      if(firstUser && chat.title==='Nova conversa') chat.title=firstUser.text.replace(/\s+/g,' ').slice(0,42)||'Nova conversa';
+      saveConversations();
+    }
+    function startNewConversation() {
+      if(activeController) activeController.abort();
+      stopBrowserSpeech(); history.splice(0); chatTranscript.splice(0);
+      activeConversationId=null; messagesEl.replaceChildren(); promptEl.value=''; showWelcome();
+      document.body.classList.remove('sidebar-open'); renderConversationList();
+    }
+    function openConversation(id) {
+      const chat=conversations.find(item=>item.id===id); if(!chat)return;
+      if(activeController) activeController.abort();
+      stopBrowserSpeech(); activeConversationId=id; history.splice(0); chatTranscript.splice(0,...(chat.messages||[]).map(item=>({...item}))); chatTranscript.slice(-12).forEach(item=>history.push({role:item.role,content:item.role==='user'?[{type:'text',text:item.text}]:item.text}));
+      messagesEl.replaceChildren();
+      if(!chatTranscript.length) showWelcome();
+      chatTranscript.forEach(item=>{const bubble=addBubble(item.text,item.role);if(item.role==='assistant')displayAssistantReply(bubble,item.text,[]);});
+      document.body.classList.remove('sidebar-open'); renderConversationList(); promptEl.value=''; promptEl.focus();
+    }
+    try {
+      const saved=JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY)||'[]');
+      if(Array.isArray(saved)) conversations=saved.filter(item=>item&&typeof item.id==='string'&&Array.isArray(item.messages));
+    } catch {}
+    document.getElementById('sidebar-toggle').addEventListener('click',()=>document.body.classList.toggle('sidebar-open'));
+    document.getElementById('sidebar-close').addEventListener('click',()=>document.body.classList.remove('sidebar-open'));
+    document.getElementById('sidebar-backdrop').addEventListener('click',()=>document.body.classList.remove('sidebar-open'));
+    document.getElementById('sidebar-new-chat').addEventListener('click',startNewConversation);
+    renderConversationList();
+
     function resizePrompt() {
       promptEl.style.height = 'auto';
       promptEl.style.height = Math.min(promptEl.scrollHeight, 200) + 'px';
@@ -500,14 +592,7 @@
       if (activeController) activeController.abort();
       stopBrowserSpeech();
     });
-    document.getElementById('new-chat-button').addEventListener('click', () => {
-      if (activeController) activeController.abort();
-      stopBrowserSpeech();
-      history.splice(0, history.length);
-      messagesEl.replaceChildren();
-      promptEl.value = '';
-      showWelcome();
-    });
+    document.getElementById('new-chat-button').addEventListener('click', startNewConversation);
     document.getElementById('export-button').addEventListener('click', exportConversation);
     document.getElementById('voice-button').addEventListener('click', startVoiceDictation);
     const voiceConversationToggle = document.getElementById('voice-conversation-toggle');
@@ -1587,8 +1672,10 @@
         addBubble('Erro: ' + (error.message || 'Não foi possível ler o arquivo.'), 'assistant', 'error');
         return;
       }
+      if (!activeConversationId) { const fresh=makeConversation(); conversations.push(fresh); activeConversationId=fresh.id; }
       history.push({ role: 'user', content });
       while (history.length > 12) history.shift();
+      chatTranscript.push({role:'user',text:userText}); persistCurrentConversation();
       addBubble(userText, 'user', '', files);
       promptEl.value = '';
       selectedFiles.splice(0, selectedFiles.length);
@@ -1607,6 +1694,7 @@
           const imageResult = await window.ADAEditImageInChat(imageFile, imageEditPrompt, pending, currentMode === 'livre' ? 'livre' : 'normal');
           history.push({ role: 'assistant', content: imageResult });
           while (history.length > 12) history.shift();
+          chatTranscript.push({role:'assistant',text:String(imageResult)}); persistCurrentConversation();
           return;
         }
         const imagePrompt = !files.length && window.ADAExtractImagePrompt ? window.ADAExtractImagePrompt(userText) : null;
@@ -1692,6 +1780,7 @@
         displayAssistantReply(pending, stripThinking(answer), streamSources);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
+        chatTranscript.push({role:'assistant',text:answer}); persistCurrentConversation();
       } catch (error) {
         if (error.name === 'AbortError') {
           pending.textContent = 'Geração interrompida.';
