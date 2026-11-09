@@ -1789,11 +1789,69 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             except httpx.TimeoutException:
                 DIAGNOSTICS["errors"] += 1
                 DIAGNOSTICS["last_error"] = "Tempo esgotado no provedor do modelo (stream)"
+                # Fallback: tentar Groq
+                try:
+                    fb_payload = dict(stream_payload)
+                    fb_payload["model"] = GROQ_MODEL_NAME
+                    fb_payload.pop("reasoning_effort", None)
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=8.0)) as fb_client:
+                        async with fb_client.stream("POST", f"{GROQ_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}, json=fb_payload) as fb_upstream:
+                            if fb_upstream.status_code < 400:
+                                async for line in fb_upstream.aiter_lines():
+                                    if not line.startswith("data:"):
+                                        continue
+                                    raw = line[5:].strip()
+                                    if raw == "[DONE]":
+                                        break
+                                    try:
+                                        chunk = json.loads(raw)
+                                        choices = chunk.get("choices") or []
+                                        delta = (choices[0].get("delta") or {}).get("content", "") if choices else ""
+                                        if isinstance(delta, list):
+                                            delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
+                                        if isinstance(delta, str) and delta:
+                                            yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
+                                yield "event: done\ndata: " + json.dumps({"model": GROQ_MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\n\n"
+                                return
+                            else:
+                                body = (await fb_upstream.aread()).decode("utf-8", errors="replace")[:300]
+                                print(f"Groq fallback stream HTTP {fb_upstream.status_code}: {body}")
+                except Exception as fb_exc:
+                    print(f"Groq fallback stream error: {fb_exc}")
                 yield "event: error\ndata: " + json.dumps({"detail": "O modelo demorou para responder. Tente novamente."}, ensure_ascii=False) + "\n\n"
             except httpx.HTTPError as exc:
                 DIAGNOSTICS["errors"] += 1
                 DIAGNOSTICS["last_error"] = f"Falha de conexão no stream: {type(exc).__name__}"
                 print(f"Streaming provider error ({type(exc).__name__}): {str(exc)[:200]}")
+                # Fallback: tentar Groq
+                try:
+                    fb_payload = dict(stream_payload)
+                    fb_payload["model"] = GROQ_MODEL_NAME
+                    fb_payload.pop("reasoning_effort", None)
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=8.0)) as fb_client:
+                        async with fb_client.stream("POST", f"{GROQ_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}, json=fb_payload) as fb_upstream:
+                            if fb_upstream.status_code < 400:
+                                async for line in fb_upstream.aiter_lines():
+                                    if not line.startswith("data:"):
+                                        continue
+                                    raw = line[5:].strip()
+                                    if raw == "[DONE]":
+                                        break
+                                    try:
+                                        chunk = json.loads(raw)
+                                        choices = chunk.get("choices") or []
+                                        delta = (choices[0].get("delta") or {}).get("content", "") if choices else ""
+                                        if isinstance(delta, list):
+                                            delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
+                                        if isinstance(delta, str) and delta:
+                                            yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
+                                yield "event: done\ndata: " + json.dumps({"model": GROQ_MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\n\n"
+                                return
+                            else:
+                                body = (await fb_upstream.aread()).decode("utf-8", errors="replace")[:300]
+                                print(f"Groq fallback stream HTTP {fb_upstream.status_code}: {body}")
+                except Exception as fb_exc:
+                    print(f"Groq fallback stream error: {fb_exc}")
                 yield "event: error\ndata: " + json.dumps({"detail": "A conexão com o provedor do modelo falhou."}, ensure_ascii=False) + "\n\n"
         return StreamingResponse(stream_reply(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
