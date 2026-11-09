@@ -1723,9 +1723,15 @@ const history = [];
       };
       instance.onerror = event => {
         if (dictationManuallyStopped || event.error === 'aborted') return;
-        voiceStatus.textContent = event.error === 'not-allowed'
-          ? 'Permita o acesso ao microfone para usar o ditado.'
-          : 'A conexão de voz foi interrompida. Tentando continuar…';
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          dictationManuallyStopped = true;
+          voiceButton.classList.remove('voice-active');
+          voiceButton.setAttribute('aria-label', 'Ditado por voz');
+          voiceButton.title = 'Ditado por voz';
+          voiceStatus.textContent = 'Permita o acesso ao microfone para usar o ditado.';
+          return;
+        }
+        voiceStatus.textContent = 'A conexão de voz foi interrompida. Tentando continuar…';
       };
       instance.onend = () => {
         if (dictationRecognition === instance) dictationRecognition = null;
