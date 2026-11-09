@@ -3,7 +3,8 @@ import base64
 import io, binascii, io, os, time
 from collections import defaultdict, deque
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.payments import require_paid_access
 from pydantic import BaseModel, Field
 from PIL import Image, UnidentifiedImageError
 
@@ -93,7 +94,7 @@ def cloudflare_error(response: httpx.Response) -> None:
 async def image_generation_status() -> dict[str, object]:
  return {"configured": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN), "provider": "Cloudflare Workers AI", "model": IMAGE_MODEL, "image_edit_model": IMAGE_EDIT_MODEL, "image_edit_supported": bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN)}
 
-@router.post("/api/generate-image", response_model=ImageGenerationResponse)
+@router.post("/api/generate-image", response_model=ImageGenerationResponse, dependencies=[Depends(require_paid_access)])
 async def generate_image(payload: ImageGenerationRequest, request: Request) -> ImageGenerationResponse:
  if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
   raise HTTPException(status_code=503, detail="Criação de imagens ainda não configurada. Adicione CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN nas variáveis do Render.")
@@ -193,7 +194,7 @@ async def _inpaint_fallback(client, image_bytes: bytes, user_prompt: str):
  return await client.post(cloudflare_url(IMAGE_INPAINT_MODEL), headers={"Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}", "Content-Type": content_type}, content=body)
 
 
-@router.post("/api/edit-image", response_model=ImageGenerationResponse)
+@router.post("/api/edit-image", response_model=ImageGenerationResponse, dependencies=[Depends(require_paid_access)])
 async def edit_image(payload: ImageEditRequest, request: Request) -> ImageGenerationResponse:
  # Se não tem token Cloudflare, pula direto para Nano Banana
  has_cloudflare = bool(CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN)
