@@ -375,7 +375,20 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
   .app{width:100%;margin:0 auto}
 }
 @media(max-width:520px){.chat-sidebar{width:min(300px,86vw)}}
-  </style>
+  
+/* Correção: garantir largura total no mobile */
+@media(max-width:899px){
+  body{width:100%;min-width:100vw;overflow-x:hidden}
+  .app{width:100%;max-width:100%;margin:0;padding:0}
+  .chat-container{width:100%;max-width:100%}
+}
+/* Desktop: sidebar visível por padrão */
+@media(min-width:900px){
+  body{width:100%}
+  .app{margin-left:280px;width:calc(100% - 280px)}
+}
+
+</style>
 </head>
 <body class="supreme-mode">
   <aside class="chat-sidebar" id="chat-sidebar" aria-label="Histórico de conversas">
