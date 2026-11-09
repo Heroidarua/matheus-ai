@@ -439,6 +439,26 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
       }
     }
 
+  
+    #subscription-gate{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:22px;background:rgba(0,0,0,.88);backdrop-filter:blur(10px);}
+    #subscription-gate[hidden]{display:none;}
+    .subscription-card{width:min(440px,100%);max-height:90vh;overflow:auto;padding:26px;border:1px solid #333;border-radius:22px;background:#101010;color:#f5f5f5;box-shadow:0 24px 90px rgba(0,0,0,.55);}
+    .subscription-eyebrow{font-size:11px;letter-spacing:.16em;color:#70e1c1;font-weight:750;}
+    .subscription-card h2{font-size:24px;line-height:1.2;margin:10px 0 8px;}
+    .subscription-card p{font-size:13px;color:#aaa;line-height:1.55;}
+    .subscription-price{font-size:34px;font-weight:800;letter-spacing:-1px;margin:18px 0 2px;}
+    .subscription-card label{display:grid;gap:7px;margin:18px 0 12px;font-size:13px;color:#ccc;}
+    .subscription-card input{width:100%;border:1px solid #444;border-radius:11px;padding:12px;background:#1d1d1d;color:#fff;font:inherit;}
+    .subscription-card button{width:100%;min-height:46px;border-radius:12px;}
+    #subscription-status{min-height:20px;margin-top:12px;font-size:12px;color:#70e1c1;}
+    #pix-payment{margin-top:18px;padding-top:16px;border-top:1px solid #333;}
+    #pix-qr{display:block;width:min(220px,100%);height:auto;margin:10px auto;border-radius:12px;background:#fff;padding:8px;}
+    #pix-code{width:100%;min-height:84px;resize:vertical;margin:8px 0;padding:10px;border:1px solid #444;border-radius:10px;background:#1d1d1d;color:#eee;font-size:11px;}
+    .pix-secondary{margin-top:9px;background:#222;color:#eee;border:1px solid #444;}
+    #pix-ticket{display:block;text-align:center;color:#70e1c1;margin:12px 0;font-size:13px;}
+    body.subscription-locked #messages,body.subscription-locked #chat-form{visibility:hidden;pointer-events:none;}
+    body.light-theme #subscription-gate{background:rgba(0,0,0,.72);}
+
   </style>
 </head>
 <body class="supreme-mode">
@@ -461,6 +481,30 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
       </div>
 
     </header>
+
+    <section id="subscription-gate" hidden aria-modal="true" role="dialog" aria-labelledby="subscription-title">
+      <div class="subscription-card">
+        <div class="subscription-eyebrow">ADA-M • ACESSO PREMIUM</div>
+        <h2 id="subscription-title">Ative seu acesso</h2>
+        <p>O acesso ao chat funciona por 24 horas. Após esse período, basta realizar uma nova compra para continuar.</p>
+        <div class="subscription-price">R$ 5,00</div>
+        <p>Pagamento único via Pix. Sem cobrança automática.</p>
+        <form id="subscription-form">
+          <label for="subscription-email">E-mail para identificar o pagamento
+            <input id="subscription-email" type="email" autocomplete="email" required maxlength="254" placeholder="voce@exemplo.com">
+          </label>
+          <button id="subscription-create" type="submit">Gerar Pix de R$ 5,00</button>
+        </form>
+        <div id="pix-payment" hidden>
+          <p>Escaneie o QR Code ou copie o código Pix abaixo. A liberação acontece automaticamente após a confirmação.</p>
+          <img id="pix-qr" alt="QR Code Pix" hidden>
+          <textarea id="pix-code" readonly aria-label="Pix Copia e Cola"></textarea>
+          <button type="button" id="pix-copy">Copiar código Pix</button>
+          <a id="pix-ticket" target="_blank" rel="noopener noreferrer" hidden>Ver pagamento no Mercado Pago</a>
+        </div>
+        <div id="subscription-status" role="status" aria-live="polite"></div>
+      </div>
+    </section>
     <section id="messages" aria-live="polite">
     </section>
     <form id="chat-form">
@@ -2021,6 +2065,7 @@ const history = [];
       }
     })();
   </script>
+  <script src="/static/payments.js?v=pix-24h-1"></script>
   <script src="/static/image-chat.js?v=auto-image-intent-20261031"></script>
 </body>
 </html>
