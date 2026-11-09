@@ -12,6 +12,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY vendor/pestinha ./vendor/pestinha
+ARG BUILD_MARKER=unknown
+COPY static/build-marker.txt /tmp/build-marker.txt
 COPY static ./static
 COPY data ./data
 
