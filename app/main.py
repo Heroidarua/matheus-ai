@@ -1706,20 +1706,20 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         github_context = await github_chat_context(http_request, last_user_message)
         if github_context:
             system_prompt += (
-                "\\n\\n<github_repository_context>\\n"
+                "\n\n<github_repository_context>\n"
                 + github_context[:30000]
-                + "\\n</github_repository_context>"
+                + "\n</github_repository_context>"
             )
     except HTTPException as exc:
         system_prompt += (
-            "\\n\\nA consulta ao GitHub foi tentada, mas não pôde ser concluída: "
+            "\n\nA consulta ao GitHub foi tentada, mas não pôde ser concluída: "
             + str(exc.detail)[:500]
             + ". Informe a falha com transparência; não invente arquivos, commits ou resultados."
         )
     except Exception as exc:
         print(f"GitHub chat context failed ({type(exc).__name__})")
         system_prompt += (
-            "\\n\\nNão foi possível consultar o GitHub nesta mensagem. "
+            "\n\nNão foi possível consultar o GitHub nesta mensagem. "
             "Informe que a consulta falhou e não invente conteúdo do repositório."
         )
 
