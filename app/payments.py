@@ -163,7 +163,7 @@ async def require_paid_access(request: Request) -> None:
 
 
 class PixCreateRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=254, pattern=r"^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
+    email: str = Field(min_length=5, max_length=254, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 @router.get("/access")
