@@ -83,11 +83,13 @@ GROQ_FALLBACK_NAME = os.getenv("GROQ_FALLBACK_NAME", "openai/gpt-oss-20b").strip
 GOOGLE_GEMINI_BASE_URL = os.getenv("GOOGLE_GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/").rstrip("/")
 GOOGLE_GEMINI_MODEL = os.getenv("GOOGLE_GEMINI_MODEL", "gemma-4-31b-it").strip()
 
-# Modelo primário: Gemma 4 via API Google (como usava antes)
-MODEL_BASE_URL = GOOGLE_GEMINI_BASE_URL
-MODEL_NAME = GOOGLE_GEMINI_MODEL
-MODEL_FALLBACK_NAME = GROQ_MODEL_NAME  # Fallback: Groq
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
+# Provedor principal configurável pelo Render. Mantém Gemini como padrão legado,
+# mas respeita MODEL_BASE_URL/MODEL_NAME quando definidos no ambiente.
+MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", GOOGLE_GEMINI_BASE_URL).strip().rstrip("/")
+MODEL_NAME = os.getenv("MODEL_NAME", GOOGLE_GEMINI_MODEL).strip()
+MODEL_FALLBACK_NAME = os.getenv("MODEL_FALLBACK_NAME", GROQ_MODEL_NAME).strip()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama").strip()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
 MAX_KNOWLEDGE_FILES = 100
@@ -1795,7 +1797,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     fb_payload["model"] = GROQ_MODEL_NAME
                     fb_payload.pop("reasoning_effort", None)
                     async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=8.0)) as fb_client:
-                        async with fb_client.stream("POST", f"{GROQ_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}, json=fb_payload) as fb_upstream:
+                        async with fb_client.stream("POST", f"{GROQ_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, json=fb_payload) as fb_upstream:
                             if fb_upstream.status_code < 400:
                                 async for line in fb_upstream.aiter_lines():
                                     if not line.startswith("data:"):
@@ -1829,7 +1831,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     fb_payload["model"] = GROQ_MODEL_NAME
                     fb_payload.pop("reasoning_effort", None)
                     async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=8.0)) as fb_client:
-                        async with fb_client.stream("POST", f"{GROQ_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}, json=fb_payload) as fb_upstream:
+                        async with fb_client.stream("POST", f"{GROQ_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, json=fb_payload) as fb_upstream:
                             if fb_upstream.status_code < 400:
                                 async for line in fb_upstream.aiter_lines():
                                     if not line.startswith("data:"):
@@ -1977,7 +1979,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             fallback_payload.pop("reasoning_effort", None)
             # Usar a URL e o header corretos para o provedor do fallback (Groq)
             fallback_url = GROQ_BASE_URL
-            fallback_headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+            fallback_headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as fallback_client:
                 response = await fallback_client.post(
                     f"{fallback_url}/chat/completions",
