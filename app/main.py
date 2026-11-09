@@ -1727,7 +1727,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     for i, msg in enumerate(messages):
         print(f"[DEBUG]   [{i}] role={msg['role']}, content={msg['content'][:100]}...")
 
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    # Header de autenticação: X-goog-api-key para Google, Bearer para Groq/Ollama
+    if MODEL_BASE_URL.startswith("https://generativelanguage.googleapis.com"):
+        headers = {"X-goog-api-key": OPENAI_API_KEY}
+    else:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     # Limites adaptativos reduzem a geração excessiva e aceleram respostas longas.
     max_output_tokens = {"curta": 512, "normal": 1536, "detalhada": 3072}.get(request.response_length, 1536)
     payload: dict[str, Any] = {
