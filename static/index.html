@@ -439,6 +439,25 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
       }
     }
 
+  
+    .github-dialog{width:min(720px,calc(100vw - 24px));max-height:90vh;overflow:auto;padding:0;border:1px solid var(--border);border-radius:18px;background:var(--panel);color:var(--text);}
+    .github-dialog::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(3px);}
+    .github-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);}
+    .github-body{display:grid;gap:12px;padding:16px 18px 20px;}
+    .github-status{font-size:13px;color:var(--muted);padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel2);}
+    .github-error{color:#ff9b9b;border-color:#783b42;}
+    .github-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+    .github-row select,.github-row input,.github-body textarea{min-width:0;flex:1;width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:10px;background:var(--panel2);color:var(--text);font:inherit;font-size:13px;}
+    .github-body label{display:grid;gap:6px;color:var(--muted);font-size:12px;}
+    .github-body textarea{min-height:230px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.5;}
+    .github-actions{display:flex;gap:8px;flex-wrap:wrap;}
+    .github-actions .tool-btn{flex:1;min-width:130px;}
+    .github-section{display:grid;gap:8px;padding-top:10px;border-top:1px solid var(--border);}
+    .github-section strong{font-size:13px;}
+    #github-proposal-status{font-size:12px;color:var(--muted);overflow-wrap:anywhere;}
+    #github-proposal-status a{color:var(--accent);}
+    @media(max-width:520px){.github-dialog{width:calc(100vw - 16px);}.github-body{padding:12px;}.github-actions .tool-btn{min-width:100%;}}
+
   </style>
 </head>
 <body class="supreme-mode">
@@ -489,6 +508,7 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
                 <button class="tool-btn" type="button" id="file-button"><span>📎</span>Enviar arquivos</button>
                 <button class="tool-btn" type="button" id="new-chat-button">Nova conversa</button>
                 <button class="tool-btn" type="button" id="export-button">Exportar conversa</button>
+                <button class="tool-btn" type="button" id="github-button"><span>⌘</span>Conectar GitHub</button>
                 <button class="tool-btn" type="button" id="stop-button" hidden>Interromper</button>
                 <span id="voice-status" class="voice-status" aria-live="polite"></span>
               </div>
@@ -2022,5 +2042,55 @@ const history = [];
     })();
   </script>
   <script src="/static/image-chat.js?v=auto-image-intent-20261031"></script>
+
+  <dialog id="github-dialog" class="github-dialog">
+    <div class="github-head">
+      <div><strong>GitHub conectado à ADA-M</strong><p style="margin:3px 0 0;color:var(--muted);font-size:12px">Leia repositórios, envie código ao chat e prepare alterações revisáveis.</p></div>
+      <button type="button" id="github-close" class="library-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="github-body">
+      <div id="github-status" class="github-status" aria-live="polite">Verificando configuração…</div>
+      <div class="github-actions">
+        <button type="button" class="tool-btn" id="github-connect">Conectar conta GitHub</button>
+        <button type="button" class="tool-btn" id="github-disconnect" hidden>Desconectar</button>
+      </div>
+      <div class="github-section">
+        <strong>1. Repositório autorizado</strong>
+        <div class="github-row">
+          <select id="github-repository" disabled aria-label="Repositório GitHub"><option value="">Selecione um repositório</option></select>
+          <button type="button" class="tool-btn" id="github-select-repository" disabled>Selecionar</button>
+        </div>
+        <div class="github-row">
+          <input id="github-file-path" type="text" placeholder="Caminho do arquivo (ex.: app/main.py)" disabled>
+          <button type="button" class="tool-btn" id="github-read-file" disabled>Ler arquivo</button>
+        </div>
+      </div>
+      <label>2. Conteúdo do arquivo — você pode revisar ou editar antes de propor alterações
+        <textarea id="github-file-content" spellcheck="false" placeholder="O conteúdo do arquivo aparecerá aqui…" disabled></textarea>
+      </label>
+      <div class="github-actions">
+        <button type="button" class="tool-btn" id="github-send-context" disabled>Enviar conteúdo ao chat</button>
+      </div>
+      <div class="github-section">
+        <strong>3. Preparar alterações — nenhuma gravação acontece nesta etapa</strong>
+        <label>Nova branch
+          <input id="github-branch" type="text" value="ada-m/alteracoes-revisadas" placeholder="ada-m/minha-correcao">
+        </label>
+        <label>Mensagem do commit
+          <input id="github-commit-message" type="text" value="ADA-M: aplicar alterações revisadas">
+        </label>
+        <div class="github-actions">
+          <button type="button" class="tool-btn" id="github-preview" disabled>Gerar prévia</button>
+          <button type="button" class="tool-btn" id="github-confirm" disabled>Confirmar e gravar na branch</button>
+        </div>
+        <div id="github-proposal-status" aria-live="polite">A ADA-M nunca grava diretamente na main. A prévia precisa ser confirmada antes de qualquer escrita.</div>
+        <div class="github-actions">
+          <button type="button" class="tool-btn" id="github-create-pr" disabled>Criar Pull Request</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/static/github-integration.js?v=github-app-20261109"></script>
 </body>
 </html>

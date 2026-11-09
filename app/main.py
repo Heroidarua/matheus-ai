@@ -134,7 +134,7 @@ class VersionedStaticFiles(StaticFiles):
 
 
 app.mount("/static", VersionedStaticFiles(directory=str(STATIC_DIR)), name="static")
-from app.github_integration import router as github_router
+from app.github_integration import router as github_router, github_chat_context
 app.include_router(github_router)
 app.include_router(google_workspace_router)
 app.include_router(file_library_router)
@@ -1700,6 +1700,29 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "Se os resultados forem fracos, conflitantes ou insuficientes, reconheça a limitação.\n"
             "<web_search_results>\n" + web_context[:7000] + "\n</web_search_results>"
         )
+    # Contexto GitHub sob demanda: somente leitura e apenas quando o usuário menciona
+    # explicitamente repositórios, arquivos, branches, commits, issues ou Pull Requests.
+    try:
+        github_context = await github_chat_context(http_request, last_user_message)
+        if github_context:
+            system_prompt += (
+                "\n\n<github_repository_context>\n"
+                + github_context[:30000]
+                + "\n</github_repository_context>"
+            )
+    except HTTPException as exc:
+        system_prompt += (
+            "\n\nA consulta ao GitHub foi tentada, mas não pôde ser concluída: "
+            + str(exc.detail)[:500]
+            + ". Informe a falha com transparência; não invente arquivos, commits ou resultados."
+        )
+    except Exception as exc:
+        print(f"GitHub chat context failed ({type(exc).__name__})")
+        system_prompt += (
+            "\n\nNão foi possível consultar o GitHub nesta mensagem. "
+            "Informe que a consulta falhou e não invente conteúdo do repositório."
+        )
+
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     
     # Se precisa gerar código, adiciona instrução específica
