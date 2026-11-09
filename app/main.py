@@ -36,6 +36,7 @@ from app.google_search import google_grounded_search
 from app.google_workspace import router as google_workspace_router
 from app.file_library import router as file_library_router, search_library
 from app.image_generation import router as image_generation_router
+from app.payments import router as payments_router, require_paid_access
 from app.companion import (
     build_companion_prompt,
     companion_storage_status,
@@ -139,6 +140,7 @@ app.include_router(github_router)
 app.include_router(google_workspace_router)
 app.include_router(file_library_router)
 app.include_router(image_generation_router)
+app.include_router(payments_router)
 
 
 class ChatMessage(BaseModel):
@@ -1560,7 +1562,7 @@ def parse_tool_call(reply: str):
             return "web_fetch", {"url": str(args["url"]).strip()}
     return None
 
-@app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
+@app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key), Depends(require_paid_access)])
 async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     # Verifica rate limit
     client_ip = http_request.client.host if http_request.client else "desconhecido"
