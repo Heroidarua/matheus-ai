@@ -759,10 +759,7 @@ const history = [];
     });
     document.getElementById('new-chat-button').addEventListener('click', startNewConversation);
     document.getElementById('export-button').addEventListener('click', exportConversation);
-    document.getElementById('voice-button').addEventListener('click', () => {
-      if (dictationRecognition || voiceButton.classList.contains('voice-active')) stopVoiceDictation();
-      else startVoiceDictation();
-    });
+    document.getElementById('voice-button').addEventListener('click', startVoiceDictation);
     const voiceConversationToggle = document.getElementById('voice-conversation-toggle');
     const plusButton = document.getElementById('plus-button');
     const plusMenu = document.getElementById('plus-menu');
@@ -1639,23 +1636,6 @@ const history = [];
     }
 
     let dictationRecognition = null;
-    let dictationManuallyStopped = false;
-    let dictationRestartTimer = null;
-
-    function stopVoiceDictation() {
-      dictationManuallyStopped = true;
-      clearTimeout(dictationRestartTimer);
-      dictationRestartTimer = null;
-      if (dictationRecognition) {
-        const current = dictationRecognition;
-        dictationRecognition = null;
-        try { current.abort(); } catch {}
-      }
-      voiceButton.classList.remove('voice-active');
-      voiceButton.setAttribute('aria-label', 'Ditado por voz');
-      voiceButton.title = 'Ditado por voz';
-      voiceStatus.textContent = 'Microfone desligado.';
-    }
 
     // Libera todas as instâncias de SpeechRecognition antes de abrir o microfone WebRTC.
     // O ditado normal usa uma instância separada e antes não era encerrado pelo LiveKit.
@@ -1694,22 +1674,22 @@ const history = [];
         voiceStatus.textContent = 'Ditado por voz não é suportado neste navegador. Use Chrome ou Edge atualizado.';
         return;
       }
-      if (dictationRecognition) return;
-      dictationManuallyStopped = false;
-      clearTimeout(dictationRestartTimer);
+      if (dictationRecognition) {
+        try { dictationRecognition.abort(); } catch {}
+        dictationRecognition = null;
+      }
       const instance = new SpeechRecognitionAPI();
       dictationRecognition = instance;
       instance.lang = 'pt-BR';
-      instance.continuous = true;
+      instance.continuous = false;
       instance.interimResults = true;
       instance.maxAlternatives = 1;
       voiceButton.classList.add('voice-active');
-      voiceButton.setAttribute('aria-label', 'Parar gravação de voz');
-      voiceButton.title = 'Toque novamente para parar';
-      voiceStatus.textContent = 'Ouvindo continuamente… Toque no microfone para encerrar.';
+      voiceStatus.textContent = 'Ouvindo para transcrever…';
       const dictationBaseText = promptEl.value.trim();
       instance.onresult = event => {
-        // Mantém o texto parcial atualizado enquanto o microfone continua ouvindo.
+        // O navegador envia resultados parciais repetidos; reconstrua o texto
+        // a partir do resultado atual em vez de acrescentá-lo a cada evento.
         const transcript = Array.from(event.results)
           .map(result => result[0]?.transcript || '')
           .join(' ')
@@ -1718,41 +1698,23 @@ const history = [];
         if (transcript) {
           promptEl.value = [dictationBaseText, transcript].filter(Boolean).join(' ');
           promptEl.dispatchEvent(new Event('input', { bubbles: true }));
-          voiceStatus.textContent = 'Gravando… Toque no microfone novamente para parar.';
+          promptEl.focus();
+          voiceStatus.textContent = 'Texto transcrito. Revise e envie quando quiser.';
         }
       };
       instance.onerror = event => {
-        if (dictationManuallyStopped || event.error === 'aborted') return;
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          dictationManuallyStopped = true;
-          voiceButton.classList.remove('voice-active');
-          voiceButton.setAttribute('aria-label', 'Ditado por voz');
-          voiceButton.title = 'Ditado por voz';
-          voiceStatus.textContent = 'Permita o acesso ao microfone para usar o ditado.';
-          return;
-        }
-        voiceStatus.textContent = 'A conexão de voz foi interrompida. Tentando continuar…';
+        voiceStatus.textContent = event.error === 'not-allowed'
+          ? 'Permita o acesso ao microfone para usar o ditado.'
+          : 'Não foi possível transcrever. Tente novamente.';
       };
       instance.onend = () => {
         if (dictationRecognition === instance) dictationRecognition = null;
-        if (dictationManuallyStopped) {
-          voiceButton.classList.remove('voice-active');
-          voiceButton.setAttribute('aria-label', 'Ditado por voz');
-          voiceButton.title = 'Ditado por voz';
-          return;
-        }
-        // Alguns navegadores encerram o reconhecimento após períodos de silêncio.
-        // Reinicia sem exigir outro toque, até que o usuário desligue manualmente.
-        dictationRestartTimer = setTimeout(() => {
-          if (!dictationManuallyStopped && !dictationRecognition) startVoiceDictation();
-        }, 300);
+        voiceButton.classList.remove('voice-active');
       };
       try { instance.start(); }
       catch {
         dictationRecognition = null;
         voiceButton.classList.remove('voice-active');
-        voiceButton.setAttribute('aria-label', 'Ditado por voz');
-        voiceButton.title = 'Ditado por voz';
         voiceStatus.textContent = 'Não foi possível iniciar o microfone.';
       }
     }
