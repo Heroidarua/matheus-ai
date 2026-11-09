@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 import psycopg
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
@@ -148,8 +148,22 @@ async def _fetch_mp_payment(payment_id: str, access_token: str) -> dict[str, Any
     return data
 
 
+async def require_paid_access(request: Request) -> None:
+    """Bloqueia somente quando a integração está ativa e não há assinatura vigente."""
+    database_url, access_token, _ = _config()
+    if not database_url or not access_token:
+        return
+    try:
+        expiry = await asyncio.to_thread(_access_record, _session_id(request))
+    except Exception as exc:
+        print(f"Payment access check failed ({type(exc).__name__})")
+        raise HTTPException(status_code=503, detail="Não foi possível validar o acesso agora.")
+    if not expiry or expiry <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=402, detail="subscription_required")
+
+
 class PixCreateRequest(BaseModel):
-    email: EmailStr
+    email: str = Field(min_length=5, max_length=254, pattern=r"^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
 
 
 @router.get("/access")
