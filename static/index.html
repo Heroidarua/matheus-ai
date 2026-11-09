@@ -55,6 +55,29 @@
     .image-studio-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;}
     .image-studio-actions button{flex:1;min-width:120px;}
     .image-studio-status{font-size:12px;color:var(--muted);min-height:18px;}
+
+    .wallpaper-dialog{width:min(560px,calc(100vw - 24px));max-height:88vh;padding:0;border:1px solid var(--border);border-radius:18px;background:var(--panel);color:var(--text);}
+    .wallpaper-dialog::backdrop{background:rgba(0,0,0,.72);backdrop-filter:blur(4px);}
+    .wallpaper-content{display:grid;gap:15px;padding:16px 18px 18px;overflow:auto;}
+    .wallpaper-section-title{font-size:13px;font-weight:650;color:var(--text);margin:0 0 9px;}
+    .wallpaper-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;}
+    .wallpaper-choice{min-height:76px;border:1px solid var(--border);border-radius:12px;padding:8px;color:#fff;font-size:12px;font-weight:600;text-shadow:0 1px 3px #000;background:#303030;display:flex;align-items:flex-end;justify-content:flex-start;position:relative;overflow:hidden;}
+    .wallpaper-choice[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px;}
+    .wallpaper-choice[data-wallpaper="default"]{background:linear-gradient(135deg,#212121,#353535);}
+    .wallpaper-choice[data-wallpaper="aurora"]{background:linear-gradient(135deg,#102c38,#285d57 48%,#432b62);}
+    .wallpaper-choice[data-wallpaper="ocean"]{background:linear-gradient(135deg,#061b35,#075985 55%,#0e7490);}
+    .wallpaper-choice[data-wallpaper="sunset"]{background:linear-gradient(135deg,#422006,#c2410c 50%,#7e22ce);}
+    .wallpaper-choice[data-wallpaper="lavender"]{background:linear-gradient(135deg,#312e81,#7e22ce 55%,#be185d);}
+    .wallpaper-choice[data-wallpaper="forest"]{background:linear-gradient(135deg,#052e16,#166534 55%,#365314);}
+    .wallpaper-upload{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;border:1px dashed var(--border);border-radius:12px;padding:10px;color:var(--text);background:var(--panel2);font-size:13px;font-weight:600;cursor:pointer;}
+    .wallpaper-upload input{display:none;}
+    .wallpaper-note{font-size:11px;color:var(--muted);line-height:1.45;margin:0;}
+    #messages.chat-wallpaper{border-radius:18px;background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:local;padding:24px 16px;isolation:isolate;}
+    #messages.chat-wallpaper .welcome{background:rgba(25,25,25,.62);backdrop-filter:blur(5px);border:1px solid rgba(255,255,255,.12);border-radius:16px;}
+    #messages.chat-wallpaper .user{background:rgba(20,20,20,.78);backdrop-filter:blur(5px);border:1px solid rgba(255,255,255,.12);}
+    #messages.chat-wallpaper .assistant{background:rgba(20,20,20,.28);backdrop-filter:blur(2px);border-radius:14px;}
+    @media(max-width:520px){.wallpaper-options{grid-template-columns:repeat(2,minmax(0,1fr));}.wallpaper-choice{min-height:68px;}#messages.chat-wallpaper{padding:18px 10px;}}
+
     .image-download{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;background:var(--panel2);}
     .generated-image-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
 
@@ -463,7 +486,7 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
                 <select id="speech-voice" aria-label="Voz da leitura"><option value="">Voz padrão do dispositivo</option></select>
               </label>
               <button class="tool-btn" type="button" id="test-speech-voice" hidden>Testar voz</button>
-              <button class="tool-btn theme-button" type="button" id="theme-button">Tema claro</button>
+              <button class="tool-btn theme-button" type="button" id="theme-button">🖼️ Plano de fundo</button>
             </div>
           </details>
         </div>
@@ -502,6 +525,36 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
       <div id="image-studio-status" class="image-studio-status" aria-live="polite"></div>
     </form>
   </dialog>
+  <dialog id="wallpaper-dialog" class="wallpaper-dialog">
+    <div class="image-studio-head">
+      <div><strong>Personalizar plano de fundo</strong><div style="font-size:11px;color:var(--muted);margin-top:3px">Escolha um tema ou use uma foto do seu dispositivo</div></div>
+      <button type="button" id="wallpaper-close" class="library-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="wallpaper-content">
+      <section>
+        <h3 class="wallpaper-section-title">Temas prontos</h3>
+        <div class="wallpaper-options" id="wallpaper-options">
+          <button type="button" class="wallpaper-choice" data-wallpaper="default" aria-pressed="false">Padrão</button>
+          <button type="button" class="wallpaper-choice" data-wallpaper="aurora" aria-pressed="false">Aurora</button>
+          <button type="button" class="wallpaper-choice" data-wallpaper="ocean" aria-pressed="false">Oceano</button>
+          <button type="button" class="wallpaper-choice" data-wallpaper="sunset" aria-pressed="false">Pôr do sol</button>
+          <button type="button" class="wallpaper-choice" data-wallpaper="lavender" aria-pressed="false">Lavanda</button>
+          <button type="button" class="wallpaper-choice" data-wallpaper="forest" aria-pressed="false">Floresta</button>
+        </div>
+      </section>
+      <section>
+        <h3 class="wallpaper-section-title">Sua própria imagem</h3>
+        <label class="wallpaper-upload" for="wallpaper-file">🖼️ Escolher foto da galeria ou arquivos
+          <input id="wallpaper-file" type="file" accept="image/*">
+        </label>
+        <p class="wallpaper-note">A imagem é ajustada para ocupar o fundo do chat e fica salva somente neste navegador e dispositivo.</p>
+      </section>
+      <div class="image-studio-actions">
+        <button type="button" id="wallpaper-reset" class="tool-btn">Restaurar fundo original</button>
+      </div>
+      <div id="wallpaper-status" class="image-studio-status" aria-live="polite"></div>
+    </div>
+  </dialog>
   <script>
     const messagesEl = document.getElementById('messages');
     const form = document.getElementById('chat-form');
@@ -518,18 +571,92 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     let currentMode = 'livre'; // Sempre sem censura
     let activeController = null;
 
-    // Modo sempre livre (sem censura) - classe aplicada no body via HTML
+    // Personalização do fundo do chat: temas e imagem escolhida pelo usuário.
+    const wallpaperDialog = document.getElementById('wallpaper-dialog');
+    const wallpaperFile = document.getElementById('wallpaper-file');
+    const wallpaperStatus = document.getElementById('wallpaper-status');
+    const WALLPAPER_STORAGE_KEY = 'ada-m-chat-wallpaper-v1';
+    const wallpaperPresets = {
+      default: '',
+      aurora: 'linear-gradient(135deg,rgba(12,35,48,.72),rgba(38,83,75,.68),rgba(54,35,78,.72))',
+      ocean: 'linear-gradient(135deg,rgba(5,27,53,.78),rgba(7,89,133,.68),rgba(14,116,144,.72))',
+      sunset: 'linear-gradient(135deg,rgba(66,32,6,.76),rgba(194,65,12,.68),rgba(126,34,206,.72))',
+      lavender: 'linear-gradient(135deg,rgba(49,46,129,.76),rgba(126,34,206,.68),rgba(190,24,93,.72))',
+      forest: 'linear-gradient(135deg,rgba(5,46,22,.78),rgba(22,101,52,.68),rgba(54,83,20,.72))'
+    };
+    function updateWallpaperSelection(value) {
+      document.querySelectorAll('.wallpaper-choice').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.wallpaper === value));
+      });
+    }
+    function applyWallpaper(config, persist = true) {
+      const wallpaper = messagesEl;
+      wallpaper.classList.remove('chat-wallpaper');
+      wallpaper.style.backgroundImage = '';
+      wallpaper.style.backgroundColor = '';
+      if (config && config.type === 'preset' && wallpaperPresets[config.value] !== undefined && config.value !== 'default') {
+        wallpaper.classList.add('chat-wallpaper');
+        wallpaper.style.backgroundImage = wallpaperPresets[config.value];
+      } else if (config && config.type === 'image' && typeof config.value === 'string' && config.value.startsWith('data:image/')) {
+        wallpaper.classList.add('chat-wallpaper');
+        wallpaper.style.backgroundImage = 'linear-gradient(rgba(20,20,20,.48),rgba(20,20,20,.48)),url("' + config.value + '")';
+      }
+      updateWallpaperSelection(config?.type === 'preset' ? config.value : '');
+      if (persist) {
+        try {
+          if (!config || config.type === 'preset' && config.value === 'default') localStorage.removeItem(WALLPAPER_STORAGE_KEY);
+          else localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(config));
+        } catch {
+          wallpaperStatus.textContent = 'Não foi possível salvar. Tente uma imagem menor.';
+        }
+      }
+    }
     document.getElementById('theme-button').addEventListener('click', () => {
-      document.body.classList.toggle('light-theme');
-      const light = document.body.classList.contains('light-theme');
-      document.getElementById('theme-button').textContent = light ? 'Tema escuro' : 'Tema claro';
-      try { localStorage.setItem('matheus-ai-theme', light ? 'light' : 'dark'); } catch {}
+      wallpaperStatus.textContent = '';
+      wallpaperDialog.showModal();
+    });
+    document.getElementById('wallpaper-close').addEventListener('click', () => wallpaperDialog.close());
+    document.getElementById('wallpaper-options').addEventListener('click', event => {
+      const choice = event.target.closest('[data-wallpaper]');
+      if (!choice) return;
+      applyWallpaper({ type: 'preset', value: choice.dataset.wallpaper });
+      wallpaperStatus.textContent = choice.dataset.wallpaper === 'default' ? 'Fundo original restaurado.' : 'Tema aplicado e salvo neste dispositivo.';
+    });
+    document.getElementById('wallpaper-reset').addEventListener('click', () => {
+      applyWallpaper({ type: 'preset', value: 'default' });
+      wallpaperFile.value = '';
+      wallpaperStatus.textContent = 'Fundo original restaurado.';
+    });
+    wallpaperFile.addEventListener('change', async () => {
+      const file = wallpaperFile.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        wallpaperStatus.textContent = 'Escolha um arquivo de imagem válido.';
+        wallpaperFile.value = '';
+        return;
+      }
+      wallpaperStatus.textContent = 'Preparando sua imagem…';
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext('2d');
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close?.();
+        const imageData = canvas.toDataURL('image/jpeg', .78);
+        applyWallpaper({ type: 'image', value: imageData });
+        wallpaperStatus.textContent = 'Foto aplicada e salva neste navegador.';
+      } catch (error) {
+        wallpaperStatus.textContent = 'Não foi possível carregar essa imagem. Tente outra foto.';
+      } finally {
+        wallpaperFile.value = '';
+      }
     });
     try {
-      if (localStorage.getItem('matheus-ai-theme') === 'light') {
-        document.body.classList.add('light-theme');
-        document.getElementById('theme-button').textContent = 'Tema escuro';
-      }
+      const savedWallpaper = JSON.parse(localStorage.getItem(WALLPAPER_STORAGE_KEY) || 'null');
+      if (savedWallpaper) applyWallpaper(savedWallpaper, false);
     } catch {}
     const selectedFiles = [];
 const history = [];
