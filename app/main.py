@@ -1849,6 +1849,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                             delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
                                         if isinstance(delta, str) and delta:
                                             yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
+                                    except (ValueError, TypeError, IndexError):
+                                        continue
                                 yield "event: done\ndata: " + json.dumps({"model": GROQ_MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\n\n"
                                 return
                             else:
