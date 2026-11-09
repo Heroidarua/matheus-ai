@@ -1732,9 +1732,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         "model": MODEL_NAME,
         "messages": messages,
         "temperature": 0.6,
-        "reasoning_effort": "low",
         "max_tokens": max_output_tokens,
     }
+    # Só enviar reasoning_effort para modelos Groq (Ollama não suporta)
+    if MODEL_BASE_URL.startswith("https://api.groq.com"):
+        payload["reasoning_effort"] = "low"
 
     web_loop_active = bool(should_search and not search_unavailable and not code_generation_needed and not summary_requested)
     fetched_urls: set[str] = set()
