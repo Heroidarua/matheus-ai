@@ -88,7 +88,9 @@ GOOGLE_GEMINI_MODEL = os.getenv("GOOGLE_GEMINI_MODEL", "gemma-4-31b-it").strip()
 MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", GOOGLE_GEMINI_BASE_URL).strip().rstrip("/")
 MODEL_NAME = os.getenv("MODEL_NAME", GOOGLE_GEMINI_MODEL).strip()
 MODEL_FALLBACK_NAME = os.getenv("MODEL_FALLBACK_NAME", GROQ_MODEL_NAME).strip()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama").strip()
+# Ollama Cloud exige a chave OLLAMA_API_KEY; OPENAI_API_KEY fica como compatibilidade legada.
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
+OPENAI_API_KEY = (OLLAMA_API_KEY or os.getenv("OPENAI_API_KEY", "ollama")).strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
