@@ -81,10 +81,10 @@ GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rst
 GROQ_MODEL_NAME = os.getenv("GROQ_MODEL_NAME", "openai/gpt-oss-120b").strip()
 GROQ_FALLBACK_NAME = os.getenv("GROQ_FALLBACK_NAME", "openai/gpt-oss-20b").strip()
 
-# Modelo primário: Gemma 4 (local via Ollama)
-MODEL_BASE_URL = OLLAMA_BASE_URL
-MODEL_NAME = OLLAMA_MODEL_NAME
-MODEL_FALLBACK_NAME = GROQ_MODEL_NAME  # Fallback: Groq
+# Modelo primário: Groq (funciona imediatamente)
+MODEL_BASE_URL = GROQ_BASE_URL
+MODEL_NAME = GROQ_MODEL_NAME
+MODEL_FALLBACK_NAME = OLLAMA_MODEL_NAME  # Fallback: Ollama
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
