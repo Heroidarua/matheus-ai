@@ -1917,11 +1917,13 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             fallback_payload = dict(payload)
             fallback_payload["model"] = fallback_model
             fallback_payload.pop("reasoning_effort", None)
-            # A sessão principal já foi fechada; usar uma sessão própria para o fallback.
+            # Usar a URL e o header corretos para o provedor do fallback (Groq)
+            fallback_url = GROQ_BASE_URL
+            fallback_headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as fallback_client:
                 response = await fallback_client.post(
-                    f"{MODEL_BASE_URL}/chat/completions",
-                    headers=headers,
+                    f"{fallback_url}/chat/completions",
+                    headers=fallback_headers,
                     json=fallback_payload,
                 )
             if response.status_code >= 400:
