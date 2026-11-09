@@ -105,7 +105,7 @@
   });
 
   disconnectButton.addEventListener("click", async () => {
-    if (!window.confirm("Desconectar a ADA-M desta instalação do GitHub nesta sessão?")) return;
+    if (!window.confirm("Desconectar o GitHub desta sessão da ADA-M? A instalação da GitHub App continuará ativa na sua conta.")) return;
     try {
       await api("/disconnect", { method: "POST" });
       state.connected = false;
