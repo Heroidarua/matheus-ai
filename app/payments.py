@@ -208,7 +208,7 @@ async def create_pix(data: PixCreateRequest, request: Request) -> dict[str, Any]
                        VALUES (%s, %s, %s, 'creating')""",
                     (idempotency_key, session_id, PRICE),
                 )
-        public_url = os.getenv("ADA_PUBLIC_URL", "").strip().rstrip("/")
+        public_url = (os.getenv("ADA_PUBLIC_URL") or os.getenv("PUBLIC_APP_URL", "")).strip().rstrip("/")
         if not public_url:
             public_url = str(request.base_url).rstrip("/")
         payload = {
