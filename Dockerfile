@@ -1,5 +1,9 @@
 FROM python:3.12-slim
 
+# Build ID único para forçar build limpo (muda a cada commit)
+ARG BUILD_ID=unknown
+ENV BUILD_ID=${BUILD_ID}
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8000
@@ -12,8 +16,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY vendor/pestinha ./vendor/pestinha
-ARG BUILD_MARKER=unknown
-COPY static/build-marker.txt /tmp/build-marker.txt
 COPY static ./static
 COPY data ./data
 
