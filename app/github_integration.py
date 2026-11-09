@@ -457,6 +457,26 @@ async def create_repository_pull_request(body: CreatePullRequest, request: Reque
             "title": result.get("title"), "state": result.get("state"), "base": default_branch, "head": branch}
 
 
+@router.get("/test-connection")
+async def test_github_connection(request: Request) -> dict[str, Any]:
+    """Testa se a instalação do GitHub está funcionando corretamente."""
+    try:
+        installation_id = _installation_id(request)
+        token = await _installation_token(installation_id)
+        data = await _github_request("GET", "/installation/repositories", token=token, params={"per_page": 5})
+        repos = [str(item.get("full_name", "")) for item in data.get("repositories", []) if isinstance(item, dict)]
+        return {
+            "ok": True,
+            "installation_id": installation_id,
+            "account": request.session.get("github_account"),
+            "repositories_found": len(repos),
+            "sample_repositories": repos[:5],
+            "message": "Conexão com o GitHub funcionando corretamente.",
+        }
+    except HTTPException as exc:
+        return {"ok": False, "error": exc.detail, "status_code": exc.status_code}
+
+
 @router.post("/disconnect")
 async def disconnect_github(request: Request) -> dict[str, bool]:
     _same_origin(request)
