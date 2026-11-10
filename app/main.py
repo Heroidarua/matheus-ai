@@ -2132,7 +2132,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         # tenta um modelo fallback como contingência para manter o chat utilizável.
         # Funciona para 429 (rate limit) e 503 (service unavailable).
         fallback_model = MODEL_FALLBACK_NAME
-        if response.status_code in {402, 429, 503} and GROQ_API_KEY and fallback_model and fallback_model != active_model_name:
+        if response is not None and response.status_code in {402, 429, 503} and GROQ_API_KEY and fallback_model and fallback_model != active_model_name:
             print(f"Primary model {active_model_name} returned HTTP {response.status_code}; trying fallback {fallback_model}")
             fallback_payload = dict(payload)
             fallback_payload["model"] = fallback_model
@@ -2163,8 +2163,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     if response.status_code >= 400:
                         print(f"Ollama model HTTP {response.status_code}: {response.text[:800]}")
 
-        response.raise_for_status()
-        data = response.json()
+        if response is not None:
+            response.raise_for_status()
+        if data is None:
+            raise ValueError("O provedor não retornou dados")
         choices = data.get("choices") or []
         if not choices:
             raise ValueError("O modelo não retornou escolhas")
