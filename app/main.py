@@ -1681,6 +1681,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if not check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Muitas requisições. Tente novamente em 1 minuto.")
     DIAGNOSTICS["requests"] += 1
+    if AI_PROVIDER == "inferx" and not (INFERX_BASE_URL and INFERX_MODEL and INFERX_API_KEY):
+        raise HTTPException(
+            status_code=503,
+            detail="InferX não está configurada. Confira INFERX_BASE_URL, INFERX_MODEL e INFERX_API_KEY no Render.",
+        )
     last_user_message = next((content_as_text(m.content) for m in reversed(request.messages) if m.role == "user"), "")
     if not last_user_message and isinstance(request.messages[-1].content, str):
         raise HTTPException(status_code=400, detail="Envie uma mensagem ou anexe um arquivo.")
