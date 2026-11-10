@@ -1995,7 +1995,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 async with stream_client.stream("POST", f"{fallback_model_base_url}/chat/completions", headers=fallback_headers, json={**stream_payload, "model": fallback_model_name}) as fallback_upstream:
                                     if fallback_upstream.status_code >= 400:
                                         body = (await fallback_upstream.aread()).decode("utf-8", errors="replace")[:500]
-                                        yield "event: error\\ndata: " + json.dumps({"detail": f"Modelo principal também falhou HTTP {fallback_upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                                        yield "event: error\ndata: " + json.dumps({"detail": f"Modelo principal também falhou HTTP {fallback_upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
                                         return
                                     async for line in fallback_upstream.aiter_lines():
                                         if not line.startswith("data:"):
@@ -2010,11 +2010,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                             if isinstance(delta, list):
                                                 delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
                                             if isinstance(delta, str) and delta:
-                                                yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\\n\\n"
+                                                yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
                                         except (ValueError, TypeError, IndexError):
                                             continue
                                 DIAGNOSTICS["successes"] += 1
-                                yield "event: done\\ndata: " + json.dumps({"model": fallback_model_name, "sources": sources}, ensure_ascii=False) + "\\n\\n"
+                                yield "event: done\ndata: " + json.dumps({"model": fallback_model_name, "sources": sources}, ensure_ascii=False) + "\n\n"
                                 return
                             if upstream.status_code >= 400:
                                 DIAGNOSTICS["errors"] += 1
