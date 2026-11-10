@@ -1864,7 +1864,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         headers = {"Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}", "anthropic-version": ANTHROPIC_API_VERSION}
         active_model_name = ANTHROPIC_MODEL
     elif MODEL_BASE_URL.startswith("https://generativelanguage.googleapis.com"):
-        headers = {"X-goog-api-key": OPENAI_API_KEY}
+        # O endpoint /v1beta/openai usa autenticação Bearer, inclusive com chaves AQ.
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
         active_model_name = MODEL_NAME
     else:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
