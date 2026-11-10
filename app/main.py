@@ -1583,6 +1583,21 @@ def parse_tool_call(reply: str):
             return "web_fetch", {"url": str(args["url"]).strip()}
     return None
 
+def is_programming_request(mode: str, message: str) -> bool:
+    """Detecta pedidos de desenvolvimento para roteá-los ao modelo coder."""
+    if mode == "programador":
+        return True
+    text = (message or "").casefold()
+    pattern = (
+        r"\b(c[oó]digo|programa(?:r|ção)?|programador|desenvolv(?:er|imento)|"
+        r"programming|coding|debug(?:gar|ging)?|bug|script|fun[cç][aã]o|"
+        r"api|backend|frontend|html|css|javascript|typescript|python|"
+        r"react|fastapi|sql|query|regex|terminal|linux|git|github|"
+        r"reposit[oó]rio|pull request|deploy|docker|yaml|json)\b"
+    )
+    return bool(re.search(pattern, text))
+
+
 def _anthropic_endpoint() -> str:
     if ANTHROPIC_BASE_URL.endswith("/v1/messages"):
         return ANTHROPIC_BASE_URL
@@ -1651,9 +1666,10 @@ def _anthropic_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return body
 
 
-async def _request_chat_completion(client: httpx.AsyncClient, payload: dict[str, Any], provider_headers: dict[str, str]) -> httpx.Response:
+async def _request_chat_completion(client: httpx.AsyncClient, payload: dict[str, Any], provider_headers: dict[str, str], base_url: str | None = None) -> httpx.Response:
     if not USE_ANTHROPIC:
-        return await client.post(f"{MODEL_BASE_URL}/chat/completions", headers=provider_headers, json=payload)
+        endpoint = (base_url or MODEL_BASE_URL).rstrip("/")
+        return await client.post(f"{endpoint}/chat/completions", headers=provider_headers, json=payload)
     upstream = await client.post(
         _anthropic_endpoint(),
         headers={
@@ -1890,11 +1906,19 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     else:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
         active_model_name = MODEL_NAME
+    active_model_base_url = MODEL_BASE_URL
+    coding_request = is_programming_request(request.mode, last_user_message)
+    # O Qwen coder só assume tarefas de programação; Gemma permanece como padrão.
+    if coding_request and not USE_ANTHROPIC and INFERX_BASE_URL and INFERX_MODEL and INFERX_API_KEY:
+        active_model_base_url = INFERX_BASE_URL
+        active_model_name = INFERX_MODEL
+        headers = {"Authorization": f"Bearer {INFERX_API_KEY}"}
+        print("Model routing: programming request -> InferX coder")
     # Limites adaptativos reduzem a geração excessiva e aceleram respostas longas.
     # Resposta normal mais enxuta por padrão reduz o tempo de geração; o usuário ainda pode escolher detalhada.
     max_output_tokens = {"curta": 384, "normal": 1024, "detalhada": 3072}.get(request.response_length, 1024)
     payload: dict[str, Any] = {
-        "model": MODEL_NAME,
+        "model": active_model_name,
         "messages": messages,
         "temperature": 0.6,
         "max_tokens": max_output_tokens,
@@ -1948,7 +1972,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 except (ValueError, TypeError):
                                     continue
                     else:
-                        async with stream_client.stream("POST", f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=stream_payload) as upstream:
+                        async with stream_client.stream("POST", f"{active_model_base_url}/chat/completions", headers=headers, json=stream_payload) as upstream:
                             if upstream.status_code >= 400:
                                 DIAGNOSTICS["errors"] += 1
                                 DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
@@ -2056,7 +2080,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             p["max_tokens"] = 512
         response = None
         for attempt in range(3):
-            response = await _request_chat_completion(client, p, headers)
+            response = await _request_chat_completion(client, p, headers, active_model_base_url)
             if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
                 break
             retry_after = response.headers.get("retry-after")
@@ -2213,7 +2237,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 {"role": "user", "content": "Continue exatamente de onde parou. Não repita o que já escreveu e conclua a resposta."},
             ]
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as continuation_client:
-                continuation_response = await _request_chat_completion(continuation_client, continuation_payload, headers)
+                continuation_response = await _request_chat_completion(continuation_client, continuation_payload, headers, active_model_base_url)
             continuation_response.raise_for_status()
             continuation_data = continuation_response.json()
             continuation_choices = continuation_data.get("choices") or []
@@ -2248,7 +2272,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             full_reply = f"Código gerado:\n```python\n{generated_code}\n```\n\nResultado da execução:\n{execution_result}"
             return ChatResponse(reply=full_reply, model=str(data.get("model", active_model_name)), sources=sources)
         
-        return ChatResponse(reply=reply.strip(), model=str(data.get("model", MODEL_NAME)), sources=sources)
+        return ChatResponse(reply=reply.strip(), model=str(data.get("model", active_model_name)), sources=sources)
     except httpx.TimeoutException:
         elapsed = time.perf_counter() - started_at
         DIAGNOSTICS["errors"] += 1
