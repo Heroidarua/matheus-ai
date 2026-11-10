@@ -113,7 +113,7 @@
     .assistant-content { white-space:normal;line-height:1.65; }
     .assistant-content p { margin:0 0 10px; }
     .assistant-content p:last-child { margin-bottom:0; }
-    .assistant-content h1,.assistant-content h2,.assistant-content h3 { margin:14px 0 7px;line-height:1.3; }
+    .assistant-content h1,.assistant-content h2,.assistant-content h3,.assistant-content h4,.assistant-content h5,.assistant-content h6 { margin:14px 0 7px;line-height:1.3; }\n    .assistant-content h1 { font-size:1.35em; } .assistant-content h2 { font-size:1.2em; } .assistant-content h3 { font-size:1.08em; } .assistant-content h4,.assistant-content h5,.assistant-content h6 { font-size:1em; }\n    .assistant-content hr { border:0;border-top:1px solid var(--border);margin:14px 0; }
     .assistant-content ul,.assistant-content ol { margin:7px 0 12px;padding-left:24px; }
     .assistant-content li { margin:4px 0; }
     .assistant-content pre { overflow:auto;padding:12px;border-radius:10px;background:#050505;border:1px solid var(--border);white-space:pre; }
@@ -1333,14 +1333,22 @@ const history = [];
         // Linhas em branco não encerram a lista: itens numerados separados
         // por espaçamento continuam na mesma <ol>, mantendo a numeração.
         if (!line.trim()) { flushParagraph(); continue; }
-        const heading = line.match(/^(#{1,3})\s+(.+)$/);
+        // Cabeçalhos Markdown aceitam de um a seis sinais #.
+        // Isso impede que #### ou ##### apareçam literalmente no chat.
+        const heading = line.match(/^\\s{0,3}(#{1,6})\\s+(.+?)\\s*#*\\s*$/);
         if (heading) {
           flushParagraph(); flushList();
           const h = document.createElement('h' + heading[1].length);
           renderInline(h, heading[2]); root.appendChild(h); continue;
         }
-        const item = line.match(/^\s*[-*]\s+(.+)$/);
-        const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+        // Separadores Markdown viram uma linha visual, não texto cru.
+        if (/^\\s{0,3}(?:(?:\\*\\s*){3,}|(?:-\\s*){3,}|(?:_\\s*){3,})$/.test(line)) {
+          flushParagraph(); flushList();
+          root.appendChild(document.createElement('hr'));
+          continue;
+        }
+        const item = line.match(/^\\s*[-*+•]\\s+(.+)$/);
+        const ordered = line.match(/^\\s*\\d+[.)]\\s+(.+)$/);
         if (item || ordered) {
           flushParagraph();
           const tag = ordered ? 'ol' : 'ul';
