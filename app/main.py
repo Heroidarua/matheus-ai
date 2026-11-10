@@ -1907,7 +1907,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 DIAGNOSTICS["errors"] += 1
                                 DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
                                 body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
-                                yield "event: error\\ndata: " + json.dumps({"detail": f"Provedor Anthropic HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                                yield "event: error\ndata: " + json.dumps({"detail": f"Provedor Anthropic HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
                                 return
                             async for line in upstream.aiter_lines():
                                 if not line.startswith("data:"):
