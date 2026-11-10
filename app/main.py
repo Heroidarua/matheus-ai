@@ -91,6 +91,12 @@ MODEL_FALLBACK_NAME = os.getenv("MODEL_FALLBACK_NAME", GROQ_MODEL_NAME).strip()
 # Ollama Cloud exige a chave OLLAMA_API_KEY; OPENAI_API_KEY fica como compatibilidade legada.
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
 OPENAI_API_KEY = (OLLAMA_API_KEY or os.getenv("OPENAI_API_KEY", "ollama")).strip()
+# Anthropic Messages API: prioridade quando a credencial está configurada.
+ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com").strip().rstrip("/")
+ANTHROPIC_AUTH_TOKEN = os.getenv("ANTHROPIC_AUTH_TOKEN", "").strip()
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5").strip() or "claude-sonnet-5-5"
+ANTHROPIC_API_VERSION = os.getenv("ANTHROPIC_API_VERSION", "2023-06-01").strip() or "2023-06-01"
+USE_ANTHROPIC = bool(ANTHROPIC_AUTH_TOKEN)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", str(ROOT / "data" / "knowledge")))
 MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
@@ -360,9 +366,11 @@ async def delete_long_term_memory(http_request: Request) -> dict[str, Any]:
 @app.get("/api/diagnostics", dependencies=[Depends(require_app_key)])
 async def diagnostics() -> dict[str, Any]:
     """Diagnóstico operacional sem revelar chaves, URLs privadas ou conteúdo do usuário."""
-    provider_configured = bool(MODEL_BASE_URL and MODEL_NAME and OPENAI_API_KEY)
+    provider_configured = bool(ANTHROPIC_AUTH_TOKEN) or bool(MODEL_BASE_URL and MODEL_NAME and OPENAI_API_KEY)
+    if USE_ANTHROPIC:
+        probe = {"status": "configurado (será validado no chat)", "latency_ms": None}
     probe = {"status": "não verificado", "latency_ms": None}
-    if provider_configured:
+    if provider_configured and not USE_ANTHROPIC:
         started = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(4.0, connect=2.0)) as client:
@@ -1560,6 +1568,103 @@ def parse_tool_call(reply: str):
             return "web_fetch", {"url": str(args["url"]).strip()}
     return None
 
+def _anthropic_endpoint() -> str:
+    if ANTHROPIC_BASE_URL.endswith("/v1/messages"):
+        return ANTHROPIC_BASE_URL
+    return ANTHROPIC_BASE_URL + ("/messages" if ANTHROPIC_BASE_URL.endswith("/v1") else "/v1/messages")
+
+
+def _anthropic_content(content: Any) -> Any:
+    if isinstance(content, str):
+        return content
+    blocks: list[dict[str, Any]] = []
+    if isinstance(content, list):
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") == "text" and isinstance(part.get("text"), str):
+                blocks.append({"type": "text", "text": part["text"]})
+            elif part.get("type") == "image_url":
+                info = part.get("image_url") or {}
+                url = info.get("url") if isinstance(info, dict) else info
+                if isinstance(url, str) and url.startswith("data:") and "," in url:
+                    meta, data = url.split(",", 1)
+                    media = meta[5:].split(";")[0]
+                    if ";base64" in meta and media in {"image/jpeg", "image/png", "image/gif", "image/webp"}:
+                        blocks.append({"type": "image", "source": {"type": "base64", "media_type": media, "data": data}})
+                elif isinstance(url, str) and url.startswith(("http://", "https://")):
+                    blocks.append({"type": "image", "source": {"type": "url", "url": url}})
+    return blocks or ""
+
+
+def _anthropic_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    system_parts: list[str] = []
+    messages: list[dict[str, Any]] = []
+    for item in payload.get("messages", []):
+        if not isinstance(item, dict):
+            continue
+        role, content = item.get("role"), item.get("content", "")
+        if role == "system":
+            if isinstance(content, str) and content.strip():
+                system_parts.append(content)
+            continue
+        if role in {"user", "assistant"}:
+            messages.append({"role": role, "content": _anthropic_content(content)})
+    merged: list[dict[str, Any]] = []
+    for item in messages:
+        if merged and merged[-1]["role"] == item["role"]:
+            prev = merged[-1]["content"]
+            cur = item["content"]
+            prev_blocks = prev if isinstance(prev, list) else [{"type": "text", "text": str(prev)}]
+            cur_blocks = cur if isinstance(cur, list) else [{"type": "text", "text": str(cur)}]
+            merged[-1]["content"] = prev_blocks + cur_blocks
+        else:
+            merged.append(item)
+    if not merged or merged[0]["role"] != "user":
+        merged.insert(0, {"role": "user", "content": "Continue a conversa com base no contexto fornecido."})
+    body: dict[str, Any] = {
+        "model": ANTHROPIC_MODEL,
+        "max_tokens": int(payload.get("max_tokens", 2048)),
+        "messages": merged,
+    }
+    if system_parts:
+        body["system"] = "\n\n".join(system_parts)
+    if "temperature" in payload:
+        body["temperature"] = payload["temperature"]
+    if payload.get("stream"):
+        body["stream"] = True
+    return body
+
+
+async def _request_chat_completion(client: httpx.AsyncClient, payload: dict[str, Any]) -> httpx.Response:
+    if not USE_ANTHROPIC:
+        return await client.post(f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=payload)
+    upstream = await client.post(
+        _anthropic_endpoint(),
+        headers={
+            "Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}",
+            "anthropic-version": ANTHROPIC_API_VERSION,
+            "content-type": "application/json",
+        },
+        json=_anthropic_payload(payload),
+    )
+    if upstream.is_success:
+        raw = upstream.json()
+        text_out = "".join(
+            str(block.get("text", "")) for block in (raw.get("content") or [])
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+        normalized = {
+            "model": raw.get("model", ANTHROPIC_MODEL),
+            "choices": [{
+                "message": {"role": "assistant", "content": text_out},
+                "finish_reason": "length" if raw.get("stop_reason") == "max_tokens" else "stop",
+            }],
+        }
+        upstream._content = json.dumps(normalized, ensure_ascii=False).encode("utf-8")
+    return upstream
+
+
 @app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_app_key)])
 async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     # Verifica rate limit
@@ -1754,11 +1859,16 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     for i, msg in enumerate(messages):
         print(f"[DEBUG]   [{i}] role={msg['role']}, content={msg['content'][:100]}...")
 
-    # Header de autenticação: X-goog-api-key para Google, Bearer para Groq/Ollama
-    if MODEL_BASE_URL.startswith("https://generativelanguage.googleapis.com"):
+    # Headers do provedor principal.
+    if USE_ANTHROPIC:
+        headers = {"Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}", "anthropic-version": ANTHROPIC_API_VERSION}
+        active_model_name = ANTHROPIC_MODEL
+    elif MODEL_BASE_URL.startswith("https://generativelanguage.googleapis.com"):
         headers = {"X-goog-api-key": OPENAI_API_KEY}
+        active_model_name = MODEL_NAME
     else:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+        active_model_name = MODEL_NAME
     # Limites adaptativos reduzem a geração excessiva e aceleram respostas longas.
     max_output_tokens = {"curta": 512, "normal": 1536, "detalhada": 3072}.get(request.response_length, 1536)
     payload: dict[str, Any] = {
@@ -1787,32 +1897,61 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             stream_payload["stream"] = True
             try:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as stream_client:
-                    async with stream_client.stream("POST", f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=stream_payload) as upstream:
-                        if upstream.status_code >= 400:
-                            DIAGNOSTICS["errors"] += 1
-                            DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
-                            body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
-                            yield "event: error\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
-                            return
-                        async for line in upstream.aiter_lines():
-                            if not line.startswith("data:"):
-                                continue
-                            raw = line[5:].strip()
-                            if raw == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(raw)
-                                choices = chunk.get("choices") or []
-                                delta = (choices[0].get("delta") or {}).get("content", "") if choices else ""
-                                if isinstance(delta, list):
-                                    delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
-                                if isinstance(delta, str) and delta:
-                                    yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
-                            except (ValueError, TypeError, IndexError):
-                                continue
+                    if USE_ANTHROPIC:
+                        async with stream_client.stream("POST", _anthropic_endpoint(), headers={
+                            "Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}",
+                            "anthropic-version": ANTHROPIC_API_VERSION,
+                            "content-type": "application/json",
+                        }, json=_anthropic_payload(stream_payload)) as upstream:
+                            if upstream.status_code >= 400:
+                                DIAGNOSTICS["errors"] += 1
+                                DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
+                                body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
+                                yield "event: error\\ndata: " + json.dumps({"detail": f"Provedor Anthropic HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                                return
+                            async for line in upstream.aiter_lines():
+                                if not line.startswith("data:"):
+                                    continue
+                                raw = line[5:].strip()
+                                if raw == "[DONE]":
+                                    break
+                                try:
+                                    event_data = json.loads(raw)
+                                    delta = event_data.get("delta") or {}
+                                    token = delta.get("text", "") if delta.get("type") == "text_delta" else ""
+                                    if token:
+                                        yield "data: " + json.dumps({"token": token}, ensure_ascii=False) + "\\n\\n"
+                                    if event_data.get("type") == "error":
+                                        raise httpx.HTTPError("Anthropic stream error")
+                                except (ValueError, TypeError):
+                                    continue
+                    else:
+                        async with stream_client.stream("POST", f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=stream_payload) as upstream:
+                            if upstream.status_code >= 400:
+                                DIAGNOSTICS["errors"] += 1
+                                DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
+                                body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
+                                yield "event: error\\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                                return
+                            async for line in upstream.aiter_lines():
+                                if not line.startswith("data:"):
+                                    continue
+                                raw = line[5:].strip()
+                                if raw == "[DONE]":
+                                    break
+                                try:
+                                    chunk = json.loads(raw)
+                                    choices = chunk.get("choices") or []
+                                    delta = (choices[0].get("delta") or {}).get("content", "") if choices else ""
+                                    if isinstance(delta, list):
+                                        delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
+                                    if isinstance(delta, str) and delta:
+                                        yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\\n\\n"
+                                except (ValueError, TypeError, IndexError):
+                                    continue
                 DIAGNOSTICS["successes"] += 1
                 DIAGNOSTICS["last_error"] = None
-                yield "event: done\ndata: " + json.dumps({"model": MODEL_NAME, "sources": sources}, ensure_ascii=False) + "\n\n"
+                yield "event: done\ndata: " + json.dumps({"model": active_model_name, "sources": sources}, ensure_ascii=False) + "\n\n"
             except httpx.TimeoutException:
                 DIAGNOSTICS["errors"] += 1
                 DIAGNOSTICS["last_error"] = "Tempo esgotado no provedor do modelo (stream)"
@@ -1895,11 +2034,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             p["max_tokens"] = 512
         response = None
         for attempt in range(3):
-            response = await client.post(
-                f"{MODEL_BASE_URL}/chat/completions",
-                headers=headers,
-                json=p,
-            )
+            response = await _request_chat_completion(client, p)
             if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
                 break
             retry_after = response.headers.get("retry-after")
@@ -1981,11 +2116,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 # Erros 429/5xx podem ser temporários. Fazer no máximo 2 novas
                 # tentativas com espera progressiva, sem repetir erros de configuração.
                 for attempt in range(3):
-                    response = await client.post(
-                        f"{MODEL_BASE_URL}/chat/completions",
-                        headers=headers,
-                        json=payload,
-                    )
+                    response = await _request_chat_completion(client, payload)
                     if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
                         break
                     retry_after = response.headers.get("retry-after")
@@ -2001,8 +2132,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         # tenta um modelo fallback como contingência para manter o chat utilizável.
         # Funciona para 429 (rate limit) e 503 (service unavailable).
         fallback_model = MODEL_FALLBACK_NAME
-        if response.status_code in {429, 503} and fallback_model and fallback_model != MODEL_NAME:
-            print(f"Primary model {MODEL_NAME} returned HTTP {response.status_code}; trying fallback {fallback_model}")
+        if response.status_code in {402, 429, 503} and GROQ_API_KEY and fallback_model and fallback_model != active_model_name:
+            print(f"Primary model {active_model_name} returned HTTP {response.status_code}; trying fallback {fallback_model}")
             fallback_payload = dict(payload)
             fallback_payload["model"] = fallback_model
             fallback_payload.pop("reasoning_effort", None)
@@ -2057,11 +2188,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 {"role": "user", "content": "Continue exatamente de onde parou. Não repita o que já escreveu e conclua a resposta."},
             ]
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as continuation_client:
-                continuation_response = await continuation_client.post(
-                    f"{MODEL_BASE_URL}/chat/completions",
-                    headers=headers,
-                    json=continuation_payload,
-                )
+                continuation_response = await _request_chat_completion(continuation_client, continuation_payload)
             continuation_response.raise_for_status()
             continuation_data = continuation_response.json()
             continuation_choices = continuation_data.get("choices") or []
@@ -2094,7 +2221,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             
             execution_result = executar_codigo_python(generated_code, mode=request.mode)
             full_reply = f"Código gerado:\n```python\n{generated_code}\n```\n\nResultado da execução:\n{execution_result}"
-            return ChatResponse(reply=full_reply, model=str(data.get("model", MODEL_NAME)), sources=sources)
+            return ChatResponse(reply=full_reply, model=str(data.get("model", active_model_name)), sources=sources)
         
         return ChatResponse(reply=reply.strip(), model=str(data.get("model", MODEL_NAME)), sources=sources)
     except httpx.TimeoutException:
