@@ -83,14 +83,23 @@ GROQ_FALLBACK_NAME = os.getenv("GROQ_FALLBACK_NAME", "openai/gpt-oss-20b").strip
 GOOGLE_GEMINI_BASE_URL = os.getenv("GOOGLE_GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/").rstrip("/")
 GOOGLE_GEMINI_MODEL = os.getenv("GOOGLE_GEMINI_MODEL", "gemma-4-31b-it").strip()
 
-# Provedor principal configurável pelo Render. Mantém Gemini como padrão legado,
-# mas respeita MODEL_BASE_URL/MODEL_NAME quando definidos no ambiente.
-MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", GOOGLE_GEMINI_BASE_URL).strip().rstrip("/")
-MODEL_NAME = os.getenv("MODEL_NAME", GOOGLE_GEMINI_MODEL).strip()
+# Provedor principal. A configuração atual do Google permanece intacta;
+# InferX usa credenciais e endpoint próprios para permitir alternância sem perder o fallback.
+AI_PROVIDER = os.getenv("AI_PROVIDER", "google").strip().lower()
+INFERX_BASE_URL = os.getenv("INFERX_BASE_URL", "").strip().rstrip("/")
+INFERX_MODEL = os.getenv("INFERX_MODEL", "").strip()
+INFERX_API_KEY = os.getenv("INFERX_API_KEY", "").strip()
 MODEL_FALLBACK_NAME = os.getenv("MODEL_FALLBACK_NAME", GROQ_MODEL_NAME).strip()
-# Ollama Cloud exige a chave OLLAMA_API_KEY; OPENAI_API_KEY fica como compatibilidade legada.
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
-OPENAI_API_KEY = (OLLAMA_API_KEY or os.getenv("OPENAI_API_KEY", "ollama")).strip()
+if AI_PROVIDER == "inferx":
+    MODEL_BASE_URL = INFERX_BASE_URL
+    MODEL_NAME = INFERX_MODEL
+    OPENAI_API_KEY = INFERX_API_KEY
+else:
+    MODEL_BASE_URL = os.getenv("MODEL_BASE_URL", GOOGLE_GEMINI_BASE_URL).strip().rstrip("/")
+    MODEL_NAME = os.getenv("MODEL_NAME", GOOGLE_GEMINI_MODEL).strip()
+    # Mantém compatibilidade com a configuração atual do Google AI Studio/Ollama.
+    OPENAI_API_KEY = (OLLAMA_API_KEY or os.getenv("OPENAI_API_KEY", "ollama")).strip()
 # Anthropic Messages API: prioridade quando a credencial está configurada.
 ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com").strip().rstrip("/")
 ANTHROPIC_AUTH_TOKEN = os.getenv("ANTHROPIC_AUTH_TOKEN", "").strip()
