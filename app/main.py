@@ -1636,9 +1636,9 @@ def _anthropic_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return body
 
 
-async def _request_chat_completion(client: httpx.AsyncClient, payload: dict[str, Any]) -> httpx.Response:
+async def _request_chat_completion(client: httpx.AsyncClient, payload: dict[str, Any], provider_headers: dict[str, str]) -> httpx.Response:
     if not USE_ANTHROPIC:
-        return await client.post(f"{MODEL_BASE_URL}/chat/completions", headers=headers, json=payload)
+        return await client.post(f"{MODEL_BASE_URL}/chat/completions", headers=provider_headers, json=payload)
     upstream = await client.post(
         _anthropic_endpoint(),
         headers={
@@ -2034,7 +2034,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             p["max_tokens"] = 512
         response = None
         for attempt in range(3):
-            response = await _request_chat_completion(client, p)
+            response = await _request_chat_completion(client, p, headers)
             if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
                 break
             retry_after = response.headers.get("retry-after")
@@ -2116,7 +2116,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 # Erros 429/5xx podem ser temporários. Fazer no máximo 2 novas
                 # tentativas com espera progressiva, sem repetir erros de configuração.
                 for attempt in range(3):
-                    response = await _request_chat_completion(client, payload)
+                    response = await _request_chat_completion(client, payload, headers)
                     if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
                         break
                     retry_after = response.headers.get("retry-after")
@@ -2188,7 +2188,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 {"role": "user", "content": "Continue exatamente de onde parou. Não repita o que já escreveu e conclua a resposta."},
             ]
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as continuation_client:
-                continuation_response = await _request_chat_completion(continuation_client, continuation_payload)
+                continuation_response = await _request_chat_completion(continuation_client, continuation_payload, headers)
             continuation_response.raise_for_status()
             continuation_data = continuation_response.json()
             continuation_choices = continuation_data.get("choices") or []
