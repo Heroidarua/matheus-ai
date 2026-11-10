@@ -1914,6 +1914,22 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         active_model_name = INFERX_MODEL
         headers = {"Authorization": f"Bearer {INFERX_API_KEY}"}
         print("Model routing: programming request -> InferX coder")
+    # O fallback do InferX é preparado antes da chamada: Gemma continua disponível.
+    primary_model_base_url = active_model_base_url
+    primary_model_name = active_model_name
+    primary_headers = headers
+    inferx_selected = active_model_base_url == INFERX_BASE_URL and bool(INFERX_BASE_URL)
+    if inferx_selected:
+        fallback_model_base_url = MODEL_BASE_URL
+        fallback_model_name = MODEL_NAME
+        if USE_ANTHROPIC:
+            fallback_headers = {"Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}", "anthropic-version": ANTHROPIC_API_VERSION}
+        else:
+            fallback_headers = {"Authorization": f"Bearer " + OPENAI_API_KEY}
+    else:
+        fallback_model_base_url = ""
+        fallback_model_name = ""
+        fallback_headers = {}
     # Limites adaptativos reduzem a geração excessiva e aceleram respostas longas.
     # Resposta normal mais enxuta por padrão reduz o tempo de geração; o usuário ainda pode escolher detalhada.
     max_output_tokens = {"curta": 384, "normal": 1024, "detalhada": 3072}.get(request.response_length, 1024)
@@ -1973,6 +1989,33 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                     continue
                     else:
                         async with stream_client.stream("POST", f"{active_model_base_url}/chat/completions", headers=headers, json=stream_payload) as upstream:
+                            if upstream.status_code == 429 and inferx_selected:
+                                await upstream.aread()
+                                print("InferX quota/rate limit reached; retrying this request with the primary model.")
+                                async with stream_client.stream("POST", f"{fallback_model_base_url}/chat/completions", headers=fallback_headers, json={**stream_payload, "model": fallback_model_name}) as fallback_upstream:
+                                    if fallback_upstream.status_code >= 400:
+                                        body = (await fallback_upstream.aread()).decode("utf-8", errors="replace")[:500]
+                                        yield "event: error\\ndata: " + json.dumps({"detail": f"Modelo principal também falhou HTTP {fallback_upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                                        return
+                                    async for line in fallback_upstream.aiter_lines():
+                                        if not line.startswith("data:"):
+                                            continue
+                                        raw = line[5:].strip()
+                                        if raw == "[DONE]":
+                                            break
+                                        try:
+                                            chunk = json.loads(raw)
+                                            choices = chunk.get("choices") or []
+                                            delta = (choices[0].get("delta") or {}).get("content", "") if choices else ""
+                                            if isinstance(delta, list):
+                                                delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
+                                            if isinstance(delta, str) and delta:
+                                                yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\\n\\n"
+                                        except (ValueError, TypeError, IndexError):
+                                            continue
+                                DIAGNOSTICS["successes"] += 1
+                                yield "event: done\\ndata: " + json.dumps({"model": fallback_model_name, "sources": sources}, ensure_ascii=False) + "\\n\\n"
+                                return
                             if upstream.status_code >= 400:
                                 DIAGNOSTICS["errors"] += 1
                                 DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
@@ -2081,6 +2124,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         response = None
         for attempt in range(3):
             response = await _request_chat_completion(client, p, headers, active_model_base_url)
+            if response.status_code == 429 and inferx_selected:
+                print("InferX quota/rate limit reached; retrying with the primary model.")
+                fallback_payload = dict(p)
+                fallback_payload["model"] = fallback_model_name
+                fallback_response = await _request_chat_completion(client, fallback_payload, fallback_headers, fallback_model_base_url)
+                return fallback_response
             if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
                 break
             retry_after = response.headers.get("retry-after")
