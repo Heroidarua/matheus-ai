@@ -230,6 +230,15 @@
     const clean = window.location.pathname + (query.toString() ? "?" + query.toString() : "") + window.location.hash;
     window.history.replaceState({}, "", clean);
     dialog.showModal();
-    refreshStatus();
+    refreshStatus().then(() => {
+      if (!state.connected) return;
+      // Mostra a confirmação no chat somente após o servidor confirmar a conexão.
+      if (typeof window.addBubble === "function") {
+        window.addBubble("Conectado ao GitHub, vamos começar?", "assistant");
+        dialog.close();
+      } else {
+        setStatus("Conectado ao GitHub, vamos começar?");
+      }
+    });
   }
 })();
