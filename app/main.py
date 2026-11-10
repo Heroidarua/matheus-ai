@@ -155,7 +155,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
     mode: str = Field(default="normal", pattern="^(normal|livre|programador|estudo|criativo)$")
-    response_length: str = Field(default="detalhada", pattern="^(curta|normal|detalhada)$")
+    response_length: str = Field(default="normal", pattern="^(curta|normal|detalhada)$")
     web_search: bool = False
     stream: bool = False
     memory: list[str] = Field(default_factory=list, max_length=30)
@@ -1871,7 +1871,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
         active_model_name = MODEL_NAME
     # Limites adaptativos reduzem a geração excessiva e aceleram respostas longas.
-    max_output_tokens = {"curta": 512, "normal": 1536, "detalhada": 3072}.get(request.response_length, 1536)
+    # Resposta normal mais enxuta por padrão reduz o tempo de geração; o usuário ainda pode escolher detalhada.
+    max_output_tokens = {"curta": 384, "normal": 1024, "detalhada": 3072}.get(request.response_length, 1024)
     payload: dict[str, Any] = {
         "model": MODEL_NAME,
         "messages": messages,
