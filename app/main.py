@@ -1920,7 +1920,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                     delta = event_data.get("delta") or {}
                                     token = delta.get("text", "") if delta.get("type") == "text_delta" else ""
                                     if token:
-                                        yield "data: " + json.dumps({"token": token}, ensure_ascii=False) + "\\n\\n"
+                                        yield "data: " + json.dumps({"token": token}, ensure_ascii=False) + "\n\n"
                                     if event_data.get("type") == "error":
                                         raise httpx.HTTPError("Anthropic stream error")
                                 except (ValueError, TypeError):
@@ -1931,7 +1931,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 DIAGNOSTICS["errors"] += 1
                                 DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
                                 body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
-                                yield "event: error\\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\\n\\n"
+                                yield "event: error\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
                                 return
                             async for line in upstream.aiter_lines():
                                 if not line.startswith("data:"):
@@ -1946,7 +1946,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                     if isinstance(delta, list):
                                         delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
                                     if isinstance(delta, str) and delta:
-                                        yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\\n\\n"
+                                        yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
                                 except (ValueError, TypeError, IndexError):
                                     continue
                 DIAGNOSTICS["successes"] += 1
