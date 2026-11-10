@@ -2165,6 +2165,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
         if response is not None:
             response.raise_for_status()
+            data = response.json()
         if data is None:
             raise ValueError("O provedor não retornou dados")
         choices = data.get("choices") or []
