@@ -195,9 +195,9 @@ class ImageEditResponse(BaseModel):
 def ollama_credit_warning() -> str:
     """Mensagem amigável para contas Ollama sem créditos de uso."""
     return (
-        "⚠️ Créditos do modelo esgotados.\\n\\n"
+        "⚠️ Créditos do modelo esgotados.\n\n"
         "Sua conta Ollama está sem créditos disponíveis. Adicione mais créditos "
-        "para continuar utilizando o modelo.\\n\\n"
+        "para continuar utilizando o modelo.\n\n"
         "Acesse https://ollama.com/settings para adicionar créditos ou atualizar "
         "a forma de pagamento."
     )
