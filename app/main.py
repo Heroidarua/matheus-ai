@@ -192,6 +192,17 @@ class ImageEditResponse(BaseModel):
     model: str
 
 
+def ollama_credit_warning() -> str:
+    """Mensagem amigável para contas Ollama sem créditos de uso."""
+    return (
+        "⚠️ Créditos do modelo esgotados.\n\n"
+        "Sua conta Ollama está sem créditos disponíveis. Adicione mais créditos "
+        "para continuar utilizando o modelo.\n\n"
+        "Acesse https://ollama.com/settings para adicionar créditos ou atualizar "
+        "a forma de pagamento."
+    )
+
+
 def require_app_key(x_app_key: str | None = Header(default=None)) -> None:
     if APP_API_KEY and x_app_key != APP_API_KEY:
         raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
@@ -1995,7 +2006,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 async with stream_client.stream("POST", f"{fallback_model_base_url}/chat/completions", headers=fallback_headers, json={**stream_payload, "model": fallback_model_name}) as fallback_upstream:
                                     if fallback_upstream.status_code >= 400:
                                         body = (await fallback_upstream.aread()).decode("utf-8", errors="replace")[:500]
-                                        yield "event: error\ndata: " + json.dumps({"detail": f"Modelo principal também falhou HTTP {fallback_upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
+                                        detail = ollama_credit_warning() if fallback_upstream.status_code == 402 and "ollama.com" in fallback_model_base_url.lower() else f"Modelo principal também falhou HTTP {fallback_upstream.status_code}: {body}"
+                                        yield "event: error\ndata: " + json.dumps({"detail": detail}, ensure_ascii=False) + "\n\n"
                                         return
                                     async for line in fallback_upstream.aiter_lines():
                                         if not line.startswith("data:"):
@@ -2020,7 +2032,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 DIAGNOSTICS["errors"] += 1
                                 DIAGNOSTICS["last_error"] = f"Erro HTTP {upstream.status_code} do provedor (stream)"
                                 body = (await upstream.aread()).decode("utf-8", errors="replace")[:500]
-                                yield "event: error\ndata: " + json.dumps({"detail": f"Provedor do modelo HTTP {upstream.status_code}: {body}"}, ensure_ascii=False) + "\n\n"
+                                detail = ollama_credit_warning() if upstream.status_code == 402 and "ollama.com" in active_model_base_url.lower() else f"Provedor do modelo HTTP {upstream.status_code}: {body}"
+                                yield "event: error\ndata: " + json.dumps({"detail": detail}, ensure_ascii=False) + "\n\n"
                                 return
                             async for line in upstream.aiter_lines():
                                 if not line.startswith("data:"):
@@ -2332,6 +2345,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         # Registra a resposta do provedor para diagnóstico, sem registrar cabeçalhos
         # nem a chave de API. A resposta costuma explicar 401, 402, 403, 404 ou 5xx.
         status_code = exc.response.status_code
+        if status_code == 402 and "ollama.com" in str(exc.request.url).lower():
+            DIAGNOSTICS["errors"] += 1
+            DIAGNOSTICS["last_error"] = "Conta Ollama sem créditos disponíveis"
+            raise HTTPException(status_code=402, detail=ollama_credit_warning())
         DIAGNOSTICS["errors"] += 1
         DIAGNOSTICS["last_error"] = f"Erro HTTP {status_code} do provedor"
         response_text = exc.response.text[:1200]
