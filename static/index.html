@@ -383,6 +383,8 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
 .sidebar-delete{flex:0 0 28px;width:28px;height:28px;padding:0;background:transparent;color:var(--muted);font-size:15px;border-radius:7px}
 .sidebar-delete:hover{background:rgba(220,70,70,.16);color:#ff7777}
 .sidebar-empty{padding:10px;color:var(--muted);font-size:13px;line-height:1.5}
+.sidebar-clear-all{width:100%;flex:0 0 auto;padding:10px 12px;border:1px solid rgba(239,90,90,.3);border-radius:10px;background:transparent;color:#f08b8b;font-size:12px;font-weight:600;text-align:left}
+.sidebar-clear-all:hover{background:rgba(220,70,70,.12);border-color:rgba(239,90,90,.55)}
 .sidebar-backdrop{display:none}
 @media(min-width:900px){
   .chat-sidebar{transform:translateX(0);box-shadow:none}
@@ -466,6 +468,7 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     <button type="button" class="sidebar-new" id="sidebar-new-chat"><span aria-hidden="true">＋</span> Nova conversa</button>
     <div class="sidebar-section">Conversas</div>
     <div class="sidebar-list" id="sidebar-list"><div class="sidebar-empty">Suas conversas aparecerão aqui.</div></div>
+    <button type="button" class="sidebar-clear-all" id="sidebar-clear-all">⌫ Limpar todas as conversas</button>
   </aside>
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
   <main class="app">
@@ -775,6 +778,20 @@ const history = [];
     document.getElementById('sidebar-close').addEventListener('click',closeSidebar);
     document.getElementById('sidebar-backdrop').addEventListener('click',closeSidebar);
     document.getElementById('sidebar-new-chat').addEventListener('click',startNewConversation);
+    document.getElementById('sidebar-clear-all').addEventListener('click', () => {
+      if (!conversations.length) return;
+      if (!confirm('Apagar permanentemente todas as conversas deste dispositivo? Esta ação não pode ser desfeita.')) return;
+      if (activeController) activeController.abort();
+      stopBrowserSpeech();
+      conversations = [];
+      activeConversationId = null;
+      history.splice(0);
+      chatTranscript.splice(0);
+      messagesEl.replaceChildren();
+      showWelcome();
+      saveConversations();
+      closeSidebar();
+    });
     renderConversationList();
 
     function resizePrompt() {
