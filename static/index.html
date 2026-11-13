@@ -386,6 +386,8 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
 .sidebar-delete{flex:0 0 28px;width:28px;height:28px;padding:0;background:transparent;color:var(--muted);font-size:15px;border-radius:7px}
 .sidebar-delete:hover{background:rgba(220,70,70,.16);color:#ff7777}
 .sidebar-empty{padding:10px;color:var(--muted);font-size:13px;line-height:1.5}
+.sidebar-clear-all{width:100%;flex:0 0 auto;padding:10px 12px;border:1px solid rgba(239,90,90,.3);border-radius:10px;background:transparent;color:#f08b8b;font-size:12px;font-weight:600;text-align:left}
+.sidebar-clear-all:hover{background:rgba(220,70,70,.12);border-color:rgba(239,90,90,.55)}
 .sidebar-backdrop{display:none}
 @media(min-width:900px){
   .chat-sidebar{transform:translateX(0);box-shadow:none}
@@ -470,6 +472,7 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     <button type="button" class="sidebar-share" id="sidebar-share" aria-label="Compartilhar ADA-M pelo WhatsApp" title="Compartilhar ADA-M pelo WhatsApp"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20l1.2-4.7A8.5 8.5 0 1 1 20.5 11.5Z"/><path d="M8.8 8.2c.3-.5.6-.5.9-.5h.5c.2 0 .4.1.5.4l.7 1.6c.1.2.1.4-.1.6l-.5.6c-.2.2-.2.4 0 .7.5.8 1.2 1.5 2 1.9.2.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l1.5.7c.3.1.4.3.4.5 0 .3-.2 1-.7 1.4-.5.4-1.1.6-1.8.5-1-.1-2.2-.7-3.5-1.8-1.1-1-1.9-2.2-2.1-3.2-.2-.9.1-1.8.5-2.4Z"/></svg><span>Compartilhar ADA-M</span></button>
     <div class="sidebar-section">Conversas</div>
     <div class="sidebar-list" id="sidebar-list"><div class="sidebar-empty">Suas conversas aparecerão aqui.</div></div>
+    <button type="button" class="sidebar-clear-all" id="sidebar-clear-all">⌫ Limpar todas as conversas</button>
   </aside>
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
   <main class="app">
@@ -779,6 +782,23 @@ const history = [];
     document.getElementById('sidebar-close').addEventListener('click',closeSidebar);
     document.getElementById('sidebar-backdrop').addEventListener('click',closeSidebar);
     document.getElementById('sidebar-new-chat').addEventListener('click',startNewConversation);
+    document.getElementById('sidebar-clear-all').addEventListener('click', () => {
+      if (!conversations.length) {
+        alert('Não há conversas salvas para apagar.');
+        return;
+      }
+      if (!confirm('Apagar permanentemente todas as conversas deste dispositivo? Esta ação não pode ser desfeita.')) return;
+      if (activeController) activeController.abort();
+      stopBrowserSpeech();
+      conversations = [];
+      activeConversationId = null;
+      history.splice(0);
+      chatTranscript.splice(0);
+      messagesEl.replaceChildren();
+      showWelcome();
+      saveConversations();
+      closeSidebar();
+    });
     document.getElementById('sidebar-share').addEventListener('click', () => {
       const shareUrl = window.location.origin;
       const shareMessage = 'Conheça a ADA-M, sua assistente pessoal de inteligência artificial. Acesse por aqui:';
