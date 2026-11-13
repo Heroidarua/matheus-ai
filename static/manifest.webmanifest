@@ -8,17 +8,17 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#212121",
-  "theme_color": "#212121",
+  "background_color": "#05070b",
+  "theme_color": "#05070b",
   "icons": [
     {
-      "src": "/static/ada-m-icon.svg",
+      "src": "/static/ada-m-icon.svg?v=2",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/static/ada-m-icon.svg",
+      "src": "/static/ada-m-icon.svg?v=2",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
