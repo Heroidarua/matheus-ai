@@ -782,10 +782,10 @@ const history = [];
     document.getElementById('sidebar-share').addEventListener('click', () => {
       const shareUrl = window.location.origin;
       const shareMessage = 'Conheça a ADA-M, sua assistente pessoal de inteligência artificial. Acesse por aqui:';
-      const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(shareMessage + '\\n' + shareUrl);
+      const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(shareMessage + '\n' + shareUrl);
       const shareWindow = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
       if (!shareWindow) {
-        const textToCopy = shareMessage + '\\n' + shareUrl;
+        const textToCopy = shareMessage + '\n' + shareUrl;
         if (navigator.clipboard?.writeText) {
           navigator.clipboard.writeText(textToCopy).then(() => alert('O convite da ADA-M foi copiado. Agora é só colar na conversa do WhatsApp.')).catch(() => prompt('Copie o convite para compartilhar:', textToCopy));
         } else {
