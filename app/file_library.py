@@ -21,6 +21,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
+from app.text_encoding import decode_text_bytes
+
 def require_library_key(x_app_key: str | None = Header(default=None)) -> None:
     expected = os.getenv("APP_API_KEY", "").strip()
     if expected and x_app_key != expected:
@@ -104,7 +106,7 @@ def extract_text(name: str, mime_type: str, raw: bytes) -> str:
             workbook.close()
             text = "\n".join(rows)
         else:
-            text = raw.decode("utf-8-sig")
+            text = decode_text_bytes(raw)
             if suffix == ".json":
                 text = json.dumps(json.loads(text), ensure_ascii=False, indent=2)
             elif suffix == ".csv":
