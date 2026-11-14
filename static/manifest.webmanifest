@@ -12,9 +12,9 @@
   "theme_color": "#030303",
   "icons": [
     {
-      "src": "/static/ada-m-icon.png?v=7",
-      "sizes": "130x103",
-      "type": "image/png",
+      "src": "/static/ada-m-icon.svg?v=8",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any"
     }
   ]
