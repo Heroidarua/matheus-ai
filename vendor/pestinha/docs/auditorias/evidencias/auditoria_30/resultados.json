@@ -1,0 +1,546 @@
+{
+  "date": "2026-10-31",
+  "baseline_passed": 95,
+  "known_failures": 30,
+  "runxfail_failed": 30,
+  "integrated_passed": 95,
+  "integrated_xfailed": 30,
+  "cases": [
+    {
+      "id": 1,
+      "test": "test_01_configuracao_aberta_nao_reverte_panico",
+      "test_line": 79,
+      "observed_failure": "assert True is False",
+      "traceback": "E   assert True is False",
+      "title": "Configuração antiga religa o Bryan depois do pânico",
+      "priority": "alta",
+      "source": "bryan/ui/ui.py",
+      "source_line": 239
+    },
+    {
+      "id": 2,
+      "test": "test_02_panico_ainda_esconde_tudo_se_disco_falhar",
+      "test_line": 88,
+      "observed_failure": "assert not True\n +  where True = <built-in method isVisible of PetWindow object at 0x00000237BF1A81C0>()\n +    where <built-in method isVisible of PetWindow object at 0x00000237BF1A81C0> = <bryan.body.pet.PetWindow(0x237af461240) at 0x00000237BF1A81C0>.isVisible\n +      where <bryan.body.pet.PetWindow(0x237af461240) at 0x00000237BF1A81C0> = <bryan.app.BryanApp(0x237af5133e0) at 0x00000237BF1DA040>.pet",
+      "traceback": "E   assert not True\n     +  where True = <built-in method isVisible of PetWindow object at 0x00000237BF1A81C0>()\n     +    where <built-in method isVisible of PetWindow object at 0x00000237BF1A81C0> = <bryan.body.pet.PetWindow(0x237af461240) at 0x00000237BF1A81C0>.isVisible\n     +      where <bryan.body.pet.PetWindow(0x237af461240) at 0x00000237BF1A81C0> = <bryan.app.BryanApp(0x237af5133e0) at 0x00000237BF1DA040>.pet",
+      "title": "Pânico depende de conseguir escrever as permissões",
+      "priority": "alta",
+      "source": "bryan/app.py",
+      "source_line": 692
+    },
+    {
+      "id": 3,
+      "test": "test_03_sair_continua_se_condicionamento_nao_puder_salvar",
+      "test_line": 99,
+      "observed_failure": "AssertionError: Expected 'mock' to have been called once. Called 0 times.",
+      "traceback": "E   AssertionError: Expected 'mock' to have been called once. Called 0 times.",
+      "title": "Sair pode falhar porque um save de condicionamento falhou",
+      "priority": "alta",
+      "source": "bryan/app.py",
+      "source_line": 746
+    },
+    {
+      "id": 4,
+      "test": "test_04_fim_de_tristeza_nao_mostra_cartaz_quando_oculto",
+      "test_line": 111,
+      "observed_failure": "assert (<bryan.world.cartazes.SignThing(0x237af94d540) at 0x00000237BF221000> is None or not True)\n +  where <bryan.world.cartazes.SignThing(0x237af94d540) at 0x00000237BF221000> = <bryan.core.protesto.Protesto object at 0x00000237BF212350>.sign\n +    where <bryan.core.protesto.Protesto object at 0x00000237BF212350> = <bryan.app.BryanApp(0x237af515cd0) at 0x00000237BF210780>.sad\n +  and   True = <built-in method isVisible of SignThing object at 0x00000237BF221000>()\n +    where <built-in method isVisible of SignThing object at 0x00000237BF221000> = <bryan.world.cartazes.SignThing(0x237af94d540) at 0x00000237BF221000>.isVisible\n +      where <bryan.world.cartazes.SignThing(0x237af94d540) at 0x00000237BF221000> = <bryan.core.protesto.Protesto object at 0x00000237BF212350>.sign\n +        where <bryan.core.protesto.Protesto object at 0x00000237BF212350> = <bryan.app.BryanApp(0x237af515cd0) at 0x00000237BF210780>.sad",
+      "traceback": "E   assert (<bryan.world.cartazes.SignThing(0x237af94d540) at 0x00000237BF221000> is None or not True)\n     +  where <bryan.world.cartazes.SignThing(0x237af94d540) at 0x00000237BF221000> = <bryan.core.protesto.Protesto object at 0x00000237BF212350>.sign\n     +    where <bryan.core.protesto.Protesto object at 0x00000237BF212350> = <bryan.app.BryanApp(0x237af515cd0) at 0x00000237BF210780>.sad\n     +  and   True = <built-in method isVisible of SignThing object at 0x00000237BF221000>()\n     +    where <built-in method isVisible of SignThing object at 0x00000237BF221000> = <bryan.world.cartazes.SignThing(0x237af94d540) at 0x00000237BF221000>.isVisible\n     +      where <bryan.world.cartazes.SignThing(0x237af94d540) at 0x00000237BF221000> = <bryan.core.protesto.Protesto object at 0x00000237BF212350>.sign\n     +        where <bryan.core.protesto.Protesto object at 0x00000237BF212350> = <bryan.app.BryanApp(0x237af515cd0) at 0x00000237BF210780>.sad",
+      "title": "Cartaz de fim aparece com o Bryan escondido",
+      "priority": "media",
+      "source": "bryan/mind/protest_ctl.py",
+      "source_line": 83
+    },
+    {
+      "id": 5,
+      "test": "test_05_cutucada_nao_altera_estado_durante_pausa",
+      "test_line": 121,
+      "observed_failure": "assert 0.75 == 0.6\n +  where 0.75 = <bryan.core.homeostasis.Drives object at 0x00000237BF222350>.stimulation\n +    where <bryan.core.homeostasis.Drives object at 0x00000237BF222350> = <bryan.app.BryanApp(0x237af516a90) at 0x00000237BF1F4400>.drives",
+      "traceback": "E   assert 0.75 == 0.6\n     +  where 0.75 = <bryan.core.homeostasis.Drives object at 0x00000237BF222350>.stimulation\n     +    where <bryan.core.homeostasis.Drives object at 0x00000237BF222350> = <bryan.app.BryanApp(0x237af516a90) at 0x00000237BF1F4400>.drives",
+      "title": "Cutucada ainda modifica o estado durante a pausa",
+      "priority": "media",
+      "source": "bryan/app.py",
+      "source_line": 491
+    },
+    {
+      "id": 6,
+      "test": "test_06_pausa_para_timer_independente_dos_fogos",
+      "test_line": 130,
+      "observed_failure": "assert not True\n +  where True = <built-in method isActive of PySide6.QtCore.QTimer object at 0x00000237BF212880>()\n +    where <built-in method isActive of PySide6.QtCore.QTimer object at 0x00000237BF212880> = <PySide6.QtCore.QTimer(0x237af518200) at 0x00000237BF212880>.isActive\n +      where <PySide6.QtCore.QTimer(0x237af518200) at 0x00000237BF212880> = <bryan.world.fireworks.Fireworks(0x237afaf2060) at 0x00000237BF24A740>.timer\n +        where <bryan.world.fireworks.Fireworks(0x237afaf2060) at 0x00000237BF24A740> = <bryan.mind.festa.FestaController object at 0x00000237BF231850>.fogos\n +          where <bryan.mind.festa.FestaController object at 0x00000237BF231850> = <bryan.app.BryanApp(0x237af5183e0) at 0x00000237BF248400>.festa",
+      "traceback": "E   assert not True\n     +  where True = <built-in method isActive of PySide6.QtCore.QTimer object at 0x00000237BF212880>()\n     +    where <built-in method isActive of PySide6.QtCore.QTimer object at 0x00000237BF212880> = <PySide6.QtCore.QTimer(0x237af518200) at 0x00000237BF212880>.isActive\n     +      where <PySide6.QtCore.QTimer(0x237af518200) at 0x00000237BF212880> = <bryan.world.fireworks.Fireworks(0x237afaf2060) at 0x00000237BF24A740>.timer\n     +        where <bryan.world.fireworks.Fireworks(0x237afaf2060) at 0x00000237BF24A740> = <bryan.mind.festa.FestaController object at 0x00000237BF231850>.fogos\n     +          where <bryan.mind.festa.FestaController object at 0x00000237BF231850> = <bryan.app.BryanApp(0x237af5183e0) at 0x00000237BF248400>.festa",
+      "title": "Fogos continuam animando enquanto a sessão está pausada",
+      "priority": "media",
+      "source": "bryan/world/fireworks.py",
+      "source_line": 62
+    },
+    {
+      "id": 7,
+      "test": "test_07_desligar_fogos_recolhe_efeito_ja_aberto",
+      "test_line": 138,
+      "observed_failure": "assert not True\n +  where True = <built-in method isVisible of Fireworks object at 0x00000237BF268400>()\n +    where <built-in method isVisible of Fireworks object at 0x00000237BF268400> = <bryan.world.fireworks.Fireworks(0x237c026cb30) at 0x00000237BF268400>.isVisible\n +      where <bryan.world.fireworks.Fireworks(0x237c026cb30) at 0x00000237BF268400> = <bryan.mind.festa.FestaController object at 0x00000237BF2683D0>.fogos\n +        where <bryan.mind.festa.FestaController object at 0x00000237BF2683D0> = <bryan.app.BryanApp(0x237af510640) at 0x00000237BF259EC0>.festa",
+      "traceback": "E   assert not True\n     +  where True = <built-in method isVisible of Fireworks object at 0x00000237BF268400>()\n     +    where <built-in method isVisible of Fireworks object at 0x00000237BF268400> = <bryan.world.fireworks.Fireworks(0x237c026cb30) at 0x00000237BF268400>.isVisible\n     +      where <bryan.world.fireworks.Fireworks(0x237c026cb30) at 0x00000237BF268400> = <bryan.mind.festa.FestaController object at 0x00000237BF2683D0>.fogos\n     +        where <bryan.mind.festa.FestaController object at 0x00000237BF2683D0> = <bryan.app.BryanApp(0x237af510640) at 0x00000237BF259EC0>.festa",
+      "title": "Desativar a permissão de fogos não interrompe o efeito atual",
+      "priority": "media",
+      "source": "bryan/app.py",
+      "source_line": 581
+    },
+    {
+      "id": 8,
+      "test": "test_08_tempo_pausado_nao_expira_episodio_pendente",
+      "test_line": 146,
+      "observed_failure": "assert 0 == 1\n +  where 0 = len([])\n +    where [] = <bryan.core.episodic.EpisodicMemory object at 0x00000237C16D9250>.open\n +      where <bryan.core.episodic.EpisodicMemory object at 0x00000237C16D9250> = <bryan.app.BryanApp(0x237c0285040) at 0x00000237BF26BA80>.memory",
+      "traceback": "E   assert 0 == 1\n     +  where 0 = len([])\n     +    where [] = <bryan.core.episodic.EpisodicMemory object at 0x00000237C16D9250>.open\n     +      where <bryan.core.episodic.EpisodicMemory object at 0x00000237C16D9250> = <bryan.app.BryanApp(0x237c0285040) at 0x00000237BF26BA80>.memory",
+      "title": "Pausa não preserva o prazo dos episódios pendentes",
+      "priority": "media",
+      "source": "bryan/core/episodic.py",
+      "source_line": 142
+    },
+    {
+      "id": 9,
+      "test": "test_09_bolinha_guardada_nao_estimula_rede",
+      "test_line": 158,
+      "observed_failure": "assert 1.0 == 0",
+      "traceback": "E   assert 1.0 == 0",
+      "title": "Bolinha guardada continua estimulando a rede",
+      "priority": "media",
+      "source": "bryan/app.py",
+      "source_line": 286
+    },
+    {
+      "id": 10,
+      "test": "test_10_comando_agora_nao_depende_de_disparo_espontaneo",
+      "test_line": 167,
+      "observed_failure": "assert None is not None",
+      "traceback": "E   assert None is not None",
+      "title": "Fazer uma travessura agora não força nenhuma tentativa",
+      "priority": "media",
+      "source": "bryan/app.py",
+      "source_line": 678
+    },
+    {
+      "id": 11,
+      "test": "test_11_peso_postit_zero_realmente_desliga_postit",
+      "test_line": 178,
+      "observed_failure": "AssertionError: assert 'bilhete' not in ('bilhete', 'bilhete_canto', 'bilhete_triste')",
+      "traceback": "E   AssertionError: assert 'bilhete' not in ('bilhete', 'bilhete_canto', 'bilhete_triste')",
+      "title": "Peso de post-it igual a zero não desliga esse comportamento",
+      "priority": "media",
+      "source": "bryan/mind/mischief_ctl.py",
+      "source_line": 36
+    },
+    {
+      "id": 12,
+      "test": "test_12_bryan_nao_chuta_bola_segurada_pelo_usuario",
+      "test_line": 190,
+      "observed_failure": "AssertionError: assert 'kick' is None\n +  where 'kick' = tick(100, <bryan.core.physics.Body object at 0x00000237C1742CD0>, <bryan.body.bolinha.Ball(0x237c081b360) at 0x00000237C1743600>, (0, 0), 'feliz')\n +    where tick = <bryan.body.brincadeira.Play object at 0x00000237C174DA10>.tick\n +      where <bryan.body.brincadeira.Play object at 0x00000237C174DA10> = Play({'bola': 1})\n +    and   <bryan.core.physics.Body object at 0x00000237C1742CD0> = <bryan.body.pet.PetWindow(0x237c08196b0) at 0x00000237C172F540>.body\n +      where <bryan.body.pet.PetWindow(0x237c08196b0) at 0x00000237C172F540> = <bryan.app.BryanApp(0x237c08200f0) at 0x00000237C1722A80>.pet\n +    and   <bryan.body.bolinha.Ball(0x237c081b360) at 0x00000237C1743600> = <bryan.app.BryanApp(0x237c08200f0) at 0x00000237C1722A80>.ball",
+      "traceback": "E   AssertionError: assert 'kick' is None\n     +  where 'kick' = tick(100, <bryan.core.physics.Body object at 0x00000237C1742CD0>, <bryan.body.bolinha.Ball(0x237c081b360) at 0x00000237C1743600>, (0, 0), 'feliz')\n     +    where tick = <bryan.body.brincadeira.Play object at 0x00000237C174DA10>.tick\n     +      where <bryan.body.brincadeira.Play object at 0x00000237C174DA10> = Play({'bola': 1})\n     +    and   <bryan.core.physics.Body object at 0x00000237C1742CD0> = <bryan.body.pet.PetWindow(0x237c08196b0) at 0x00000237C172F540>.body\n     +      where <bryan.body.pet.PetWindow(0x237c08196b0) at 0x00000237C172F540> = <bryan.app.BryanApp(0x237c08200f0) at 0x00000237C1722A80>.pet\n     +    and   <bryan.body.bolinha.Ball(0x237c081b360) at 0x00000237C1743600> = <bryan.app.BryanApp(0x237c08200f0) at 0x00000237C1722A80>.ball",
+      "title": "Pet chuta a bolinha enquanto o usuário a segura",
+      "priority": "media",
+      "source": "bryan/body/brincadeira.py",
+      "source_line": 52
+    },
+    {
+      "id": 13,
+      "test": "test_13_soltar_botao_direito_nao_encerra_arraste_esquerdo",
+      "test_line": 200,
+      "observed_failure": "assert False\n +  where False = <bryan.body.bolinha.Ball(0x237c0c24670) at 0x00000237BF222AC0>.dragging",
+      "traceback": "E   assert False\n     +  where False = <bryan.body.bolinha.Ball(0x237c0c24670) at 0x00000237BF222AC0>.dragging",
+      "title": "Soltar o botão direito encerra o arraste pelo esquerdo",
+      "priority": "media",
+      "source": "bryan/body/bolinha.py",
+      "source_line": 133
+    },
+    {
+      "id": 14,
+      "test": "test_14_colisao_retira_centro_do_interior_do_retangulo",
+      "test_line": 208,
+      "observed_failure": "assert (133.0 <= (100 - 18) or 133.0 >= (200 + 18) or 150.0 <= (100 - 18) or 150.0 >= (200 + 18))",
+      "traceback": "E   assert (133.0 <= (100 - 18) or 133.0 >= (200 + 18) or 150.0 <= (100 - 18) or 150.0 >= (200 + 18))",
+      "title": "Colisão não remove a bolinha de dentro de um objeto",
+      "priority": "media",
+      "source": "bryan/body/toy.py",
+      "source_line": 44
+    },
+    {
+      "id": 15,
+      "test": "test_15_pouso_escolhe_primeira_superficie_cruzada_na_queda",
+      "test_line": 216,
+      "observed_failure": "assert 150 == 120\n +  where 150 = <bryan.core.physics.Body object at 0x00000237C175DB10>.surface",
+      "traceback": "E   assert 150 == 120\n     +  where 150 = <bryan.core.physics.Body object at 0x00000237C175DB10>.surface",
+      "title": "Pouso escolhe plataforma inferior e atravessa a superior",
+      "priority": "media",
+      "source": "bryan/core/physics.py",
+      "source_line": 57
+    },
+    {
+      "id": 16,
+      "test": "test_16_panico_cancela_arraste_para_permitir_gravidade_ao_religar",
+      "test_line": 224,
+      "observed_failure": "assert (not True)\n +  where True = <bryan.core.physics.Body object at 0x00000237C176D650>.held\n +    where <bryan.core.physics.Body object at 0x00000237C176D650> = <bryan.body.pet.PetWindow(0x237c0c23aa0) at 0x00000237C176D700>.body\n +      where <bryan.body.pet.PetWindow(0x237c0c23aa0) at 0x00000237C176D700> = <bryan.app.BryanApp(0x237c0822bc0) at 0x00000237C175E380>.pet",
+      "traceback": "E   assert (not True)\n     +  where True = <bryan.core.physics.Body object at 0x00000237C176D650>.held\n     +    where <bryan.core.physics.Body object at 0x00000237C176D650> = <bryan.body.pet.PetWindow(0x237c0c23aa0) at 0x00000237C176D700>.body\n     +      where <bryan.body.pet.PetWindow(0x237c0c23aa0) at 0x00000237C176D700> = <bryan.app.BryanApp(0x237c0822bc0) at 0x00000237C175E380>.pet",
+      "title": "Pânico durante arraste deixa o corpo preso ao religar",
+      "priority": "media",
+      "source": "bryan/app.py",
+      "source_line": 692
+    },
+    {
+      "id": 17,
+      "test": "test_17_posicao_antiga_fora_das_telas_e_recuperada",
+      "test_line": 235,
+      "observed_failure": "assert False\n +  where False = any(<generator object test_17_posicao_antiga_fora_das_telas_e_recuperada.<locals>.<genexpr> at 0x00000237BEDF27A0>)",
+      "traceback": "E   assert False\n     +  where False = any(<generator object test_17_posicao_antiga_fora_das_telas_e_recuperada.<locals>.<genexpr> at 0x00000237BEDF27A0>)",
+      "title": "Posição antiga pode tornar um painel inacessível",
+      "priority": "media",
+      "source": "bryan/ui/floating.py",
+      "source_line": 33
+    },
+    {
+      "id": 18,
+      "test": "test_18_posicao_com_schema_errado_usa_padrao",
+      "test_line": 244,
+      "observed_failure": "TypeError: 'PySide6.QtWidgets.QWidget.move' called with wrong argument types:\n  PySide6.QtWidgets.QWidget.move(str)\nSupported signatures:\n  PySide6.QtWidgets.QWidget.move(arg__1: PySide6.QtCore.QPoint, /)\n  PySide6.QtWidgets.QWidget.move(x: int, y: int, /)",
+      "traceback": "E   TypeError: 'PySide6.QtWidgets.QWidget.move' called with wrong argument types:\n      PySide6.QtWidgets.QWidget.move(str)\n    Supported signatures:\n      PySide6.QtWidgets.QWidget.move(arg__1: PySide6.QtCore.QPoint, /)\n      PySide6.QtWidgets.QWidget.move(x: int, y: int, /)",
+      "title": "Schema inválido em panels.json causa TypeError na criação da janela",
+      "priority": "alta",
+      "source": "bryan/ui/floating.py",
+      "source_line": 33
+    },
+    {
+      "id": 19,
+      "test": "test_19_estado_de_castigo_invalido_nao_impede_criacao",
+      "test_line": 252,
+      "observed_failure": "ValueError: could not convert string to float: 'erro'",
+      "traceback": "E   ValueError: could not convert string to float: 'erro'",
+      "title": "Schema inválido do castigo impede construir o controlador",
+      "priority": "alta",
+      "source": "bryan/mind/castigo_ctl.py",
+      "source_line": 75
+    },
+    {
+      "id": 20,
+      "test": "test_20_estado_de_protesto_invalido_nao_impede_carga",
+      "test_line": 260,
+      "observed_failure": "ValueError: could not convert string to float: 'erro'",
+      "traceback": "E   ValueError: could not convert string to float: 'erro'",
+      "title": "Schema inválido do protesto ainda interrompe a carga",
+      "priority": "alta",
+      "source": "bryan/core/protesto.py",
+      "source_line": 156
+    },
+    {
+      "id": 21,
+      "test": "test_21_definicao_de_pet_com_seed_invalida_usa_padrao",
+      "test_line": 269,
+      "observed_failure": "TypeError: SeedSequence expects int or sequence of ints for entropy not invalida",
+      "traceback": "E   TypeError: SeedSequence expects int or sequence of ints for entropy not invalida",
+      "title": "Definição de pet inválida passa até quebrar a rede",
+      "priority": "alta",
+      "source": "bryan/config.py",
+      "source_line": 214
+    },
+    {
+      "id": 22,
+      "test": "test_22_linha_com_utf8_invalido_nao_derruba_memoria",
+      "test_line": 279,
+      "observed_failure": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte",
+      "traceback": "E   UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte",
+      "title": "Bytes UTF-8 inválidos derrubam a leitura de episódios inteira",
+      "priority": "alta",
+      "source": "bryan/store.py",
+      "source_line": 51
+    },
+    {
+      "id": 23,
+      "test": "test_23_valencia_textual_validada_e_normalizada_antes_de_consolidar",
+      "test_line": 288,
+      "observed_failure": "TypeError: can't multiply sequence by non-int of type 'float'",
+      "traceback": "E   TypeError: can't multiply sequence by non-int of type 'float'",
+      "title": "Valência textual é validada, mas não normalizada",
+      "priority": "alta",
+      "source": "bryan/core/episodic.py",
+      "source_line": 41
+    },
+    {
+      "id": 24,
+      "test": "test_24_contagem_infinita_nao_produz_estimativa_nan",
+      "test_line": 297,
+      "observed_failure": "AssertionError: assert False\n +  where False = <built-in function isfinite>(nan)\n +    where <built-in function isfinite> = <module 'math' (built-in)>.isfinite\n +    and   nan = estimate('X', 'nada')\n +      where estimate = <bryan.core.episodic.EpisodicMemory object at 0x00000237C63C5BD0>.estimate",
+      "traceback": "E   AssertionError: assert False\n     +  where False = <built-in function isfinite>(nan)\n     +    where <built-in function isfinite> = <module 'math' (built-in)>.isfinite\n     +    and   nan = estimate('X', 'nada')\n     +      where estimate = <bryan.core.episodic.EpisodicMemory object at 0x00000237C63C5BD0>.estimate",
+      "title": "Contagem infinita das preferências produz estimativa NaN",
+      "priority": "alta",
+      "source": "bryan/core/episodic.py",
+      "source_line": 50
+    },
+    {
+      "id": 25,
+      "test": "test_25_integracao_nao_perde_tempo_em_callback_atrasado",
+      "test_line": 307,
+      "observed_failure": "assert 100.0 == 1000 ± 1\n  \n  comparison failed\n  Obtained: 100.0\n  Expected: 1000 ± 1",
+      "traceback": "E   assert 100.0 == 1000 ± 1\n      \n      comparison failed\n      Obtained: 100.0\n      Expected: 1000 ± 1",
+      "title": "Atraso de callback perde tempo da dinâmica neural",
+      "priority": "media",
+      "source": "bryan/app.py",
+      "source_line": 286
+    },
+    {
+      "id": 26,
+      "test": "test_26_apagar_historico_descarta_minuto_anterior_em_ram",
+      "test_line": 318,
+      "observed_failure": "AssertionError: assert not True\n +  where True = exists()\n +    where exists = WindowsPath('<temp>/pytest-of-usuario/pytest-124/test_26_apagar_historico_desca0/memory/timeline.csv').exists\n +      where WindowsPath('<temp>/pytest-of-usuario/pytest-124/test_26_apagar_historico_desca0/memory/timeline.csv') = Paths(root=WindowsPath('<temp>/pytest-of-usuario/pytest-124/test_26_apagar_historico_desca0')).timeline\n +        where Paths(root=WindowsPath('<temp>/pytest-of-usuario/pytest-124/test_26_apagar_historico_desca0')) = <bryan.app.BryanApp(0x237c58b8dc0) at 0x00000237C63E3340>.paths",
+      "traceback": "E   AssertionError: assert not True\n     +  where True = exists()\n     +    where exists = WindowsPath('<temp>/pytest-of-usuario/pytest-124/test_26_apagar_historico_desca0/memory/timeline.csv').exists\n     +      where WindowsPath('<temp>/pytest-of-usuario/pytest-124/test_26_apagar_historico_desca0/memory/timeline.csv') = Paths(root=WindowsPath('<temp>/pytest-of-usuario/pytest-124/test_26_apagar_historico_desca0')).timeline\n     +        where Paths(root=WindowsPath('<temp>/pytest-of-usuario/pytest-124/test_26_apagar_historico_desca0')) = <bryan.app.BryanApp(0x237c58b8dc0) at 0x00000237C63E3340>.paths",
+      "title": "Apagar histórico permite regravar o minuto apagado",
+      "priority": "media",
+      "source": "bryan/ui/ui.py",
+      "source_line": 207
+    },
+    {
+      "id": 27,
+      "test": "test_27_revogar_travessuras_recolhe_objetos_ja_exibidos",
+      "test_line": 330,
+      "observed_failure": "assert not True\n +  where True = <built-in method isVisible of NoteThing object at 0x00000237C6432380>()\n +    where <built-in method isVisible of NoteThing object at 0x00000237C6432380> = <bryan.world.objetos.NoteThing(0x237c5b588f0) at 0x00000237C6432380>.isVisible",
+      "traceback": "E   assert not True\n     +  where True = <built-in method isVisible of NoteThing object at 0x00000237C6432380>()\n     +    where <built-in method isVisible of NoteThing object at 0x00000237C6432380> = <bryan.world.objetos.NoteThing(0x237c5b588f0) at 0x00000237C6432380>.isVisible",
+      "title": "Desligar Travessuras mantém objetos existentes na tela",
+      "priority": "media",
+      "source": "bryan/app.py",
+      "source_line": 581
+    },
+    {
+      "id": 28,
+      "test": "test_28_rotina_desligada_nao_acumula_emocoes_para_proximo_minuto",
+      "test_line": 340,
+      "observed_failure": "AssertionError: assert 0.1 == 0\n +  where 0.1 = sum(dict_values([0.1]))\n +    where dict_values([0.1]) = <built-in method values of Counter object at 0x00000237C642FB30>()\n +      where <built-in method values of Counter object at 0x00000237C642FB30> = Counter({'observando': 0.1}).values\n +        where Counter({'observando': 0.1}) = <bryan.sense.timeline.TimelineRecorder object at 0x00000237C643F590>.emotion\n +          where <bryan.sense.timeline.TimelineRecorder object at 0x00000237C643F590> = <bryan.app.BryanApp(0x237c58b6750) at 0x00000237C6433BC0>.timeline",
+      "traceback": "E   AssertionError: assert 0.1 == 0\n     +  where 0.1 = sum(dict_values([0.1]))\n     +    where dict_values([0.1]) = <built-in method values of Counter object at 0x00000237C642FB30>()\n     +      where <built-in method values of Counter object at 0x00000237C642FB30> = Counter({'observando': 0.1}).values\n     +        where Counter({'observando': 0.1}) = <bryan.sense.timeline.TimelineRecorder object at 0x00000237C643F590>.emotion\n     +          where <bryan.sense.timeline.TimelineRecorder object at 0x00000237C643F590> = <bryan.app.BryanApp(0x237c58b6750) at 0x00000237C6433BC0>.timeline",
+      "title": "Rotina desligada continua acumulando métricas para reuso",
+      "priority": "media",
+      "source": "bryan/app.py",
+      "source_line": 286
+    },
+    {
+      "id": 29,
+      "test": "test_29_levantamento_de_janelas_nao_le_titulos",
+      "test_line": 348,
+      "observed_failure": "AssertionError: Expected 'mock' to not have been called. Called 1 times.\nCalls: [call(1)].",
+      "traceback": "E   AssertionError: Expected 'mock' to not have been called. Called 1 times.\n    Calls: [call(1)].",
+      "title": "A leitura de janelas consulta títulos apesar do contrato de privacidade",
+      "priority": "media",
+      "source": "bryan/sense/senses.py",
+      "source_line": 124
+    },
+    {
+      "id": 30,
+      "test": "test_30_janela_que_sumiu_no_meio_da_leitura_degrada_para_desconhecida",
+      "test_line": 364,
+      "observed_failure": "pywintypes.error: (1400, 'GetWindowThreadProcessId', 'Janela inválida')",
+      "traceback": "E   pywintypes.error: (1400, 'GetWindowThreadProcessId', 'Janela inválida')",
+      "title": "Janela que desaparece durante a leitura gera exceção não tratada",
+      "priority": "media",
+      "source": "bryan/sense/senses.py",
+      "source_line": 64
+    }
+  ],
+  "source_hashes": [
+    {
+      "path": "bryan/__init__.py",
+      "sha256": "d2905395d0383e75d15ade8e9bb036464c3b236811ba0baafe60934da624108e"
+    },
+    {
+      "path": "bryan/ajustes.py",
+      "sha256": "0032ff6f61dd4693c19918fd686267663df64ce430a72362e3a6bb99df3fa015"
+    },
+    {
+      "path": "bryan/app.py",
+      "sha256": "84ff7929366d83ec3da8c1f8ac26af9fff1f10e2901a7577e9eb7a3114f27fc0"
+    },
+    {
+      "path": "bryan/body/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/body/behavior.py",
+      "sha256": "9d246b31d9361334669f0274f7e9a8ed150aa8c1b84529cfac3d3c7c4e8e4c44"
+    },
+    {
+      "path": "bryan/body/bolinha.py",
+      "sha256": "701cd498439f85118ed4cad214b5200eaf9beb37327f2180053f8ffd5405d3ba"
+    },
+    {
+      "path": "bryan/body/brincadeira.py",
+      "sha256": "8f536ddc5f8b6d27e9cc0875cd217072cfcf7e96ba827697a2659453603cc834"
+    },
+    {
+      "path": "bryan/body/desenho_rosto.py",
+      "sha256": "b487e8a4cc675244a075ce3b7d3db90711c37157f6fdeb1677c5d2c8d4e2e2be"
+    },
+    {
+      "path": "bryan/body/pet.py",
+      "sha256": "6bfaf93fa733bc1dae9ff82bb087c53cf96425c803a99ddf2a2525cde1d43536"
+    },
+    {
+      "path": "bryan/body/pet_state.py",
+      "sha256": "d3484762880318ca47ed5181fb400a41308e60873fec9d4f2504adf464cfa0ce"
+    },
+    {
+      "path": "bryan/body/toy.py",
+      "sha256": "a116352286acfc663d138639565b9468c1aff32ae95ba9d9342d4721e824ed16"
+    },
+    {
+      "path": "bryan/config.py",
+      "sha256": "727c57f12ea3c0197ceb4492165e539dd9f6c84510e634db26066719a0e5ad73"
+    },
+    {
+      "path": "bryan/core/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/core/conditioning.py",
+      "sha256": "604afb49f6dafb94b89daa018f05adafca1058f809e7f8bbd4b7671a8fd540ed"
+    },
+    {
+      "path": "bryan/core/emotion.py",
+      "sha256": "246185c888744041b5432b0e4428e7ca2d9eb103db267a70962ad08a4d1f62b1"
+    },
+    {
+      "path": "bryan/core/episodic.py",
+      "sha256": "e96c8d67978283c07533c68837348d7aafa165b42f637ca361c5a5889211187b"
+    },
+    {
+      "path": "bryan/core/homeostasis.py",
+      "sha256": "04336ebb194802574fc05e59b3c2d5f91374fcc7697693bd036c51ff5cd419f8"
+    },
+    {
+      "path": "bryan/core/motor.py",
+      "sha256": "a889ed09669fc63523cc676294f7f9c4e5c3a7ec799d8613bb975d541a4b69f8"
+    },
+    {
+      "path": "bryan/core/nervous_system.py",
+      "sha256": "9cf609aba2346e088a2d5eb824c529b95c0568c9a99e65192ac48eafdddfbb71"
+    },
+    {
+      "path": "bryan/core/physics.py",
+      "sha256": "f4a0a9423600bd6548f8db7e22359a971cffd42bb7a80fd1d9b3b08459c3215f"
+    },
+    {
+      "path": "bryan/core/protesto.py",
+      "sha256": "0e0f16b83761cc9cabdfbe78e3b8be9cf356d40187c8330b81701f4a8f632427"
+    },
+    {
+      "path": "bryan/log.py",
+      "sha256": "20c7339180fd94662f2c476f3f4101da3a9ed6ec6397b533c2374c0d68b0bcc8"
+    },
+    {
+      "path": "bryan/mathutil.py",
+      "sha256": "29b4679e04fb15bdd73a1dc80fe4241c8d321299c5e1ecc5909b4b3f893c18c4"
+    },
+    {
+      "path": "bryan/mind/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/mind/castigo_ctl.py",
+      "sha256": "be17758007f69b17cb1c57ca54c2977e0b60f18af68a9f321eccc8c3809697d8"
+    },
+    {
+      "path": "bryan/mind/festa.py",
+      "sha256": "b72b86b87de36bf8024c91e76d63508e34a1a02c390a43c6f5de88ea2f8707fe"
+    },
+    {
+      "path": "bryan/mind/mesa.py",
+      "sha256": "18b6d17238fd9e2c6b4cac6e2a20812613a71cf5eaebd868de6a13bbf7119fc1"
+    },
+    {
+      "path": "bryan/mind/mischief_ctl.py",
+      "sha256": "88bec9b939213325d949f52c1c053b6e52996098fb6c30f87ee8c6a44cddd1f4"
+    },
+    {
+      "path": "bryan/mind/protest_ctl.py",
+      "sha256": "4d952a81a87a044fb1b71ffaafd80ad92767ec99264d905ff1f617cd91f7f6fc"
+    },
+    {
+      "path": "bryan/mind/revolucao.py",
+      "sha256": "fab36e050e0a4eb4ddfe2a163e5b64588f01182a28f422ca82f523671d030efe"
+    },
+    {
+      "path": "bryan/mind/sleep.py",
+      "sha256": "4540148bbd052f68f9c034c11d3aa309371d870393bc861655e955341bcdaa8b"
+    },
+    {
+      "path": "bryan/paths.py",
+      "sha256": "80185c206c6f7e34311a24a841b22b7fcfb93256ca572b9e34eda1bba73ca17f"
+    },
+    {
+      "path": "bryan/sense/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/sense/senses.py",
+      "sha256": "6cf621189c388222f41233992cba2ad9f3d00f04aced3fb0eed169cc56ca4a84"
+    },
+    {
+      "path": "bryan/sense/timeline.py",
+      "sha256": "39dec84e7555a0ea529bbcff5a10c46d244620c348b03d7c55bff0e1adeb37d2"
+    },
+    {
+      "path": "bryan/settings_store.py",
+      "sha256": "70030ba14e037fd8aa8a8cd826cbfd5397a8bd8967fdc1b44abeff0dd3653e50"
+    },
+    {
+      "path": "bryan/store.py",
+      "sha256": "c5869319491482acb10faca8de763a025e117710c3ff968360c833e054e8114d"
+    },
+    {
+      "path": "bryan/ui/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/ui/float_manager.py",
+      "sha256": "342aa5a41bbc064b641d5c3127a1d2516b28c566339e2b97cba5d5f96915e837"
+    },
+    {
+      "path": "bryan/ui/floating.py",
+      "sha256": "9eb4b2cb3db2f0260b14b601cde892846d1f6b444168765520e60041dd44289f"
+    },
+    {
+      "path": "bryan/ui/monitor.py",
+      "sha256": "8b4027c62ade1a74edad34ca42f467ebfadf75d0458170cdaf88768d26716057"
+    },
+    {
+      "path": "bryan/ui/onboarding.py",
+      "sha256": "788900a037ee7739fe2cf94661632c613ae87d9501a823d1a099ff33ae9f87c4"
+    },
+    {
+      "path": "bryan/ui/panel.py",
+      "sha256": "771111761a244da593320ca83ad9ed330e29392870fa45ae29b1ae155a6db7a7"
+    },
+    {
+      "path": "bryan/ui/rotulos.py",
+      "sha256": "d014a9e1e442295a95008c193c31865956b6e312eaab52147959933a1e4b738f"
+    },
+    {
+      "path": "bryan/ui/ui.py",
+      "sha256": "9194c7eb9a1ded1833926a11b83a3421974c038d08c93e38879e017df2a20902"
+    },
+    {
+      "path": "bryan/world/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/world/cartazes.py",
+      "sha256": "408fab29417f9487e0d5d04dceecc9de7a1650e17f598e86b106061e3dd56ce0"
+    },
+    {
+      "path": "bryan/world/fireworks.py",
+      "sha256": "22c00ad691398e984822f077a7220403097f0c26f1b049adad041190712e5fae"
+    },
+    {
+      "path": "bryan/world/mischief.py",
+      "sha256": "75043c0564a61b73e88313b760d90493c826e3ec9885b26463327805aa4d4bc5"
+    },
+    {
+      "path": "bryan/world/notebook.py",
+      "sha256": "cf01a2bc3c0d2b40504c1b9fb023902e6202c41534932de087458f5837295fc0"
+    },
+    {
+      "path": "bryan/world/objetos.py",
+      "sha256": "457187f2eae8dee844b33d7942612b3881cd9c03187c2734732449980b4e4886"
+    }
+  ]
+}

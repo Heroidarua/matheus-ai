@@ -1,0 +1,206 @@
+.F...........................F......F............F.....F.FF..........F.. [ 72%]
+
+.......F..FFFFF.............                                             [100%]
+
+================================== FAILURES ===================================
+
+__________ test_cenario_cantinho[002-entrada-soltar_no_ar_e_pousar] ___________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'entrada', 'id': 2, 'name': 'soltar_no_ar_e_pousar', 'variant': 1}, 'esperado': True, 'observado': False}
+
+E   assert False == True
+
+____________ test_cenario_cantinho[030-olhar-raiva_canto_direito] _____________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'olhar', 'id': 30, 'name': 'raiva_canto_direito', 'variant': 9}, 'esperado': (1.0, 0.0), 'observado': (-1.0, 0.0)}
+
+E   assert (-1.0, 0.0) == (1.0, 0.0)
+
+E     
+
+E     At index 0 diff: -1.0 != 1.0
+
+E     Use -v to get more diff
+
+____________ test_cenario_cantinho[037-cartazes-posicao_ao_nascer] ____________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'cartazes', 'id': 37, 'name': 'posicao_ao_nascer', 'variant': 6}, 'esperado': [True, True], 'observado': [False, False]}
+
+E   assert [False, False] == [True, True]
+
+E     
+
+E     At index 0 diff: False != True
+
+E     Use -v to get more diff
+
+_ test_cenario_cantinho[050-iniciar_fuga-direcao_sobrevive_ao_comportamento] __
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'iniciar_fuga', 'id': 50, 'name': 'direcao_sobrevive_ao_comportamento', 'variant': 9}, 'esperado': True, 'observado': False}
+
+E   assert False == True
+
+________ test_cenario_cantinho[056-concluir_fuga-prazo_expirado_fora] _________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'concluir_fuga', 'id': 56, 'name': 'prazo_expirado_fora', 'variant': 5}, 'esperado': 0.0, 'observado': 1.0}
+
+E   assert 1.0 == 0.0
+
+__________ test_cenario_cantinho[058-concluir_fuga-usuario_carregou] __________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'concluir_fuga', 'id': 58, 'name': 'usuario_carregou', 'variant': 7}, 'esperado': 0.0, 'observado': 1.0}
+
+E   assert 1.0 == 0.0
+
+_______ test_cenario_cantinho[059-concluir_fuga-placa_moveu_pet_parado] _______
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'concluir_fuga', 'id': 59, 'name': 'placa_moveu_pet_parado', 'variant': 8}, 'esperado': 0.0, 'observado': 1.0}
+
+E   assert 1.0 == 0.0
+
+_______ test_cenario_cantinho[070-persistencia-falha_de_disco_na_fuga] ________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'persistencia', 'id': 70, 'name': 'falha_de_disco_na_fuga', 'variant': 9}, 'esperado': None, 'observado': 'PermissionError'}
+
+E   assert 'PermissionError' == None
+
+_____________ test_cenario_cantinho[080-sessao-dormindo_nao_foge] _____________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'sessao', 'id': 80, 'name': 'dormindo_nao_foge', 'variant': 9}, 'esperado': [True, 0.0], 'observado': [False, 160.0]}
+
+E   assert [False, 160.0] == [True, 0.0]
+
+E     
+
+E     At index 0 diff: False != True
+
+E     Use -v to get more diff
+
+---------------------------- Captured stdout setup ----------------------------
+
+[assets] pasta assets/memes/ n�o existe: sem memes
+
+[assets] assets/recadinhos.txt n�o existe: sem post-its
+
+[assets] assets/cartazes.txt n�o existe: usando frases padr�o
+
+_____________ test_cenario_cantinho[083-prioridades-manifestacao] _____________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'prioridades', 'id': 83, 'name': 'manifestacao', 'variant': 2}, 'esperado': 0.0, 'observado': 150.0}
+
+E   assert 150.0 == 0.0
+
+________________ test_cenario_cantinho[084-prioridades-greve] _________________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'prioridades', 'id': 84, 'name': 'greve', 'variant': 3}, 'esperado': 0.0, 'observado': -130.0}
+
+E   assert -130.0 == 0.0
+
+______________ test_cenario_cantinho[085-prioridades-revolucao] _______________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'prioridades', 'id': 85, 'name': 'revolucao', 'variant': 4}, 'esperado': 0.0, 'observado': 105.0}
+
+E   assert 105.0 == 0.0
+
+_____________ test_cenario_cantinho[086-prioridades-motor_canto] ______________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'prioridades', 'id': 86, 'name': 'motor_canto', 'variant': 5}, 'esperado': 0.0, 'observado': -110.0}
+
+E   assert -110.0 == 0.0
+
+____________ test_cenario_cantinho[087-prioridades-missao_antiga] _____________
+
+experimentos\test_cantinho_100.py:361: in test_cenario_cantinho
+
+    assert observed == expected, dict(cenario=case, observado=observed, esperado=expected)
+
+E   AssertionError: {'cenario': {'group': 'prioridades', 'id': 87, 'name': 'missao_antiga', 'variant': 6}, 'esperado': 0.0, 'observado': 260.0}
+
+E   assert 260.0 == 0.0
+
+- generated xml file: <temp>\deskbuddy-cantinho-100.xml -
+
+=========================== short test summary info ===========================
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[002-entrada-soltar_no_ar_e_pousar]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[030-olhar-raiva_canto_direito]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[037-cartazes-posicao_ao_nascer]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[050-iniciar_fuga-direcao_sobrevive_ao_comportamento]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[056-concluir_fuga-prazo_expirado_fora]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[058-concluir_fuga-usuario_carregou]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[059-concluir_fuga-placa_moveu_pet_parado]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[070-persistencia-falha_de_disco_na_fuga]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[080-sessao-dormindo_nao_foge]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[083-prioridades-manifestacao]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[084-prioridades-greve]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[085-prioridades-revolucao]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[086-prioridades-motor_canto]
+
+FAILED experimentos/test_cantinho_100.py::test_cenario_cantinho[087-prioridades-missao_antiga]
+
+14 failed, 86 passed in 1.61s
+

@@ -1,0 +1,22 @@
+name: Keep-alive
+
+on:
+  schedule:
+    - cron: '*/9 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the Render service
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS --max-time 60 https://matheus-ai.onrender.com/health; then
+              echo "ADA-M acordada"
+              exit 0
+            fi
+            echo "tentativa $i falhou, aguardando wake-up..."
+            sleep 5
+          done
+          exit 1

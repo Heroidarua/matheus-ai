@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "matheus-stt",
+  "main": "src/index.js",
+  "compatibility_date": "2025-09-01",
+  // Binding AI (recomendado): adicione no dashboard em
+  //   Settings → Bindings & Secrets → Add → Capability → AI
+  // Ou descomente abaixo e use `npx wrangler secret put AI_TOKEN`:
+  //
+  // "bindings": [
+  //   { "type": "ai", "binding": "AI" }
+  // ]
+}

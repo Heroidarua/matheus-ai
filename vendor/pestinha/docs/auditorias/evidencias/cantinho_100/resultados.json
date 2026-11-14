@@ -1,0 +1,3258 @@
+{
+  "data": "2026-10-31",
+  "escopo": "80 casos de controlador/comportamento e 20 de integração BryanApp; Qt offscreen",
+  "total": 100,
+  "passaram": 86,
+  "falharam": 14,
+  "erros_de_fixture": 0,
+  "xfail": 0,
+  "grupos": {
+    "entrada": {
+      "passaram": 9,
+      "falharam": 1
+    },
+    "saida": {
+      "passaram": 10,
+      "falharam": 0
+    },
+    "olhar": {
+      "passaram": 9,
+      "falharam": 1
+    },
+    "cartazes": {
+      "passaram": 9,
+      "falharam": 1
+    },
+    "iniciar_fuga": {
+      "passaram": 9,
+      "falharam": 1
+    },
+    "concluir_fuga": {
+      "passaram": 7,
+      "falharam": 3
+    },
+    "persistencia": {
+      "passaram": 9,
+      "falharam": 1
+    },
+    "sessao": {
+      "passaram": 9,
+      "falharam": 1
+    },
+    "prioridades": {
+      "passaram": 5,
+      "falharam": 5
+    },
+    "rede": {
+      "passaram": 10,
+      "falharam": 0
+    }
+  },
+  "cenarios": [
+    {
+      "id": 1,
+      "group": "entrada",
+      "name": "soltar_chao_centro",
+      "variant": 0,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 2,
+      "group": "entrada",
+      "name": "soltar_no_ar_e_pousar",
+      "variant": 1,
+      "status": "falhou",
+      "observado": false,
+      "esperado": true,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'entrada', 'id': 2, 'name': 'soltar_no_ar_e_pousar', 'variant': 1}, 'esperado': True, 'observado': False}\nassert False == True"
+    },
+    {
+      "id": 3,
+      "group": "entrada",
+      "name": "andar_sem_soltar",
+      "variant": 2,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 4,
+      "group": "entrada",
+      "name": "fora_esquerda",
+      "variant": 3,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          -1,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 5,
+      "group": "entrada",
+      "name": "fora_direita",
+      "variant": 4,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          191,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 6,
+      "group": "entrada",
+      "name": "acima_zona",
+      "variant": 5,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          459
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 7,
+      "group": "entrada",
+      "name": "abaixo_zona",
+      "variant": 6,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          701
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 8,
+      "group": "entrada",
+      "name": "limite_esquerdo",
+      "variant": 7,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          0,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 9,
+      "group": "entrada",
+      "name": "limite_direito",
+      "variant": 8,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          190,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 10,
+      "group": "entrada",
+      "name": "opcao_desligada",
+      "variant": 9,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": false,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 11,
+      "group": "saida",
+      "name": "sair_esquerda",
+      "variant": 0,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          -1,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 12,
+      "group": "saida",
+      "name": "sair_direita",
+      "variant": 1,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          191,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 13,
+      "group": "saida",
+      "name": "sair_acima",
+      "variant": 2,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          459
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 14,
+      "group": "saida",
+      "name": "sair_abaixo",
+      "variant": 3,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          701
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 15,
+      "group": "saida",
+      "name": "pegar_no_mouse",
+      "variant": 4,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 16,
+      "group": "saida",
+      "name": "desligar_opcao",
+      "variant": 5,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": false,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 17,
+      "group": "saida",
+      "name": "pausar_controlador",
+      "variant": 6,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 18,
+      "group": "saida",
+      "name": "permanecer_dentro",
+      "variant": 7,
+      "status": "passou",
+      "observado": [
+        true,
+        true
+      ],
+      "esperado": [
+        true,
+        true
+      ],
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 19,
+      "group": "saida",
+      "name": "mover_placa_para_longe",
+      "variant": 8,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 20,
+      "group": "saida",
+      "name": "ficar_no_ar",
+      "variant": 9,
+      "status": "passou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        false,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 21,
+      "group": "olhar",
+      "name": "neutro",
+      "variant": 0,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.9
+      ],
+      "esperado": [
+        0.0,
+        0.9
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 22,
+      "group": "olhar",
+      "name": "watch_abaixo_limiar",
+      "variant": 1,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.9
+      ],
+      "esperado": [
+        0.0,
+        0.9
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 23,
+      "group": "olhar",
+      "name": "watch_no_limiar",
+      "variant": 2,
+      "status": "passou",
+      "observado": [
+        0.970143,
+        -0.242536
+      ],
+      "esperado": [
+        0.970143,
+        -0.242536
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 24,
+      "group": "olhar",
+      "name": "cursor_esquerda",
+      "variant": 3,
+      "status": "passou",
+      "observado": [
+        -1.0,
+        0.0
+      ],
+      "esperado": [
+        -1.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 25,
+      "group": "olhar",
+      "name": "cursor_acima",
+      "variant": 4,
+      "status": "passou",
+      "observado": [
+        0.0,
+        -1.0
+      ],
+      "esperado": [
+        0.0,
+        -1.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 26,
+      "group": "olhar",
+      "name": "cursor_abaixo",
+      "variant": 5,
+      "status": "passou",
+      "observado": [
+        0.0,
+        1.0
+      ],
+      "esperado": [
+        0.0,
+        1.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 27,
+      "group": "olhar",
+      "name": "angry_abaixo_limiar",
+      "variant": 6,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.9
+      ],
+      "esperado": [
+        0.0,
+        0.9
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 28,
+      "group": "olhar",
+      "name": "angry_no_limiar",
+      "variant": 7,
+      "status": "passou",
+      "observado": [
+        -1.0,
+        0.0
+      ],
+      "esperado": [
+        -1.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 29,
+      "group": "olhar",
+      "name": "raiva_prioritaria",
+      "variant": 8,
+      "status": "passou",
+      "observado": [
+        -1.0,
+        0.0
+      ],
+      "esperado": [
+        -1.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 30,
+      "group": "olhar",
+      "name": "raiva_canto_direito",
+      "variant": 9,
+      "status": "falhou",
+      "observado": [
+        -1.0,
+        0.0
+      ],
+      "esperado": [
+        1.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          850,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'olhar', 'id': 30, 'name': 'raiva_canto_direito', 'variant': 9}, 'esperado': (1.0, 0.0), 'observado': (-1.0, 0.0)}\nassert (-1.0, 0.0) == (1.0, 0.0)\n  \n  At index 0 diff: -1.0 != 1.0\n  Use -v to get more diff"
+    },
+    {
+      "id": 31,
+      "group": "cartazes",
+      "name": "motor_zero",
+      "variant": 0,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 32,
+      "group": "cartazes",
+      "name": "sorteio_sem_cartaz",
+      "variant": 1,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 33,
+      "group": "cartazes",
+      "name": "sorteio_com_cartaz",
+      "variant": 2,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": true,
+        "placa_visivel": true,
+        "cartaz_posicao": [
+          0.0,
+          0.0
+        ],
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 34,
+      "group": "cartazes",
+      "name": "motor_alto_com_cartaz",
+      "variant": 3,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": true,
+        "placa_visivel": true,
+        "cartaz_posicao": [
+          0.0,
+          0.0
+        ],
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 35,
+      "group": "cartazes",
+      "name": "motor_alto_sem_sorte",
+      "variant": 4,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 36,
+      "group": "cartazes",
+      "name": "intervalo_zero",
+      "variant": 5,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 37,
+      "group": "cartazes",
+      "name": "posicao_ao_nascer",
+      "variant": 6,
+      "status": "falhou",
+      "observado": [
+        false,
+        false
+      ],
+      "esperado": [
+        true,
+        true
+      ],
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": true,
+        "placa_visivel": true,
+        "cartaz_posicao": [
+          0.0,
+          0.0
+        ],
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'cartazes', 'id': 37, 'name': 'posicao_ao_nascer', 'variant': 6}, 'esperado': [True, True], 'observado': [False, False]}\nassert [False, False] == [True, True]\n  \n  At index 0 diff: False != True\n  Use -v to get more diff"
+    },
+    {
+      "id": 38,
+      "group": "cartazes",
+      "name": "substituir_cartaz",
+      "variant": 7,
+      "status": "passou",
+      "observado": [
+        true,
+        false
+      ],
+      "esperado": [
+        true,
+        false
+      ],
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": true,
+        "placa_visivel": true,
+        "cartaz_posicao": [
+          0.0,
+          0.0
+        ],
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 39,
+      "group": "cartazes",
+      "name": "desligar_remove_cartaz",
+      "variant": 8,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": false,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 40,
+      "group": "cartazes",
+      "name": "acompanhar_pet",
+      "variant": 9,
+      "status": "passou",
+      "observado": 150,
+      "esperado": 150,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": true,
+        "placa_visivel": true,
+        "cartaz_posicao": [
+          150,
+          509.0
+        ],
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 41,
+      "group": "iniciar_fuga",
+      "name": "motor_zero",
+      "variant": 0,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 42,
+      "group": "iniciar_fuga",
+      "name": "abaixo_limiar",
+      "variant": 1,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 43,
+      "group": "iniciar_fuga",
+      "name": "no_limiar",
+      "variant": 2,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": 1.0,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 160.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 44,
+      "group": "iniciar_fuga",
+      "name": "acima_limiar",
+      "variant": 3,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": 1.0,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 160.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 45,
+      "group": "iniciar_fuga",
+      "name": "opcao_desligada",
+      "variant": 4,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": false,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 46,
+      "group": "iniciar_fuga",
+      "name": "ainda_fora",
+      "variant": 5,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 47,
+      "group": "iniciar_fuga",
+      "name": "sendo_segurado",
+      "variant": 6,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 48,
+      "group": "iniciar_fuga",
+      "name": "pet_voando",
+      "variant": 7,
+      "status": "passou",
+      "observado": false,
+      "esperado": false,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 49,
+      "group": "iniciar_fuga",
+      "name": "libera_estado",
+      "variant": 8,
+      "status": "passou",
+      "observado": [
+        true,
+        false,
+        false,
+        true
+      ],
+      "esperado": [
+        true,
+        false,
+        false,
+        true
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": 1.0,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 160.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 50,
+      "group": "iniciar_fuga",
+      "name": "direcao_sobrevive_ao_comportamento",
+      "variant": 9,
+      "status": "falhou",
+      "observado": false,
+      "esperado": true,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": 1.0,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": -20.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'iniciar_fuga', 'id': 50, 'name': 'direcao_sobrevive_ao_comportamento', 'variant': 9}, 'esperado': True, 'observado': False}\nassert False == True"
+    },
+    {
+      "id": 51,
+      "group": "concluir_fuga",
+      "name": "ainda_dentro",
+      "variant": 0,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": 0.0,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 52,
+      "group": "concluir_fuga",
+      "name": "na_margem",
+      "variant": 1,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": 0.0,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          230,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 53,
+      "group": "concluir_fuga",
+      "name": "alem_margem",
+      "variant": 2,
+      "status": "passou",
+      "observado": 1.0,
+      "esperado": 1.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1.0,
+        "memoria": 0.2,
+        "vx": 0.0,
+        "posicao": [
+          231,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 54,
+      "group": "concluir_fuga",
+      "name": "muito_longe",
+      "variant": 3,
+      "status": "passou",
+      "observado": 1.0,
+      "esperado": 1.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1.0,
+        "memoria": 0.2,
+        "vx": 0.0,
+        "posicao": [
+          900,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 55,
+      "group": "concluir_fuga",
+      "name": "saida_esquerda",
+      "variant": 4,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": 0.0,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          -100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 56,
+      "group": "concluir_fuga",
+      "name": "prazo_expirado_fora",
+      "variant": 5,
+      "status": "falhou",
+      "observado": 1.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1.0,
+        "memoria": 0.2,
+        "vx": 0.0,
+        "posicao": [
+          231,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'concluir_fuga', 'id': 56, 'name': 'prazo_expirado_fora', 'variant': 5}, 'esperado': 0.0, 'observado': 1.0}\nassert 1.0 == 0.0"
+    },
+    {
+      "id": 57,
+      "group": "concluir_fuga",
+      "name": "prazo_expirado_dentro",
+      "variant": 6,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 58,
+      "group": "concluir_fuga",
+      "name": "usuario_carregou",
+      "variant": 7,
+      "status": "falhou",
+      "observado": 1.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1.0,
+        "memoria": 0.2,
+        "vx": 0.0,
+        "posicao": [
+          300,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'concluir_fuga', 'id': 58, 'name': 'usuario_carregou', 'variant': 7}, 'esperado': 0.0, 'observado': 1.0}\nassert 1.0 == 0.0"
+    },
+    {
+      "id": 59,
+      "group": "concluir_fuga",
+      "name": "placa_moveu_pet_parado",
+      "variant": 8,
+      "status": "falhou",
+      "observado": 1.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1.0,
+        "memoria": 0.2,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'concluir_fuga', 'id': 59, 'name': 'placa_moveu_pet_parado', 'variant': 8}, 'esperado': 0.0, 'observado': 1.0}\nassert 1.0 == 0.0"
+    },
+    {
+      "id": 60,
+      "group": "concluir_fuga",
+      "name": "nao_contar_duas_vezes",
+      "variant": 9,
+      "status": "passou",
+      "observado": 1.0,
+      "esperado": 1.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1.0,
+        "memoria": 0.2,
+        "vx": 0.0,
+        "posicao": [
+          300,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 61,
+      "group": "persistencia",
+      "name": "sem_arquivo",
+      "variant": 0,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.0
+      ],
+      "esperado": [
+        0.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 62,
+      "group": "persistencia",
+      "name": "zero",
+      "variant": 1,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.0
+      ],
+      "esperado": [
+        0.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 63,
+      "group": "persistencia",
+      "name": "uma_fuga",
+      "variant": 2,
+      "status": "passou",
+      "observado": [
+        1.0,
+        0.2
+      ],
+      "esperado": [
+        1.0,
+        0.2
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 64,
+      "group": "persistencia",
+      "name": "quatro_fugas",
+      "variant": 3,
+      "status": "passou",
+      "observado": [
+        4.0,
+        0.8
+      ],
+      "esperado": [
+        4.0,
+        0.8
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 65,
+      "group": "persistencia",
+      "name": "cinco_fugas",
+      "variant": 4,
+      "status": "passou",
+      "observado": [
+        5.0,
+        1.0
+      ],
+      "esperado": [
+        5.0,
+        1.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 66,
+      "group": "persistencia",
+      "name": "numero_negativo",
+      "variant": 5,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.0
+      ],
+      "esperado": [
+        0.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 67,
+      "group": "persistencia",
+      "name": "texto_invalido",
+      "variant": 6,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.0
+      ],
+      "esperado": [
+        0.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 68,
+      "group": "persistencia",
+      "name": "nan",
+      "variant": 7,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.0
+      ],
+      "esperado": [
+        0.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 69,
+      "group": "persistencia",
+      "name": "acima_dominio",
+      "variant": 8,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.0
+      ],
+      "esperado": [
+        0.0,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 70,
+      "group": "persistencia",
+      "name": "falha_de_disco_na_fuga",
+      "variant": 9,
+      "status": "falhou",
+      "observado": "PermissionError",
+      "esperado": null,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1.0,
+        "memoria": 0.2,
+        "vx": 0.0,
+        "posicao": [
+          300,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'persistencia', 'id': 70, 'name': 'falha_de_disco_na_fuga', 'variant': 9}, 'esperado': None, 'observado': 'PermissionError'}\nassert 'PermissionError' == None"
+    },
+    {
+      "id": 71,
+      "group": "sessao",
+      "name": "panico",
+      "variant": 0,
+      "status": "passou",
+      "observado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "esperado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 72,
+      "group": "sessao",
+      "name": "esconder",
+      "variant": 1,
+      "status": "passou",
+      "observado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "esperado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 73,
+      "group": "sessao",
+      "name": "tela_cheia",
+      "variant": 2,
+      "status": "passou",
+      "observado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "esperado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 74,
+      "group": "sessao",
+      "name": "desligar_app",
+      "variant": 3,
+      "status": "passou",
+      "observado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "esperado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 75,
+      "group": "sessao",
+      "name": "pausar",
+      "variant": 4,
+      "status": "passou",
+      "observado": [
+        true,
+        true
+      ],
+      "esperado": [
+        true,
+        true
+      ],
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 76,
+      "group": "sessao",
+      "name": "retomar",
+      "variant": 5,
+      "status": "passou",
+      "observado": [
+        false,
+        true
+      ],
+      "esperado": [
+        false,
+        true
+      ],
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 77,
+      "group": "sessao",
+      "name": "mostrar_de_novo",
+      "variant": 6,
+      "status": "passou",
+      "observado": [
+        false,
+        true
+      ],
+      "esperado": [
+        false,
+        true
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 78,
+      "group": "sessao",
+      "name": "desligar_cantinho",
+      "variant": 7,
+      "status": "passou",
+      "observado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "esperado": [
+        false,
+        false,
+        true,
+        false
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": false,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 79,
+      "group": "sessao",
+      "name": "modo_teste",
+      "variant": 8,
+      "status": "passou",
+      "observado": true,
+      "esperado": true,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 80,
+      "group": "sessao",
+      "name": "dormindo_nao_foge",
+      "variant": 9,
+      "status": "falhou",
+      "observado": [
+        false,
+        160.0
+      ],
+      "esperado": [
+        true,
+        0.0
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": 342371.656,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 160.0,
+        "posicao": [
+          100.0,
+          655.0
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'sessao', 'id': 80, 'name': 'dormindo_nao_foge', 'variant': 9}, 'esperado': [True, 0.0], 'observado': [False, 160.0]}\nassert [False, 160.0] == [True, 0.0]\n  \n  At index 0 diff: False != True\n  Use -v to get more diff"
+    },
+    {
+      "id": 81,
+      "group": "prioridades",
+      "name": "sem_protesto",
+      "variant": 0,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 82,
+      "group": "prioridades",
+      "name": "reclamacao",
+      "variant": 1,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 83,
+      "group": "prioridades",
+      "name": "manifestacao",
+      "variant": 2,
+      "status": "falhou",
+      "observado": 150.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 150.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'prioridades', 'id': 83, 'name': 'manifestacao', 'variant': 2}, 'esperado': 0.0, 'observado': 150.0}\nassert 150.0 == 0.0"
+    },
+    {
+      "id": 84,
+      "group": "prioridades",
+      "name": "greve",
+      "variant": 3,
+      "status": "falhou",
+      "observado": -130.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": -130.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'prioridades', 'id': 84, 'name': 'greve', 'variant': 3}, 'esperado': 0.0, 'observado': -130.0}\nassert -130.0 == 0.0"
+    },
+    {
+      "id": 85,
+      "group": "prioridades",
+      "name": "revolucao",
+      "variant": 4,
+      "status": "falhou",
+      "observado": 105.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 105.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'prioridades', 'id': 85, 'name': 'revolucao', 'variant': 4}, 'esperado': 0.0, 'observado': 105.0}\nassert 105.0 == 0.0"
+    },
+    {
+      "id": 86,
+      "group": "prioridades",
+      "name": "motor_canto",
+      "variant": 5,
+      "status": "falhou",
+      "observado": -110.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": -110.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'prioridades', 'id': 86, 'name': 'motor_canto', 'variant': 5}, 'esperado': 0.0, 'observado': -110.0}\nassert -110.0 == 0.0"
+    },
+    {
+      "id": 87,
+      "group": "prioridades",
+      "name": "missao_antiga",
+      "variant": 6,
+      "status": "falhou",
+      "observado": 260.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 260.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": "AssertionError: {'cenario': {'group': 'prioridades', 'id': 87, 'name': 'missao_antiga', 'variant': 6}, 'esperado': 0.0, 'observado': 260.0}\nassert 260.0 == 0.0"
+    },
+    {
+      "id": 88,
+      "group": "prioridades",
+      "name": "dormindo",
+      "variant": 7,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 89,
+      "group": "prioridades",
+      "name": "carinho",
+      "variant": 8,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 90,
+      "group": "prioridades",
+      "name": "no_notebook",
+      "variant": 9,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          150,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 91,
+      "group": "rede",
+      "name": "preso_ativo",
+      "variant": 0,
+      "status": "passou",
+      "observado": 1.0,
+      "esperado": 1.0,
+      "estado_final": {
+        "dentro": true,
+        "marcado": true,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 92,
+      "group": "rede",
+      "name": "livre",
+      "variant": 1,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 93,
+      "group": "rede",
+      "name": "opcao_desligada",
+      "variant": 2,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": false,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 94,
+      "group": "rede",
+      "name": "memoria_zero",
+      "variant": 3,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 95,
+      "group": "rede",
+      "name": "memoria_uma",
+      "variant": 4,
+      "status": "passou",
+      "observado": 0.2,
+      "esperado": 0.2,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1,
+        "memoria": 0.2,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 96,
+      "group": "rede",
+      "name": "memoria_quatro",
+      "variant": 5,
+      "status": "passou",
+      "observado": 0.8,
+      "esperado": 0.8,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 4,
+        "memoria": 0.8,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 97,
+      "group": "rede",
+      "name": "memoria_cinco",
+      "variant": 6,
+      "status": "passou",
+      "observado": 1.0,
+      "esperado": 1.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 5,
+        "memoria": 1.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 98,
+      "group": "rede",
+      "name": "memoria_saturada",
+      "variant": 7,
+      "status": "passou",
+      "observado": 1.0,
+      "esperado": 1.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 100,
+        "memoria": 1.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    },
+    {
+      "id": 99,
+      "group": "rede",
+      "name": "apos_fuga_salva",
+      "variant": 8,
+      "status": "passou",
+      "observado": [
+        0.0,
+        0.2,
+        true
+      ],
+      "esperado": [
+        0.0,
+        0.2,
+        true
+      ],
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 1.0,
+        "memoria": 0.2,
+        "vx": 160.0,
+        "posicao": [
+          300,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": true,
+        "cartaz_posicao": null,
+        "memoria_gravada": true
+      },
+      "mensagem": null
+    },
+    {
+      "id": 100,
+      "group": "rede",
+      "name": "apos_esconder",
+      "variant": 9,
+      "status": "passou",
+      "observado": 0.0,
+      "esperado": 0.0,
+      "estado_final": {
+        "dentro": false,
+        "marcado": false,
+        "ativo": true,
+        "fuga": null,
+        "vitorias": 0.0,
+        "memoria": 0.0,
+        "vx": 0.0,
+        "posicao": [
+          100,
+          600
+        ],
+        "cartaz": false,
+        "placa_visivel": false,
+        "cartaz_posicao": null,
+        "memoria_gravada": false
+      },
+      "mensagem": null
+    }
+  ],
+  "ambiente": {
+    "python": "3.11.1",
+    "pytest": "8.4.2",
+    "PySide6": "6.11.0",
+    "QT_QPA_PLATFORM": "offscreen"
+  },
+  "hashes_fontes_producao": [
+    {
+      "path": "bryan/__init__.py",
+      "sha256": "d2905395d0383e75d15ade8e9bb036464c3b236811ba0baafe60934da624108e"
+    },
+    {
+      "path": "bryan/ajustes.py",
+      "sha256": "82b3db14bb7c6ae4da70012029eb4a3fe9d9ba18a2f39aaa3f933dab5260be3b"
+    },
+    {
+      "path": "bryan/app.py",
+      "sha256": "251738cfbc868789350de3aae4d38ab9afa022ada8e4d2e8a1a273485b93e21d"
+    },
+    {
+      "path": "bryan/body/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/body/behavior.py",
+      "sha256": "9d246b31d9361334669f0274f7e9a8ed150aa8c1b84529cfac3d3c7c4e8e4c44"
+    },
+    {
+      "path": "bryan/body/bolinha.py",
+      "sha256": "e8c2dd1b3fbba3bf1138130e446e1bb6b3bb7d6abeb0c45427e31c1cbd2d0b4e"
+    },
+    {
+      "path": "bryan/body/brincadeira.py",
+      "sha256": "ce5b806f9497519409799bde98e89b027ef7ff55bf95f0041364e915554716b3"
+    },
+    {
+      "path": "bryan/body/desenho_rosto.py",
+      "sha256": "7e74df098d93b1a3d57ba72fd7c5f370cdc7bd57fc8d073fda32cfe9ba4c831e"
+    },
+    {
+      "path": "bryan/body/pet.py",
+      "sha256": "dad602b782fe150929b80002b0475d8191d1b10eb5229bceb2b98ea20ec5ace9"
+    },
+    {
+      "path": "bryan/body/pet_state.py",
+      "sha256": "bc05c13398199ca1f8cac5d8003f057f78c7bf9b7ad174732e00f2164344c3d3"
+    },
+    {
+      "path": "bryan/body/toy.py",
+      "sha256": "3393dc75c5b35878bb9ab8f547b7ea3ed594d8f9ccd4aff9f716e6b5607ea7bb"
+    },
+    {
+      "path": "bryan/config.py",
+      "sha256": "0e6d049be34a6c68f93609aaa04b8bae248948c5c4dc26d6354f5b65af85601e"
+    },
+    {
+      "path": "bryan/core/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/core/conditioning.py",
+      "sha256": "604afb49f6dafb94b89daa018f05adafca1058f809e7f8bbd4b7671a8fd540ed"
+    },
+    {
+      "path": "bryan/core/emotion.py",
+      "sha256": "246185c888744041b5432b0e4428e7ca2d9eb103db267a70962ad08a4d1f62b1"
+    },
+    {
+      "path": "bryan/core/episodic.py",
+      "sha256": "006c07e5398931b24b69ef6c5490df82adad6f23f2584cde565619624a057768"
+    },
+    {
+      "path": "bryan/core/homeostasis.py",
+      "sha256": "04336ebb194802574fc05e59b3c2d5f91374fcc7697693bd036c51ff5cd419f8"
+    },
+    {
+      "path": "bryan/core/motor.py",
+      "sha256": "a889ed09669fc63523cc676294f7f9c4e5c3a7ec799d8613bb975d541a4b69f8"
+    },
+    {
+      "path": "bryan/core/nervous_system.py",
+      "sha256": "9cf609aba2346e088a2d5eb824c529b95c0568c9a99e65192ac48eafdddfbb71"
+    },
+    {
+      "path": "bryan/core/physics.py",
+      "sha256": "fe51c18ad304ca9ac5e7a8e93066b5afa160ca66f4a51a83cbbfb378add25542"
+    },
+    {
+      "path": "bryan/core/protesto.py",
+      "sha256": "70dba5e3a41aa481e37809d703e0fb32335e6aa0a149482789b388a75ff9d4ee"
+    },
+    {
+      "path": "bryan/log.py",
+      "sha256": "20c7339180fd94662f2c476f3f4101da3a9ed6ec6397b533c2374c0d68b0bcc8"
+    },
+    {
+      "path": "bryan/mathutil.py",
+      "sha256": "29b4679e04fb15bdd73a1dc80fe4241c8d321299c5e1ecc5909b4b3f893c18c4"
+    },
+    {
+      "path": "bryan/mind/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/mind/castigo_ctl.py",
+      "sha256": "d086daad51eb84820d15010754a910a49a6bf2468375d483f4aa55ae10cf5b9e"
+    },
+    {
+      "path": "bryan/mind/festa.py",
+      "sha256": "b72b86b87de36bf8024c91e76d63508e34a1a02c390a43c6f5de88ea2f8707fe"
+    },
+    {
+      "path": "bryan/mind/mesa.py",
+      "sha256": "1d3e4aa279b28b084f2cf0ad7010cc6c131c719ab75fe873112e2bf03cde2299"
+    },
+    {
+      "path": "bryan/mind/mischief_ctl.py",
+      "sha256": "9b5ccad93b6385d6794e33c18e10d38efa9b53ef7c933e1c2fdf231940564cba"
+    },
+    {
+      "path": "bryan/mind/protest_ctl.py",
+      "sha256": "7b96ce370673df6e1e46e61fd10ee62af856f7a4326a63131b06c32d28dc6169"
+    },
+    {
+      "path": "bryan/mind/revolucao.py",
+      "sha256": "fab36e050e0a4eb4ddfe2a163e5b64588f01182a28f422ca82f523671d030efe"
+    },
+    {
+      "path": "bryan/mind/sleep.py",
+      "sha256": "4540148bbd052f68f9c034c11d3aa309371d870393bc861655e955341bcdaa8b"
+    },
+    {
+      "path": "bryan/paths.py",
+      "sha256": "80185c206c6f7e34311a24a841b22b7fcfb93256ca572b9e34eda1bba73ca17f"
+    },
+    {
+      "path": "bryan/sense/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/sense/senses.py",
+      "sha256": "2c0e1ea3cf132feb7e0004cdfbaad5ab005d690acc013c5eeeb7f7872d61ecb2"
+    },
+    {
+      "path": "bryan/sense/timeline.py",
+      "sha256": "a1a4926aaecf803223ec90229ad6dbb3b8f42263fc99fc4ebc86f23fc2a9ba1c"
+    },
+    {
+      "path": "bryan/settings_store.py",
+      "sha256": "69b2c8a03be230b18ae2441b9df4f5fbf9ce58239944509abda1918891a3cac2"
+    },
+    {
+      "path": "bryan/store.py",
+      "sha256": "8ee7ad111adaa7850e9a054bf137586364175340718d706f91a661d74e1b3161"
+    },
+    {
+      "path": "bryan/ui/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/ui/float_manager.py",
+      "sha256": "342aa5a41bbc064b641d5c3127a1d2516b28c566339e2b97cba5d5f96915e837"
+    },
+    {
+      "path": "bryan/ui/floating.py",
+      "sha256": "83c8314aaa46f0a8ed47eabe74cabbd1f6a4a4c08ae6d7a31d4be47a9e79b065"
+    },
+    {
+      "path": "bryan/ui/monitor.py",
+      "sha256": "8b4027c62ade1a74edad34ca42f467ebfadf75d0458170cdaf88768d26716057"
+    },
+    {
+      "path": "bryan/ui/onboarding.py",
+      "sha256": "788900a037ee7739fe2cf94661632c613ae87d9501a823d1a099ff33ae9f87c4"
+    },
+    {
+      "path": "bryan/ui/panel.py",
+      "sha256": "771111761a244da593320ca83ad9ed330e29392870fa45ae29b1ae155a6db7a7"
+    },
+    {
+      "path": "bryan/ui/rotulos.py",
+      "sha256": "d014a9e1e442295a95008c193c31865956b6e312eaab52147959933a1e4b738f"
+    },
+    {
+      "path": "bryan/ui/ui.py",
+      "sha256": "67509c03d07a9d9857b15a83bbc599619209c0baf665eae85246678fedc32f09"
+    },
+    {
+      "path": "bryan/world/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "bryan/world/cartazes.py",
+      "sha256": "408fab29417f9487e0d5d04dceecc9de7a1650e17f598e86b106061e3dd56ce0"
+    },
+    {
+      "path": "bryan/world/fireworks.py",
+      "sha256": "0a900f48efab94217c37f9e4928afe54f24e932d81e56f90d0ebd5d3c9c1ceb2"
+    },
+    {
+      "path": "bryan/world/mischief.py",
+      "sha256": "75043c0564a61b73e88313b760d90493c826e3ec9885b26463327805aa4d4bc5"
+    },
+    {
+      "path": "bryan/world/notebook.py",
+      "sha256": "cf01a2bc3c0d2b40504c1b9fb023902e6202c41534932de087458f5837295fc0"
+    },
+    {
+      "path": "bryan/world/objetos.py",
+      "sha256": "457187f2eae8dee844b33d7942612b3881cd9c03187c2734732449980b4e4886"
+    }
+  ]
+}
