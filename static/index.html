@@ -7,8 +7,8 @@
   <meta name="theme-color" content="#000000">
   <meta name="description" content="ADA-M — assistente pessoal para programação, Linux, Termux e arquivos.">
   <link rel="manifest" href="/static/manifest.webmanifest">
-  <link rel="icon" href="/static/ada-m-icon.svg?v=3" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/static/ada-m-icon.svg?v=3">
+  <link rel="icon" href="/static/ada-m-icon.svg?v=4" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/ada-m-icon.svg?v=4">
   <title>ADA-M</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -463,6 +463,8 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     #github-proposal-status a{color:var(--accent);}
     @media(max-width:520px){.github-dialog{width:calc(100vw - 16px);}.github-body{padding:12px;}.github-actions .tool-btn{min-width:100%;}}
 
+      .brand-logo{display:block;width:43px;height:43px;flex:0 0 43px;object-fit:contain;border-radius:13px;}
+    @media(max-width:520px){.brand-logo{width:39px;height:39px;flex-basis:39px;}}
   </style>
 </head>
 <body class="supreme-mode">
@@ -478,9 +480,7 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
   <main class="app">
     <header class="app-header app-header-v2">
       <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Abrir histórico de conversas" title="Histórico de conversas">☰</button>
-      <div class="brand-monogram" aria-hidden="true">
-        <span class="monogram-plus" aria-hidden="true">+</span>
-      </div>
+      <img class="brand-logo" src="/static/ada-m-icon.svg?v=4" alt="Ícone ADA-M" width="43" height="43">
       <div class="brand-copy-v2">
         <div class="brand-overline">INTELIGÊNCIA PESSOAL</div>
         <h1>ADA<span class="brand-dash">—</span>M</h1>
