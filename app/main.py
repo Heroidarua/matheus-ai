@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from pypdf import PdfReader
 from livekit import api as livekit_api
 
+from app.text_encoding import decode_text_bytes
 from app.research_engine import build_search_query, classify_research_topic, is_relevant_result, rank_results
 from app.google_search import google_grounded_search
 from app.google_workspace import router as google_workspace_router
@@ -1081,9 +1082,9 @@ def extract_document_text(name: str, mime_type: str, raw: bytes) -> str:
         except Exception:
             raise HTTPException(status_code=400, detail=f"Não foi possível ler a planilha {name}.")
     try:
-        text = raw.decode("utf-8-sig")
+        text = decode_text_bytes(raw)
     except UnicodeDecodeError:
-        raise HTTPException(status_code=415, detail=f"O arquivo {name} não é texto UTF-8, PDF, DOCX ou XLSX suportado.")
+        raise HTTPException(status_code=415, detail=f"O arquivo {name} não contém texto legível ou não está em um formato suportado.")
     if suffix == ".json":
         try:
             text = json.dumps(json.loads(text), ensure_ascii=False, indent=2)
