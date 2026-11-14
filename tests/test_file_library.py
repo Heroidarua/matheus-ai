@@ -40,3 +40,17 @@ def test_unknown_extension_is_rejected_without_database_access():
 def test_search_gracefully_skips_when_database_is_not_configured(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert search_library("consulta de documentos") == []
+
+
+
+def test_extract_windows_1252_text_with_accents():
+    raw = "Domínios livres para compra: ação, coração, usuário".encode("cp1252")
+    text = extract_text("lista.txt", "text/plain", raw)
+    assert "ação" in text
+    assert "coração" in text
+
+
+def test_extract_utf16_text_with_bom():
+    raw = "Lista de domínios disponíveis".encode("utf-16")
+    text = extract_text("lista.txt", "text/plain", raw)
+    assert "domínios" in text
