@@ -1,9 +1,9 @@
-const CACHE_NAME = 'ada-m-pwa-v10-icon-refresh';
+const CACHE_NAME = 'ada-m-pwa-v11-icon-refresh';
 const APP_SHELL = [
   '/',
   '/static/manifest.webmanifest',
-  '/static/ada-m-icon.svg',
-  '/static/ada-m-icon.png?v=8'
+  '/static/ada-m-icon.svg?v=11',
+  '/static/ada-m-icon.svg?v=11'
 ];
 
 self.addEventListener('install', event => {
