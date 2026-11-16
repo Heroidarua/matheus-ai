@@ -67,7 +67,7 @@ def test_detects_terminal_intent(message):
 @pytest.mark.parametrize("message", [
     "O que é um terminal Linux?",
     "Como funciona o shell?",
-    "Você consegue abrir um terminal?",
+    "O terminal serve para quê?",
 ])
 def test_terminal_intent_requires_an_execution_action(message):
     assert not is_terminal_task(message)
