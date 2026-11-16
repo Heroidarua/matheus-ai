@@ -29,7 +29,7 @@ def test_rejects_unknown_or_malformed_tool_calls(response):
 
 def test_parses_fenced_json():
     tools = {"web_search"}
-    call = parse_tool_call('FENCEjson\n{"tool":"web_search","args":{"query":"ADA-M"}}\nFENCE', tools)
+    call = parse_tool_call(chr(96) * 3 + 'json\n{"tool":"web_search","args":{"query":"ADA-M"}}\n' + chr(96) * 3, tools)
     assert call is not None and call.name == "web_search"
 
 
