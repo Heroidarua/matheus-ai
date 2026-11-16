@@ -2305,7 +2305,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     import json
                     for offset in range(0, len(reply), 180):
                         yield "data: " + json.dumps({"token": reply[offset:offset + 180]}, ensure_ascii=False) + "\n\n"
-                    yield "event: done\ndata: " + json.dumps({"model": str(data.get("model", active_model_name)), "sources": sources}, ensure_ascii=False) + "\\n\\n"
+                    yield "event: done\ndata: " + json.dumps({"model": str(data.get("model", active_model_name)), "sources": sources}, ensure_ascii=False) + "\n\n"
                 return StreamingResponse(completed_agent_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
         else:
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
