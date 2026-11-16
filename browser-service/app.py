@@ -147,6 +147,74 @@ def is_readable_content_type(value: str | None) -> bool:
     }
 
 
+async def extract_page_content(page: Page) -> dict[str, Any]:
+    """Extrai conteúdo visível e útil, sem scripts, estilos, navegação ou texto técnico."""
+    return await page.evaluate("""() => {
+        const preferred = document.querySelector("main, [role='main'], article");
+        const root = preferred || document.body;
+        if (!root) return {title: document.title || "", text: "", headings: [], links: []};
+
+        const clone = root.cloneNode(true);
+        const originals = [root, ...root.querySelectorAll("*")];
+        const copies = [clone, ...clone.querySelectorAll("*")];
+
+        clone.querySelectorAll(
+          "script, style, noscript, template, svg, canvas, iframe, object, embed, nav, footer, aside, form, [hidden], [aria-hidden='true']"
+        ).forEach(el => el.remove());
+        if (!preferred) clone.querySelectorAll("header").forEach(el => el.remove());
+
+        for (let i = Math.min(originals.length, copies.length) - 1; i >= 0; i--) {
+          const original = originals[i];
+          const copy = copies[i];
+          if (!copy || !copy.isConnected) continue;
+          const style = window.getComputedStyle(original);
+          if (style.display === "none" || style.visibility === "hidden" ||
+              style.opacity === "0" || original.getAttribute("aria-hidden") === "true") {
+            copy.remove();
+          }
+        }
+
+        const clean = value => (value || "").replace(/\u00a0/g, " ")
+          .replace(/[ \t]+/g, " ").replace(/\s+([,.;:!?])/g, "$1").trim();
+        const raw = clone.innerText || clone.textContent || "";
+        const lines = raw.split(/\n+/).map(clean).filter(Boolean);
+        const uniqueLines = [];
+        const seen = new Set();
+        for (const line of lines) {
+          if (line.length < 2 || line.length > 1200) continue;
+          const key = line.toLocaleLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          uniqueLines.push(line);
+        }
+
+        const headings = [...clone.querySelectorAll("h1, h2, h3")]
+          .map(el => clean(el.innerText || el.textContent))
+          .filter((value, index, list) => value && list.indexOf(value) === index)
+          .slice(0, 40);
+
+        const links = [];
+        const seenLinks = new Set();
+        for (const a of root.querySelectorAll("a[href]")) {
+          const style = window.getComputedStyle(a);
+          if (style.display === "none" || style.visibility === "hidden" ||
+              a.closest("[hidden], [aria-hidden='true'], nav, footer, aside")) continue;
+          const label = clean(a.innerText || a.getAttribute("aria-label") || a.title);
+          const href = a.href || "";
+          if (!label || !/^https?:\/\//i.test(href) || seenLinks.has(href)) continue;
+          seenLinks.add(href);
+          links.push({text: label.slice(0, 180), url: href.slice(0, 2000)});
+          if (links.length >= 30) break;
+        }
+
+        return {
+          title: (document.title || "").slice(0, 300),
+          text: uniqueLines.join("\n").slice(0, 12000),
+          headings,
+          links
+        };
+    }""")
+
 def require_key(value: str | None) -> None:
     if not API_KEY:
         raise HTTPException(status_code=503, detail="ADA_BROWSER_API_KEY não foi configurada.")
@@ -218,17 +286,23 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 if not payload.url or not await is_public_url(payload.url):
                     raise HTTPException(status_code=400, detail="Informe uma URL HTTP(S) pública válida.")
                 response = await page.goto(payload.url, wait_until="domcontentloaded", timeout=ACTION_TIMEOUT_MS)
-                await page.wait_for_timeout(350)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=2500)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(450)
                 content_type = response.headers.get("content-type", "") if response else ""
                 readable = is_readable_content_type(content_type)
-                page_text = (await page.locator("body").inner_text())[:MAX_TEXT_CHARS] if readable else ""
+                extracted = await extract_page_content(page) if readable else {"title": (await page.title())[:300], "text": "", "headings": [], "links": []}
                 result = {
                     "ok": True,
                     "url": page.url,
-                    "title": (await page.title())[:300],
+                    "title": extracted["title"],
                     "status": response.status if response else None,
                     "content_type": content_type.split(";", 1)[0][:120],
-                    "text": page_text,
+                    "text": extracted["text"][:MAX_TEXT_CHARS],
+                    "headings": extracted["headings"],
+                    "links": extracted["links"],
                 }
                 if not readable:
                     result["note"] = "A resposta não é uma página textual legível; nenhum conteúdo binário foi enviado ao agente."
@@ -242,7 +316,8 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 target = page.locator(payload.selector).first if payload.selector else page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").nth(payload.index)
                 await target.click()
                 await page.wait_for_timeout(250)
-                return {"ok": True, "url": page.url, "title": (await page.title())[:300], "text": (await page.locator("body").inner_text())[:MAX_TEXT_CHARS]}
+                extracted = await extract_page_content(page)
+                return {"ok": True, "url": page.url, **extracted}
             if payload.action == "fill":
                 if not payload.selector and payload.index is None:
                     raise HTTPException(status_code=400, detail="A ação fill exige selector ou index.")
@@ -262,8 +337,8 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 await target.press(payload.key)
                 return {"ok": True, "pressed": payload.key}
             if payload.action == "text":
-                text = await page.locator("body").inner_text()
-                return {"ok": True, "url": page.url, "title": (await page.title())[:300], "text": text[:MAX_TEXT_CHARS]}
+                extracted = await extract_page_content(page)
+                return {"ok": True, "url": page.url, **extracted}
             if payload.action == "screenshot":
                 image = await page.screenshot(type="png", full_page=payload.full_page, animations="disabled")
                 if len(image) > 5 * 1024 * 1024:
@@ -292,7 +367,8 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 await page.go_forward(wait_until="domcontentloaded", timeout=ACTION_TIMEOUT_MS)
             elif payload.action == "refresh":
                 await page.reload(wait_until="domcontentloaded", timeout=ACTION_TIMEOUT_MS)
-            return {"ok": True, "url": page.url, "title": (await page.title())[:300], "text": (await page.locator("body").inner_text())[:MAX_TEXT_CHARS]}
+            extracted = await extract_page_content(page)
+            return {"ok": True, "url": page.url, **extracted}
         except HTTPException:
             raise
         except Exception as exc:
