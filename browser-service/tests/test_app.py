@@ -1,7 +1,14 @@
-import asyncio
+import importlib.util
+from pathlib import Path
+
 import pytest
 
-from app import is_public_url
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "app.py"
+SPEC = importlib.util.spec_from_file_location("ada_browser_service_app", MODULE_PATH)
+service = importlib.util.module_from_spec(SPEC)
+assert SPEC and SPEC.loader
+SPEC.loader.exec_module(service)
 
 
 @pytest.mark.asyncio
@@ -11,10 +18,10 @@ from app import is_public_url
     "javascript:alert(1)", "http://router.local/", "http://10.0.0.1:80/",
 ])
 async def test_blocks_private_or_unsupported_urls(url):
-    assert not await is_public_url(url)
+    assert not await service.is_public_url(url)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("url", ["https://example.com", "http://example.org/path"])
 async def test_accepts_public_http_urls(url):
-    assert await is_public_url(url)
+    assert await service.is_public_url(url)
