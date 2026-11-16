@@ -100,6 +100,17 @@ async def cleanup_expired() -> None:
                 pass
 
 
+async def _track_new_page(session: BrowserSession, page: Page) -> None:
+    if page in session.pages:
+        return
+    if len(session.pages) >= MAX_TABS:
+        await page.close()
+        return
+    page.set_default_timeout(ACTION_TIMEOUT_MS)
+    session.pages.append(page)
+    session.active_page = len(session.pages) - 1
+
+
 async def create_session(session_id: str) -> BrowserSession:
     if browser is None:
         raise HTTPException(status_code=503, detail="Navegador ainda não inicializado.")
@@ -117,6 +128,7 @@ async def create_session(session_id: str) -> BrowserSession:
     page = await context.new_page()
     page.set_default_timeout(ACTION_TIMEOUT_MS)
     session = BrowserSession(context=context, pages=[page])
+    context.on("page", lambda new_page: asyncio.create_task(_track_new_page(session, new_page)))
     sessions[session_id] = session
     return session
 
@@ -213,6 +225,8 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "text": text[:MAX_TEXT_CHARS]}
             if payload.action == "screenshot":
                 image = await page.screenshot(type="png", full_page=payload.full_page, animations="disabled")
+                if len(image) > 5 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="Screenshot excede o limite de 5 MB; tente sem full_page.")
                 return {"ok": True, "url": page.url, "image_base64": base64.b64encode(image).decode("ascii"), "mime_type": "image/png"}
             if payload.action == "tabs":
                 return {"ok": True, "active": session.active_page, "tabs": [{"index": i, "url": p.url, "title": (await p.title())[:200]} for i, p in enumerate(session.pages)]}
