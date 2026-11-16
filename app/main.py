@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, is_agent_task, parse_tool_call as parse_agent_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, is_agent_task, is_browser_task, parse_tool_call as parse_agent_tool_call
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -1899,7 +1899,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         system_prompt += (
             "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
         )
-    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message)
+    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message)
     if should_search and not search_unavailable:
         system_prompt += (
             "\n\n" + WEB_TOOLS_SPEC +
