@@ -88,7 +88,7 @@ def is_agent_task(message: str) -> bool:
 
 def is_browser_task(message: str) -> bool:
     """Recognize browser requests even when a URL or context precedes the verb."""
-    text = re.sub(r"\\s+", " ", (message or "").strip().casefold())
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
     browser_terms = r"(?:navegador|chromium|browser)"
@@ -96,6 +96,17 @@ def is_browser_task(message: str) -> bool:
     # Require both an explicit navigation action and an explicit browser reference.
     return bool(re.search(action_terms + r".{0,100}" + browser_terms, text) or
                 re.search(browser_terms + r".{0,100}" + action_terms, text))
+
+
+def normalize_tool_url(value: Any) -> str:
+    """Accept a raw URL or extract the destination from a Markdown link."""
+    if not isinstance(value, str):
+        return ""
+    candidate = value.strip()
+    markdown_link = re.fullmatch(r"\[[^\]]+\]\((https?://[^)\s]+)\)", candidate, re.IGNORECASE)
+    if markdown_link:
+        candidate = markdown_link.group(1)
+    return candidate
 
 
 AGENT_TOOLS_SPEC = """

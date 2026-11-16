@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, is_agent_task, is_browser_task, parse_tool_call as parse_agent_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, is_agent_task, is_browser_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -1634,7 +1634,7 @@ def parse_tool_call(reply: str):
             limit = 10
         return "web_search", {"query": str(args["query"])[:400], "limit": limit}
     if call.name == "web_fetch" and args.get("url"):
-        return "web_fetch", {"url": str(args["url"]).strip()[:2000]}
+        return "web_fetch", {"url": normalize_tool_url(args["url"])[:2000]}
     if call.name == "calculate" and args.get("expression"):
         return "calculate", {"expression": str(args["expression"])[:300]}
     if call.name == "browser" and args.get("action"):
@@ -1645,7 +1645,7 @@ def parse_tool_call(reply: str):
         clean: dict[str, Any] = {"action": action}
         for key, limit in (("url", 2048), ("selector", 1000), ("text", 5000), ("value", 2000), ("key", 40)):
             if args.get(key) is not None:
-                clean[key] = str(args[key])[:limit]
+                clean[key] = (normalize_tool_url(args[key]) if key == "url" else str(args[key]))[:limit]
         if args.get("index") is not None:
             try:
                 clean["index"] = max(0, min(int(args["index"]), 79))
@@ -2051,7 +2051,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if MODEL_BASE_URL.startswith("https://api.groq.com"):
         payload["reasoning_effort"] = "low"
 
-    web_loop_active = bool((should_search or agent_mode_active) and not search_unavailable and not code_generation_needed and not summary_requested)
+    web_loop_active = bool(((should_search and not search_unavailable) or agent_mode_active) and not code_generation_needed and not summary_requested)
     fetched_urls: set[str] = set()
     loop_messages: list[dict[str, Any]] = list(messages)
     loop_status: dict[str, str] = {"status": ""}
