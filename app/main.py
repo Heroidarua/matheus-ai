@@ -1552,6 +1552,16 @@ async def tool_web_fetch(url: str) -> dict:
                                      headers=headers, follow_redirects=True) as client:
             r = await client.get(url)
             r.raise_for_status()
+            content_type = r.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            readable_types = {"text/html", "application/xhtml+xml", "text/plain", "application/json", "application/ld+json"}
+            if not (content_type.startswith("text/") or content_type in readable_types):
+                return {
+                    "ok": False,
+                    "error": "A página respondeu com conteúdo binário ou não textual; o conteúdo bruto foi bloqueado para evitar texto ilegível. Tente abrir pelo navegador Chromium.",
+                    "url": str(r.url)[:2000],
+                    "status_code": r.status_code,
+                    "content_type": content_type or "desconhecido",
+                }
             html = r.text
     except httpx.TimeoutException:
         return {"ok": False, "error": f"Timeout de {int(WEB_FETCH_TIMEOUT)}s ao carregar {url[:200]}"}
