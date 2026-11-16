@@ -1594,7 +1594,17 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
             except (ValueError, AttributeError):
                 detail = "Falha no serviço de navegador"
             return {"ok": False, "error": str(detail)[:500]}
-        return response.json()
+        result = response.json()
+        # A imagem não deve ser despejada no contexto textual do modelo; mantemos o resultado compacto.
+        if action == "screenshot" and isinstance(result, dict) and result.get("image_base64"):
+            result = {
+                "ok": bool(result.get("ok")),
+                "screenshot_captured": True,
+                "mime_type": result.get("mime_type", "image/png"),
+                "size_bytes": len(result["image_base64"]) * 3 // 4,
+                "url": result.get("url", ""),
+            }
+        return result
     except (httpx.HTTPError, ValueError) as exc:
         return {"ok": False, "error": f"Serviço de navegador indisponível ({type(exc).__name__})."}
 
