@@ -43,6 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
+from app.agent_runtime import AGENT_TOOLS_SPEC, is_agent_task, parse_tool_call as parse_agent_tool_call
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -164,7 +165,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
-    mode: str = Field(default="normal", pattern="^(normal|livre|programador|estudo|criativo)$")
+    mode: str = Field(default="normal", pattern="^(normal|livre|programador|estudo|criativo|agente)$")
     response_length: str = Field(default="normal", pattern="^(curta|normal|detalhada)$")
     web_search: bool = False
     stream: bool = False
@@ -1570,29 +1571,21 @@ async def tool_web_fetch(url: str) -> dict:
 _TOOL_CALL_RE = re.compile(r'\{[^{}]*"tool"\s*:\s*"(?:web_search|web_fetch)"[^{}]*\}', re.DOTALL)
 
 def parse_tool_call(reply: str):
-    """Extrai um chamado de ferramenta do texto do modelo (JSON em bloco opcional)."""
-    candidates = []
-    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", reply or "", re.DOTALL)
-    if m:
-        candidates.append(m.group(1))
-    candidates += _TOOL_CALL_RE.findall(reply or "")
-    for cand in candidates:
+    """Extrai e valida uma chamada JSON de ferramenta permitida."""
+    call = parse_agent_tool_call(reply or "", {"web_search", "web_fetch", "calculate"})
+    if call is None:
+        return None
+    args = call.arguments
+    if call.name == "web_search" and args.get("query"):
         try:
-            obj = json.loads(cand)
+            limit = max(1, min(int(args.get("limit", 10)), 20))
         except (ValueError, TypeError):
-            continue
-        name = obj.get("tool")
-        args = obj.get("args") or {}
-        if not isinstance(args, dict):
-            continue
-        if name == "web_search" and args.get("query"):
-            try:
-                lim = int(args.get("limit", 10))
-            except (ValueError, TypeError):
-                lim = 10
-            return "web_search", {"query": str(args["query"])[:400], "limit": lim}
-        if name == "web_fetch" and args.get("url"):
-            return "web_fetch", {"url": str(args["url"]).strip()}
+            limit = 10
+        return "web_search", {"query": str(args["query"])[:400], "limit": limit}
+    if call.name == "web_fetch" and args.get("url"):
+        return "web_fetch", {"url": str(args["url"]).strip()[:2000]}
+    if call.name == "calculate" and args.get("expression"):
+        return "calculate", {"expression": str(args["expression"])[:300]}
     return None
 
 def is_programming_request(mode: str, message: str) -> bool:
@@ -1823,6 +1816,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         system_prompt += (
             "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
         )
+    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message)
     if should_search and not search_unavailable:
         system_prompt += (
             "\n\n" + WEB_TOOLS_SPEC +
@@ -1835,6 +1829,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "Não diga que pesquisou na web, não invente citações ou fontes. É proibido afirmar que um evento atual não aconteceu só porque não conseguiu consultar a internet. "
             "Diga claramente que não conseguiu verificar o resultado em tempo real e evite concluir quem venceu."
         )
+    if agent_mode_active:
+        system_prompt += "\n\n" + AGENT_TOOLS_SPEC
     if sources:
         grounding_summary = next((source.get("summary", "") for source in sources if source.get("summary")), "")
         web_context = "\n\n".join(
@@ -1955,7 +1951,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if MODEL_BASE_URL.startswith("https://api.groq.com"):
         payload["reasoning_effort"] = "low"
 
-    web_loop_active = bool(should_search and not search_unavailable and not code_generation_needed and not summary_requested)
+    web_loop_active = bool((should_search or agent_mode_active) and not search_unavailable and not code_generation_needed and not summary_requested)
     fetched_urls: set[str] = set()
     loop_messages: list[dict[str, Any]] = list(messages)
     loop_status: dict[str, str] = {"status": ""}
@@ -2183,6 +2179,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 for item in result.get("results", []):
                     if item["url"] not in {s.get("url") for s in sources}:
                         sources.append(item)
+            elif name == "calculate":
+                loop_status["status"] = "Calculando…"
+                result = {"ok": True, "result": calcular_seguro(args["expression"])}
             else:
                 if len(fetched_urls) >= WEB_MAX_FETCHES:
                     result = {"ok": False, "error": "Limite de 5 páginas lidas nesta pergunta atingido"}
