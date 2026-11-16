@@ -72,6 +72,11 @@ async def is_public_url(value: str) -> bool:
         try:
             addresses = [ipaddress.ip_address(host)]
         except ValueError:
+            # Chromium aceita algumas formas abreviadas/numéricas de IPv4 que
+            # ipaddress não interpreta como endereço literal; não permita que
+            # esses valores sejam tratados como nomes DNS públicos.
+            if re.fullmatch(r"(?:[0-9]+|0x[0-9a-f]+|[0-9.]+)", host):
+                return False
             loop = asyncio.get_running_loop()
             infos = await loop.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
             addresses = [ipaddress.ip_address(info[4][0]) for info in infos]
