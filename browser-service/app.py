@@ -55,6 +55,7 @@ class BrowserAction(BaseModel):
     value: str | None = Field(default=None, max_length=2000)
     key: str | None = Field(default=None, max_length=40)
     tab: int | None = Field(default=None, ge=0, le=7)
+    index: int | None = Field(default=None, ge=0, le=79)
     full_page: bool = False
 
 
@@ -177,7 +178,7 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
     require_key(x_ada_browser_key)
     if not SESSION_ID_RE.fullmatch(payload.session_id):
         raise HTTPException(status_code=400, detail="Identificador de sessão inválido.")
-    allowed = {"open", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
+    allowed = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
     if payload.action not in allowed:
         raise HTTPException(status_code=400, detail="Ação de navegador não permitida.")
 
@@ -211,16 +212,21 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 response = await page.goto(payload.url, wait_until="domcontentloaded", timeout=ACTION_TIMEOUT_MS)
                 await page.wait_for_timeout(350)
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "status": response.status if response else None, "text": (await page.locator("body").inner_text())[:MAX_TEXT_CHARS]}
+            if payload.action == "inspect":
+                elements = await page.locator("a,button,input,textarea,select,[role=button],[role=link]").evaluate_all("""els => els.slice(0, 80).map((el, index) => ({index, tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || el.getAttribute("aria-label") || "").trim().replace(/\\s+/g, " ").slice(0, 180), role: el.getAttribute("role") || "", aria_label: el.getAttribute("aria-label") || "", href: el.getAttribute("href") || "", type: el.getAttribute("type") || "", name: el.getAttribute("name") || "", placeholder: el.getAttribute("placeholder") || "", visible: !!(el.getClientRects().length)})).filter(el => el.visible)""")
+                return {"ok": True, "url": page.url, "title": (await page.title())[:300], "elements": elements}
             if payload.action == "click":
-                if not payload.selector:
-                    raise HTTPException(status_code=400, detail="A ação click exige selector.")
-                await page.locator(payload.selector).first.click()
+                if not payload.selector and payload.index is None:
+                    raise HTTPException(status_code=400, detail="A ação click exige selector ou index obtido em inspect.")
+                target = page.locator(payload.selector).first if payload.selector else page.locator("a,button,input,textarea,select,[role=button],[role=link]").nth(payload.index)
+                await target.click()
                 await page.wait_for_timeout(250)
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "text": (await page.locator("body").inner_text())[:MAX_TEXT_CHARS]}
             if payload.action == "fill":
-                if not payload.selector:
-                    raise HTTPException(status_code=400, detail="A ação fill exige selector.")
-                await page.locator(payload.selector).first.fill(payload.text or "")
+                if not payload.selector and payload.index is None:
+                    raise HTTPException(status_code=400, detail="A ação fill exige selector ou index.")
+                target = page.locator(payload.selector).first if payload.selector else page.locator("input,textarea,[contenteditable=true]").nth(payload.index)
+                await target.fill(payload.text or "")
                 return {"ok": True, "filled": True, "selector": payload.selector}
             if payload.action == "select":
                 if not payload.selector or payload.value is None:
