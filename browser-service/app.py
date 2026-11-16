@@ -24,10 +24,10 @@ from pydantic import BaseModel, Field
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 API_KEY = os.getenv("ADA_BROWSER_API_KEY", "").strip()
-MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "20")), 100))
-MAX_TABS = max(1, min(int(os.getenv("BROWSER_MAX_TABS", "3")), 8))
+MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "3")), 10))
+MAX_TABS = max(1, min(int(os.getenv("BROWSER_MAX_TABS", "2")), 4))
 SESSION_TTL = max(60, min(int(os.getenv("BROWSER_SESSION_TTL", "1800")), 86400))
-ACTION_TIMEOUT_MS = max(3000, min(int(os.getenv("BROWSER_ACTION_TIMEOUT_MS", "20000")), 45000))
+ACTION_TIMEOUT_MS = max(3000, min(int(os.getenv("BROWSER_ACTION_TIMEOUT_MS", "15000")), 30000))
 MAX_TEXT_CHARS = 12000
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
 
