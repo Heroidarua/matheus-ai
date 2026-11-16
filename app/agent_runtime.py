@@ -126,7 +126,8 @@ Você pode executar ferramentas respondendo APENAS com um objeto JSON válido, s
 {"tool":"web_search","args":{"query":"termo de busca","limit":8}}
 {"tool":"web_fetch","args":{"url":"https://exemplo.com"}}
 {"tool":"browser","args":{"action":"open","url":"https://exemplo.com"}}
-{"tool":"calculate","args":{"expression":"(125 * 4) / 2"}}\n{"tool":"terminal","args":{"command":"pwd && ls -la"}}
+{"tool":"calculate","args":{"expression":"(125 * 4) / 2"}}
+{"tool":"terminal","args":{"command":"pwd && ls -la"}}
 
 Regras:
 - Use web_search para pesquisar resultados e fontes.
