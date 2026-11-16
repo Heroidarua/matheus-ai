@@ -3,6 +3,7 @@ import pytest
 from app.agent_runtime import (
     ToolDefinition,
     is_agent_task,
+    is_browser_task,
     parse_tool_call,
     run_tool_loop,
 )
