@@ -1604,6 +1604,8 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
                 "size_bytes": len(result["image_base64"]) * 3 // 4,
                 "url": result.get("url", ""),
             }
+        if isinstance(result, dict) and isinstance(result.get("text"), str):
+            result["text"] = result["text"][:6000]
         return result
     except (httpx.HTTPError, ValueError) as exc:
         return {"ok": False, "error": f"Serviço de navegador indisponível ({type(exc).__name__})."}
@@ -2032,7 +2034,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     loop_messages: list[dict[str, Any]] = list(messages)
     loop_status: dict[str, str] = {"status": ""}
 
-    if request.stream:
+    if request.stream and not web_loop_active:
         async def stream_reply():
             import json
             nonlocal web_loop_active, loop_status
@@ -2293,10 +2295,18 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             response = None
             data = None
             reply, data = await _run_web_loop()
-            # resposta já obtida pelo loop; pula para o pós-processamento
+            # O loop de ferramentas precisa terminar antes de transmitir a resposta.
+            # Mantemos o protocolo SSE do frontend e não enviamos JSON bruto ao cliente.
             DIAGNOSTICS["successes"] += 1
             DIAGNOSTICS["last_error"] = None
-            print(f"Web loop completed in {time.perf_counter() - started_at:.2f}s")
+            print(f"Web/agent loop completed in {time.perf_counter() - started_at:.2f}s")
+            if request.stream:
+                async def completed_agent_stream():
+                    import json
+                    for offset in range(0, len(reply), 180):
+                        yield "data: " + json.dumps({"token": reply[offset:offset + 180]}, ensure_ascii=False) + "\\n\\n"
+                    yield "event: done\\ndata: " + json.dumps({"model": str(data.get("model", active_model_name)), "sources": sources}, ensure_ascii=False) + "\\n\\n"
+                return StreamingResponse(completed_agent_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
         else:
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 response = None
