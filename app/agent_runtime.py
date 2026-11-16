@@ -37,23 +37,22 @@ def parse_tool_call(
     if not isinstance(response, str) or not response.strip():
         return None
 
-    candidates: list[str] = []
-    stripped = response.strip()
-    if stripped.startswith("{") and stripped.endswith("}"):
-        candidates.append(stripped)
-    fenced = re.search(r"\x60{3}(?:json)?\s*(\{.*?\})\s*\x60{3}", response, re.DOTALL | re.IGNORECASE)
-    if fenced:
-        candidates.append(fenced.group(1))
-    candidates.extend(re.findall(r'\{[^{}]*"tool"\s*:\s*"[^"]+"[^{}]*\}', response, re.DOTALL))
-
-    allowed = set(allowed_tools.keys()) if isinstance(allowed_tools, Mapping) else set(allowed_tools)
-    for candidate in candidates:
+    # A resposta pode incluir <thinking>, Markdown ou texto antes/depois do JSON.
+    # JSONDecoder.raw_decode respeita objetos aninhados; regexes simples truncam
+    # chamadas reais que possuem o objeto args dentro do objeto principal.
+    decoder = json.JSONDecoder()
+    payloads: list[dict[str, Any]] = []
+    for index, char in enumerate(response):
+        if char != "{":
+            continue
         try:
-            payload = json.loads(candidate)
+            payload, _ = decoder.raw_decode(response, index)
         except (TypeError, ValueError):
             continue
-        if not isinstance(payload, dict):
-            continue
+        if isinstance(payload, dict) and "tool" in payload:
+            payloads.append(payload)
+    allowed = set(allowed_tools.keys()) if isinstance(allowed_tools, Mapping) else set(allowed_tools)
+    for payload in payloads:
         name = payload.get("tool")
         arguments = payload.get("args", {})
         if not isinstance(name, str) or len(name) > MAX_TOOL_NAME_LENGTH or name not in allowed:
