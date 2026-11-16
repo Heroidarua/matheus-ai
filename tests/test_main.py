@@ -367,3 +367,10 @@ def test_browser_tool_parser_accepts_inspection_and_indexed_actions(payload, exp
 
 def test_browser_tool_parser_rejects_unknown_actions():
     assert main.parse_tool_call('{"tool":"browser","args":{"action":"delete_all"}}') is None
+
+
+def test_main_parser_accepts_isolated_terminal_tool():
+    call = main.parse_tool_call(
+        '{"tool":"terminal","args":{"command":"pwd && ls -la"}}'
+    )
+    assert call == ("terminal", {"command": "pwd && ls -la"})
