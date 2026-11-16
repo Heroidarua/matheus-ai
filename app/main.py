@@ -1629,7 +1629,7 @@ def parse_tool_call(reply: str):
         return "calculate", {"expression": str(args["expression"])[:300]}
     if call.name == "browser" and args.get("action"):
         action = str(args["action"]).strip().lower()
-        permitted = {"open", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
+        permitted = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
         if action not in permitted:
             return None
         clean: dict[str, Any] = {"action": action}
