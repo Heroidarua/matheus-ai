@@ -1652,7 +1652,7 @@ def parse_tool_call(reply: str):
             return None
         if action in {"click", "fill"} and not clean.get("selector") and clean.get("index") is None:
             return None
-        if action in {"select", "press"} and not clean.get("selector"):
+        if action in {"select", "press"} and not clean.get("selector") and clean.get("index") is None:
             return None
         if action == "select" and "value" not in clean:
             return None
