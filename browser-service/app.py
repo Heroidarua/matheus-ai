@@ -229,14 +229,16 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 await target.fill(payload.text or "")
                 return {"ok": True, "filled": True, "selector": payload.selector}
             if payload.action == "select":
-                if not payload.selector or payload.value is None:
-                    raise HTTPException(status_code=400, detail="A ação select exige selector e value.")
-                selected = await page.locator(payload.selector).first.select_option(value=payload.value)
+                if (not payload.selector and payload.index is None) or payload.value is None:
+                    raise HTTPException(status_code=400, detail="A ação select exige selector ou index e value.")
+                target = page.locator(payload.selector).first if payload.selector else page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").nth(payload.index)
+                selected = await target.select_option(value=payload.value)
                 return {"ok": True, "selected": selected}
             if payload.action == "press":
-                if not payload.selector or not payload.key:
-                    raise HTTPException(status_code=400, detail="A ação press exige selector e key.")
-                await page.locator(payload.selector).first.press(payload.key)
+                if (not payload.selector and payload.index is None) or not payload.key:
+                    raise HTTPException(status_code=400, detail="A ação press exige selector ou index e key.")
+                target = page.locator(payload.selector).first if payload.selector else page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").nth(payload.index)
+                await target.press(payload.key)
                 return {"ok": True, "pressed": payload.key}
             if payload.action == "text":
                 text = await page.locator("body").inner_text()
