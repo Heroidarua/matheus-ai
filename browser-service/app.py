@@ -213,19 +213,19 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 await page.wait_for_timeout(350)
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "status": response.status if response else None, "text": (await page.locator("body").inner_text())[:MAX_TEXT_CHARS]}
             if payload.action == "inspect":
-                elements = await page.locator("a,button,input,textarea,select,[role=button],[role=link]").evaluate_all("""els => els.filter(el => el.getClientRects().length).slice(0, 80).map((el, index) => ({index, tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || el.getAttribute("aria-label") || "").trim().replace(/\\s+/g, " ").slice(0, 180), role: el.getAttribute("role") || "", aria_label: el.getAttribute("aria-label") || "", href: el.getAttribute("href") || "", type: el.getAttribute("type") || "", name: el.getAttribute("name") || "", placeholder: el.getAttribute("placeholder") || ""}))""")
+                elements = await page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").evaluate_all("""els => els.filter(el => el.getClientRects().length).slice(0, 80).map((el, index) => ({index, tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || el.getAttribute("aria-label") || "").trim().replace(/\\s+/g, " ").slice(0, 180), role: el.getAttribute("role") || "", aria_label: el.getAttribute("aria-label") || "", href: el.getAttribute("href") || "", type: el.getAttribute("type") || "", name: el.getAttribute("name") || "", placeholder: el.getAttribute("placeholder") || ""}))""")
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "elements": elements}
             if payload.action == "click":
                 if not payload.selector and payload.index is None:
                     raise HTTPException(status_code=400, detail="A ação click exige selector ou index obtido em inspect.")
-                target = page.locator(payload.selector).first if payload.selector else page.locator("a,button,input,textarea,select,[role=button],[role=link]").nth(payload.index)
+                target = page.locator(payload.selector).first if payload.selector else page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").nth(payload.index)
                 await target.click()
                 await page.wait_for_timeout(250)
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "text": (await page.locator("body").inner_text())[:MAX_TEXT_CHARS]}
             if payload.action == "fill":
                 if not payload.selector and payload.index is None:
                     raise HTTPException(status_code=400, detail="A ação fill exige selector ou index.")
-                target = page.locator(payload.selector).first if payload.selector else page.locator("a,button,input,textarea,select,[role=button],[role=link]").nth(payload.index)
+                target = page.locator(payload.selector).first if payload.selector else page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").nth(payload.index)
                 await target.fill(payload.text or "")
                 return {"ok": True, "filled": True, "selector": payload.selector}
             if payload.action == "select":
