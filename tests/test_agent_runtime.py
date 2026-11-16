@@ -120,3 +120,19 @@ def test_normalize_tool_url_accepts_raw_and_markdown_links(value, expected):
 
 def test_normalize_tool_url_rejects_non_string_values():
     assert normalize_tool_url(None) == ""
+
+@pytest.mark.parametrize("response", [
+    '<thinking>Vou abrir o site.</thinking>\n{"tool":"browser","args":{"action":"open","url":"https://sos01.com.br"}}',
+    '```json\n{"tool":"browser","args":{"action":"open","url":"https://sos01.com.br"}}\n```',
+    'A chamada é: {"tool":"browser","args":{"action":"open","url":"https://sos01.com.br"}}',
+])
+def test_parse_nested_browser_tool_json_with_wrappers(response):
+    call = parse_tool_call(response, {"browser"})
+    assert call is not None
+    assert call.name == "browser"
+    assert call.arguments == {"action": "open", "url": "https://sos01.com.br"}
+
+
+def test_parse_tool_call_ignores_thinking_json_without_tool_call():
+    response = '<thinking>{"analysis":"not a tool"}</thinking> Resposta normal.'
+    assert parse_tool_call(response, {"browser"}) is None
