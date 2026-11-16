@@ -38,7 +38,7 @@ def parse_tool_call(
         return None
 
     candidates: list[str] = []
-    fenced = re.search(r"\`\`\`(?:json)?\s*(\{.*?\})\s*\`\`\`", response, re.DOTALL | re.IGNORECASE)
+    fenced = re.search(r"\x60{3}(?:json)?\s*(\{.*?\})\s*\x60{3}", response, re.DOTALL | re.IGNORECASE)
     if fenced:
         candidates.append(fenced.group(1))
     candidates.extend(re.findall(r'\{[^{}]*"tool"\s*:\s*"[^"]+"[^{}]*\}', response, re.DOTALL))
