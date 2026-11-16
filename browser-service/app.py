@@ -139,6 +139,14 @@ async def create_session(session_id: str) -> BrowserSession:
     return session
 
 
+def is_readable_content_type(value: str | None) -> bool:
+    """Only expose human-readable page bodies to the agent; never leak binary bytes."""
+    content_type = (value or "").split(";", 1)[0].strip().lower()
+    return content_type.startswith("text/") or content_type in {
+        "application/xhtml+xml", "application/json", "application/ld+json"
+    }
+
+
 def require_key(value: str | None) -> None:
     if not API_KEY:
         raise HTTPException(status_code=503, detail="ADA_BROWSER_API_KEY não foi configurada.")
@@ -211,7 +219,20 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                     raise HTTPException(status_code=400, detail="Informe uma URL HTTP(S) pública válida.")
                 response = await page.goto(payload.url, wait_until="domcontentloaded", timeout=ACTION_TIMEOUT_MS)
                 await page.wait_for_timeout(350)
-                return {"ok": True, "url": page.url, "title": (await page.title())[:300], "status": response.status if response else None, "text": (await page.locator("body").inner_text())[:MAX_TEXT_CHARS]}
+                content_type = response.headers.get("content-type", "") if response else ""
+                readable = is_readable_content_type(content_type)
+                page_text = (await page.locator("body").inner_text())[:MAX_TEXT_CHARS] if readable else ""
+                result = {
+                    "ok": True,
+                    "url": page.url,
+                    "title": (await page.title())[:300],
+                    "status": response.status if response else None,
+                    "content_type": content_type.split(";", 1)[0][:120],
+                    "text": page_text,
+                }
+                if not readable:
+                    result["note"] = "A resposta não é uma página textual legível; nenhum conteúdo binário foi enviado ao agente."
+                return result
             if payload.action == "inspect":
                 elements = await page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").evaluate_all("""els => els.filter(el => el.getClientRects().length).slice(0, 80).map((el, index) => ({index, tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || el.getAttribute("aria-label") || "").trim().replace(/\\s+/g, " ").slice(0, 180), role: el.getAttribute("role") || "", aria_label: el.getAttribute("aria-label") || "", href: el.getAttribute("href") || "", type: el.getAttribute("type") || "", name: el.getAttribute("name") || "", placeholder: el.getAttribute("placeholder") || ""}))""")
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "elements": elements}

@@ -27,3 +27,24 @@ async def test_blocks_private_or_unsupported_urls(url):
 @pytest.mark.parametrize("url", ["https://example.com", "http://example.org/path"])
 async def test_accepts_public_http_urls(url):
     assert await service.is_public_url(url)
+
+
+@pytest.mark.parametrize("content_type", [
+    "text/html; charset=utf-8",
+    "text/plain",
+    "application/json",
+    "application/xhtml+xml",
+])
+def test_accepts_readable_content_types(content_type):
+    assert service.is_readable_content_type(content_type)
+
+
+@pytest.mark.parametrize("content_type", [
+    "application/octet-stream",
+    "application/pdf",
+    "image/png",
+    "application/zip",
+    "",
+])
+def test_rejects_binary_or_unknown_content_types(content_type):
+    assert not service.is_readable_content_type(content_type)
