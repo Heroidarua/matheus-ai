@@ -1577,7 +1577,7 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
     """Executa uma ação limitada no serviço Chromium isolado."""
     if not BROWSER_SERVICE_ENABLED:
         return {"ok": False, "error": "Navegador não configurado. Configure BROWSER_SERVICE_URL e BROWSER_SERVICE_API_KEY na API ADA-M."}
-    allowed_actions = {"open", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
+    allowed_actions = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
     if action not in allowed_actions:
         return {"ok": False, "error": "Ação de navegador não permitida."}
     payload = {"session_id": session_id, "action": action, **arguments}
@@ -1636,6 +1636,11 @@ def parse_tool_call(reply: str):
         for key, limit in (("url", 2048), ("selector", 1000), ("text", 5000), ("value", 2000), ("key", 40)):
             if args.get(key) is not None:
                 clean[key] = str(args[key])[:limit]
+        if args.get("index") is not None:
+            try:
+                clean["index"] = max(0, min(int(args["index"]), 79))
+            except (ValueError, TypeError):
+                return None
         if args.get("tab") is not None:
             try:
                 clean["tab"] = max(0, min(int(args["tab"]), 7))
@@ -1645,7 +1650,9 @@ def parse_tool_call(reply: str):
             clean["full_page"] = bool(args["full_page"])
         if action == "open" and not clean.get("url"):
             return None
-        if action in {"click", "fill", "select", "press"} and not clean.get("selector"):
+        if action in {"click", "fill"} and not clean.get("selector") and clean.get("index") is None:
+            return None
+        if action in {"select", "press"} and not clean.get("selector"):
             return None
         if action == "select" and "value" not in clean:
             return None
@@ -1900,7 +1907,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         if BROWSER_SERVICE_ENABLED:
             system_prompt += (
                 "\n\nNAVEGADOR CHROMIUM DISPONÍVEL: use a ferramenta browser para abrir páginas, "
-                "clicar em elementos, preencher campos, selecionar opções, pressionar teclas, ler texto, "
+                "inspecionar links/botões/campos e clicar pelo índice retornado, preencher campos, selecionar opções, pressionar teclas, ler texto, "
                 "tirar screenshots, gerenciar abas e navegar para trás/à frente. "
                 "Formato: {\"tool\":\"browser\",\"args\":{\"action\":\"open\",\"url\":\"https://example.com\"}}. "
                 "Uma ação por rodada; examine o resultado antes de agir novamente. "
