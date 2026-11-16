@@ -351,3 +351,19 @@ def test_long_term_memory_retrieval_is_contextual(monkeypatch):
     assert any("ADA-M" in item for item in related)
     assert not any("Prefiro respostas" in item for item in related)
     assert long_term_memory.forget_all("test-owner") == 2
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ('{"tool":"browser","args":{"action":"inspect"}}', ("browser", {"action": "inspect"})),
+        ('{"tool":"browser","args":{"action":"click","index":2}}', ("browser", {"action": "click", "index": 2})),
+        ('{"tool":"browser","args":{"action":"fill","index":3,"text":"hello"}}', ("browser", {"action": "fill", "index": 3, "text": "hello"})),
+    ],
+)
+def test_browser_tool_parser_accepts_inspection_and_indexed_actions(payload, expected):
+    assert main.parse_tool_call(payload) == expected
+
+
+def test_browser_tool_parser_rejects_unknown_actions():
+    assert main.parse_tool_call('{"tool":"browser","args":{"action":"delete_all"}}') is None
