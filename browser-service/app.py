@@ -177,6 +177,13 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
         raise HTTPException(status_code=400, detail="Ação de navegador não permitida.")
 
     session = sessions.get(payload.session_id)
+    if session and time.monotonic() - session.last_used > SESSION_TTL:
+        try:
+            await session.context.close()
+        except Exception:
+            pass
+        sessions.pop(payload.session_id, None)
+        session = None
     if payload.action == "close":
         if session:
             await session.context.close()
