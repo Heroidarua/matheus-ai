@@ -1602,8 +1602,15 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
             try:
                 detail = response.json().get("detail", "Falha no serviço de navegador")
             except (ValueError, AttributeError):
-                detail = "Falha no serviço de navegador"
-            return {"ok": False, "error": str(detail)[:500]}
+                detail = response.text[:300] or "Resposta sem detalhe"
+            print(
+                f"[browser] service_http_error status={response.status_code} "
+                f"url={BROWSER_SERVICE_URL}/v1/action detail={str(detail)[:300]}"
+            )
+            return {
+                "ok": False,
+                "error": f"Serviço de navegador HTTP {response.status_code}: {str(detail)[:400]}",
+            }
         result = response.json()
         # A imagem não deve ser despejada no contexto textual do modelo; mantemos o resultado compacto.
         if action == "screenshot" and isinstance(result, dict) and result.get("image_base64"):
@@ -1617,8 +1624,15 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
         if isinstance(result, dict) and isinstance(result.get("text"), str):
             result["text"] = result["text"][:6000]
         return result
-    except (httpx.HTTPError, ValueError) as exc:
-        return {"ok": False, "error": f"Serviço de navegador indisponível ({type(exc).__name__})."}
+    except httpx.TimeoutException as exc:
+        print(f"[browser] service_timeout type={type(exc).__name__} url={BROWSER_SERVICE_URL}/v1/action")
+        return {"ok": False, "error": "Tempo esgotado aguardando o serviço Chromium."}
+    except httpx.HTTPError as exc:
+        print(f"[browser] service_connection_error type={type(exc).__name__} detail={str(exc)[:300]} url={BROWSER_SERVICE_URL}/v1/action")
+        return {"ok": False, "error": f"Falha de conexão com serviço Chromium ({type(exc).__name__})."}
+    except ValueError as exc:
+        print(f"[browser] service_invalid_response type={type(exc).__name__} detail={str(exc)[:300]}")
+        return {"ok": False, "error": "O serviço Chromium retornou uma resposta inválida."}
 
 
 def parse_tool_call(reply: str):
