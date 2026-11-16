@@ -43,7 +43,8 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, is_agent_task, is_browser_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call
+from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -1637,7 +1638,7 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
 
 def parse_tool_call(reply: str):
     """Extrai e valida uma chamada JSON de ferramenta permitida."""
-    call = parse_agent_tool_call(reply or "", {"web_search", "web_fetch", "calculate", "browser"})
+    call = parse_agent_tool_call(reply or "", {"web_search", "web_fetch", "calculate", "browser", "terminal"})
     if call is None:
         return None
     args = call.arguments
@@ -1651,6 +1652,11 @@ def parse_tool_call(reply: str):
         return "web_fetch", {"url": normalize_tool_url(args["url"])[:2000]}
     if call.name == "calculate" and args.get("expression"):
         return "calculate", {"expression": str(args["expression"])[:300]}
+    if call.name == "terminal" and args.get("command") is not None:
+        command = args.get("command")
+        if not isinstance(command, str) or not command.strip() or len(command) > 4000:
+            return None
+        return "terminal", {"command": command.strip()}
     if call.name == "browser" and args.get("action"):
         action = str(args["action"]).strip().lower()
         permitted = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
@@ -1913,7 +1919,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         system_prompt += (
             "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
         )
-    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message)
+    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message)
     if should_search and not search_unavailable:
         system_prompt += (
             "\n\n" + WEB_TOOLS_SPEC +
@@ -1945,6 +1951,23 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             )
         else:
             system_prompt += "\n\nO navegador visual ainda não está conectado: não alegue que clicou ou navegou em páginas."
+        if is_terminal_configured():
+            system_prompt += (
+                "\n\nTERMINAL LINUX ISOLADO DISPONÍVEL: use a ferramenta terminal para executar comandos Linux, "
+                "Python, Node.js, Git, compilar, testar, instalar pacotes e criar/editar arquivos no workspace persistente "
+                "desta sessão. Envie um comando por chamada em JSON: "
+                '{"tool":"terminal","args":{"command":"pwd && ls -la"}}. '
+                "O workspace é /home/render/ada-workspace. Cada comando começa em um novo shell; use "
+                "'cd pasta && comando' para mudar de diretório. O ambiente é uma microVM isolada e não recebe "
+                "as chaves da ADA-M. A rede é limitada a repositórios e registries comuns. "
+                "Não tente acessar dados do host nem segredos. Peça autorização antes de exclusões, comandos destrutivos, "
+                "push/publicação ou ações externas irreversíveis."
+            )
+        else:
+            system_prompt += (
+                "\n\nTERMINAL LINUX: ainda não configurado. Não chame a ferramenta terminal nem simule comandos. "
+                "Explique que o Render precisa das variáveis RENDER_API_KEY e RENDER_WORKSPACE_ID."
+            )
     if sources:
         grounding_summary = next((source.get("summary", "") for source in sources if source.get("summary")), "")
         web_context = "\n\n".join(
@@ -2299,6 +2322,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             elif name == "browser":
                 loop_status["status"] = "Navegando…"
                 result = await tool_browser_action(session_id, **args)
+            elif name == "terminal":
+                loop_status["status"] = "Executando no terminal isolado…"
+                result = await run_terminal_command(http_request.session, args["command"])
             else:
                 if len(fetched_urls) >= WEB_MAX_FETCHES:
                     result = {"ok": False, "error": "Limite de 5 páginas lidas nesta pergunta atingido"}

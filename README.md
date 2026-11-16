@@ -244,3 +244,24 @@ A integração não altera o modelo principal de conversa, a leitura em voz alta
 ## Personalidade e estado afetivo simulado
 
 A camada `app/companion.py` adiciona identidade conversacional consistente e sinais afetivos contextuais (alegria, serenidade, curiosidade, empatia, confiança, frustração e surpresa). O estado é isolado por sessão e pode ser persistido no PostgreSQL já configurado em `DATABASE_URL`. A camada não altera os pesos do modelo e não afirma consciência ou sentimentos subjetivos. Sem PostgreSQL, o fallback é temporário em memória. O endpoint `GET /api/companion/state` informa os valores da sessão sem expor mensagens. Consulte [docs/personalidade-e-emocoes.md](docs/personalidade-e-emocoes.md) para detalhes e limitações.
+
+## Terminal Linux isolado para o modo agente
+
+O modo agente pode executar comandos Linux, Python, Node.js, Git, testes e instalação de dependências em **Render Sandboxes**, microVMs efêmeras separadas do processo principal. O terminal mantém um workspace por sessão ADA-M e suspende automaticamente após 15 minutos sem uso; a sessão tem limite de runtime de uma hora. A rede de saída é limitada a repositórios e registries comuns. Nenhuma chave da aplicação é injetada na sandbox.
+
+### Ativação
+
+1. No Render, abra **Account Settings → API Keys** e crie uma API key.
+2. Na página **Settings** do workspace, copie o ID do workspace.
+3. No serviço principal da ADA-M, adicione as variáveis privadas:
+   - `RENDER_API_KEY`: API key do Render.
+   - `RENDER_WORKSPACE_ID`: ID do workspace Render.
+4. Aguarde o deploy. O terminal permanece desativado até as duas variáveis estarem configuradas.
+
+A integração usa o SDK oficial Python `render>=1.8.0` e o plano de sandbox `1c-2g` (1 CPU e 2 GB RAM). Render Sandboxes está em beta pública e o uso pode gerar cobrança conforme o plano/consumo da conta; confira os limites e preços atuais no painel do Render. As sandboxes são executadas em Oregon.
+
+### Como usar
+
+Peça no chat, por exemplo: “Use o terminal para criar um projeto Python, instalar as dependências e executar os testes”. A ADA-M poderá executar várias chamadas sequenciais no mesmo workspace. Cada comando abre um novo shell; use `cd pasta && comando` para mudar de diretório. O workspace fica em `/home/render/ada-workspace`.
+
+**Segurança:** os comandos são executados fora do servidor principal, em microVM própria, com limite de 45 segundos por comando, saída limitada e egress HTTPS allow-list. Não são compartilhadas variáveis secretas nem arquivos privados da ADA-M com o ambiente de execução. Operações destrutivas ou externas ainda exigem autorização explícita. Para detalhes, consulte a [documentação oficial do Render Sandboxes](https://render.com/docs/sandboxes).

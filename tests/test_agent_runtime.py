@@ -4,6 +4,7 @@ from app.agent_runtime import (
     ToolDefinition,
     is_agent_task,
     is_browser_task,
+    is_terminal_task,
     normalize_tool_url,
     parse_tool_call,
     run_tool_loop,
@@ -52,6 +53,32 @@ def test_detects_explicit_action_requests(message):
 ])
 def test_does_not_treat_questions_as_execution_jobs(message):
     assert not is_agent_task(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Use o terminal para executar pwd",
+    "Abra o shell e rode python --version",
+    "Instale as dependências pelo terminal",
+])
+def test_detects_terminal_intent(message):
+    assert is_terminal_task(message)
+
+
+@pytest.mark.parametrize("message", [
+    "O que é um terminal Linux?",
+    "Como funciona o shell?",
+    "O terminal serve para quê?",
+])
+def test_terminal_intent_requires_an_execution_action(message):
+    assert not is_terminal_task(message)
+
+
+def test_terminal_tool_call_is_accepted_by_allowlist():
+    tools = {"terminal": ToolDefinition("terminal", "isolated shell", ("command",), lambda **kw: kw)}
+    call = parse_tool_call('{"tool":"terminal","args":{"command":"pwd && ls -la"}}', tools)
+    assert call is not None
+    assert call.name == "terminal"
+    assert call.arguments == {"command": "pwd && ls -la"}
 
 
 @pytest.mark.asyncio
