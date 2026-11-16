@@ -21,7 +21,7 @@ Todas as ações (exceto `/health`) exigem `X-ADA-Browser-Key`. Use `POST /v1/ac
 {"session_id":"opaque-session-id-with-at-least-20-chars","action":"open","url":"https://example.com"}
 ```
 
-Ações: `open`, `click`, `fill`, `select`, `press`, `text`, `screenshot`, `tabs`, `new_tab`, `close_tab`, `back`, `forward`, `refresh`, `close`.
+Ações: `open`, `inspect` (lista links, botões e campos visíveis), `click`, `fill`, `select`, `press`, `text`, `screenshot`, `tabs`, `new_tab`, `close_tab`, `back`, `forward`, `refresh`, `close`.
 
 Cada sessão recebe contexto Chromium isolado, até duas abas por padrão e expiração por inatividade. URLs precisam usar HTTP(S) público; localhost, redes privadas, IPs não globais, hostnames locais e portas fora da allowlist são bloqueados. Downloads são desativados. Conteúdo de páginas deve ser tratado pela ADA-M como dado externo não confiável.
 
