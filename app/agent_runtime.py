@@ -103,7 +103,7 @@ def normalize_tool_url(value: Any) -> str:
     if not isinstance(value, str):
         return ""
     candidate = value.strip()
-    markdown_link = re.fullmatch(r"\\[[^\\]]+\\]\\((https?://[^)\\s]+)\\)", candidate, re.IGNORECASE)
+    markdown_link = re.fullmatch(r"\[[^\]]+\]\((https?://[^)\s]+)\)", candidate, re.IGNORECASE)
     if markdown_link:
         candidate = markdown_link.group(1)
     return candidate
