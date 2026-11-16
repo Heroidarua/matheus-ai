@@ -73,3 +73,15 @@ async def test_run_tool_loop_executes_only_registered_tools():
     result = await run_tool_loop([{"role": "user", "content": "calcule"}], model, tools)
     assert result == "O resultado é 4."
     assert calls == 2
+
+
+def test_browser_tool_call_is_accepted_by_allowlist():
+    tools = {"browser": ToolDefinition("browser", "isolated browser", ("action",), lambda **kw: kw)}
+    call = parse_tool_call('{"tool":"browser","args":{"action":"open","url":"https://example.com"}}', tools)
+    assert call is not None
+    assert call.name == "browser"
+    assert call.arguments["action"] == "open"
+
+
+def test_browser_tool_call_still_requires_registered_tool():
+    assert parse_tool_call('{"tool":"browser","args":{"action":"open"}}', {"calculate"}) is None
