@@ -86,6 +86,18 @@ def is_agent_task(message: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
 
 
+def is_browser_task(message: str) -> bool:
+    """Recognize browser requests even when a URL or context precedes the verb."""
+    text = re.sub(r"\\s+", " ", (message or "").strip().casefold())
+    if not text:
+        return False
+    browser_terms = r"(?:navegador|chromium|browser)"
+    action_terms = r"(?:acesse|acessar|abra|abrir|entre|entrar|visite|visitar|navegue|navegar|inspecione|inspecionar|analise|analisar|verifique|verificar)"
+    # Require both an explicit navigation action and an explicit browser reference.
+    return bool(re.search(action_terms + r".{0,100}" + browser_terms, text) or
+                re.search(browser_terms + r".{0,100}" + action_terms, text))
+
+
 AGENT_TOOLS_SPEC = """
 MODO AGENTE — FERRAMENTAS DISPONÍVEIS
 Você pode executar ferramentas respondendo APENAS com um objeto JSON válido, sem texto antes/depois:
@@ -96,7 +108,7 @@ Você pode executar ferramentas respondendo APENAS com um objeto JSON válido, s
 
 Regras:
 - Use web_search para pesquisar resultados e fontes.
-- Use browser quando o usuário pedir para acessar/abrir um site pelo navegador, analisar visualmente uma página, inspecionar elementos ou interagir com ela. Comece com action=open e examine o resultado antes de agir.
+- PRIORIDADE DE NAVEGAÇÃO: se o usuário mencionar que quer acessar/abrir/visitar/analisar um site pelo navegador, use SEMPRE browser (Chromium), mesmo que a mensagem também contenha uma URL ou peça pesquisa. Não substitua essa ação por web_fetch. Comece com action=open e examine o resultado antes de agir.
 - Use web_fetch apenas para extração simples de texto de páginas públicas; nunca use essa ferramenta para interpretar arquivos binários.
 - Se a página responder com conteúdo binário, formato não suportado, bloqueio ou erro, informe a limitação; nunca reproduza bytes ou conteúdo ilegível como se fosse texto.
 - Use calculate somente para expressões matemáticas simples.
