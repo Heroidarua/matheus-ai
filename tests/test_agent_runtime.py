@@ -4,6 +4,7 @@ from app.agent_runtime import (
     ToolDefinition,
     is_agent_task,
     is_browser_task,
+    normalize_tool_url,
     parse_tool_call,
     run_tool_loop,
 )
@@ -106,3 +107,16 @@ def test_detects_browser_intent_when_url_or_context_comes_first(message):
 ])
 def test_browser_intent_requires_action_and_browser_reference(message):
     assert not is_browser_task(message)
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("https://888game.app", "https://888game.app"),
+    ("[https://888game.app](https://888game.app)", "https://888game.app"),
+    ("[Abrir site](https://example.com/path)", "https://example.com/path"),
+])
+def test_normalize_tool_url_accepts_raw_and_markdown_links(value, expected):
+    assert normalize_tool_url(value) == expected
+
+
+def test_normalize_tool_url_rejects_non_string_values():
+    assert normalize_tool_url(None) == ""
