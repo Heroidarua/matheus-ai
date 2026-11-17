@@ -136,6 +136,25 @@ def is_terminal_task(message: str) -> bool:
     ))
 
 
+def should_run_agent_loop(
+    *,
+    agent_mode_active: bool,
+    summary_requested: bool,
+    code_generation_needed: bool,
+    terminal_task: bool,
+    terminal_configured: bool,
+    should_search: bool,
+    search_unavailable: bool,
+) -> bool:
+    """Decide when an action request must use the iterative tool loop."""
+    has_agent_or_search = (should_search and not search_unavailable) or agent_mode_active
+    if not has_agent_or_search or summary_requested:
+        return False
+    if not code_generation_needed:
+        return True
+    return terminal_task or (agent_mode_active and terminal_configured)
+
+
 def extract_terminal_command(message: str) -> str | None:
     """Extract an explicitly supplied shell command from a terminal request."""
     if not isinstance(message, str) or not message.strip():
