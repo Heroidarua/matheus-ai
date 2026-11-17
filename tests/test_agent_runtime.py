@@ -255,3 +255,50 @@ def test_agent_loop_activation_for_coding_and_search(
         should_search=search,
         search_unavailable=search_failed,
     ) is expected
+
+
+
+def test_file_creation_request_requires_terminal_when_agent_and_executor_are_ready():
+    from app.agent_runtime import requires_terminal_execution
+
+    prompt = (
+        "Crie uma pasta chamada validacao_relatorio. Dentro dela, crie calculadora.py, "
+        "test_calculadora.py com unittest e README.md. Execute os testes."
+    )
+    assert requires_terminal_execution(
+        prompt,
+        agent_mode_active=True,
+        terminal_configured=True,
+    )
+
+
+def test_file_creation_request_does_not_require_terminal_when_executor_is_unavailable():
+    from app.agent_runtime import requires_terminal_execution
+
+    assert not requires_terminal_execution(
+        "Crie uma pasta e um arquivo README.md",
+        agent_mode_active=True,
+        terminal_configured=False,
+    )
+
+
+def test_browser_task_keeps_browser_priority_over_implicit_terminal():
+    from app.agent_runtime import requires_terminal_execution
+
+    assert not requires_terminal_execution(
+        "Acesse um site pelo navegador e analise os botões",
+        agent_mode_active=True,
+        terminal_configured=True,
+        browser_task=True,
+    )
+
+
+def test_explicit_terminal_task_reports_unavailable_executor_instead_of_skipping():
+    from app.agent_runtime import requires_terminal_execution
+
+    assert requires_terminal_execution(
+        "Use o terminal para executar pwd",
+        agent_mode_active=True,
+        terminal_configured=False,
+        explicit_terminal_task=True,
+    )
