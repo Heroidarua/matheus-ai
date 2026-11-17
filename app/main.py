@@ -2294,21 +2294,25 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         nonlocal sources, fetched_urls
 
         def terminal_reply(result: dict[str, Any]) -> str:
-            if not result.get("ok"):
-                detail = str(result.get("error") or result.get("stderr") or "erro não informado")
-                return "❌ **O terminal não conseguiu executar o comando.**\n\n" + detail
+            if result.get("error"):
+                return "❌ **O terminal não conseguiu executar o comando.**\\n\\n" + str(result["error"])
             stdout = str(result.get("stdout") or "")
             stderr = str(result.get("stderr") or "")
             output = stdout
             if stderr:
-                output += ("\n" if output else "") + "[stderr]\n" + stderr
+                output += ("\\n" if output else "") + "[stderr]\\n" + stderr
             if not output:
                 output = "(comando executado sem saída)"
             exit_code = result.get("exit_code", 0)
+            heading = (
+                "✅ **Comando executado no terminal Linux isolado.**"
+                if exit_code == 0
+                else "⚠️ **Comando executado, mas terminou com erro.**"
+            )
             return (
-                "✅ **Comando executado no terminal Linux isolado.**\n\n"
+                heading + "\\n\\n"
                 + output[:10000]
-                + f"\n\nCódigo de saída: {exit_code}\nWorkspace: {result.get('workspace', '/home/render/ada-workspace')}"
+                + f"\\n\\nCódigo de saída: {exit_code}\\nWorkspace: {result.get('workspace', '/home/render/ada-workspace')}"
             )
 
         if terminal_task:
