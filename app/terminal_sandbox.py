@@ -18,22 +18,29 @@ SANDBOX_IDLE_SECONDS = 900
 WORKSPACE = "/home/render/ada-workspace"
 
 # Restrict outbound HTTPS to common source-control and package registries.
-NETWORK_POLICY = {
-    "type": "allow-list",
-    "rules": [
-        {"domain": "github.com"},
-        {"domain": "codeload.github.com"},
-        {"domain": "*.githubusercontent.com"},
-        {"domain": "pypi.org"},
-        {"domain": "*.pythonhosted.org"},
-        {"domain": "registry.npmjs.org"},
-        {"domain": "npmjs.com"},
-        {"domain": "*.npmjs.com"},
-        {"domain": "deb.debian.org"},
-        {"domain": "archive.ubuntu.com"},
-        {"domain": "security.ubuntu.com"},
-    ],
-}
+NETWORK_ALLOWED_DOMAINS = (
+    "github.com",
+    "codeload.github.com",
+    "*.githubusercontent.com",
+    "pypi.org",
+    "*.pythonhosted.org",
+    "registry.npmjs.org",
+    "npmjs.com",
+    "*.npmjs.com",
+    "deb.debian.org",
+    "archive.ubuntu.com",
+    "security.ubuntu.com",
+)
+
+
+def _network_policy():
+    """Build the typed policy objects required by Render SDK 1.9+."""
+    from render.sandbox import EgressRule, NetworkPolicy
+
+    return NetworkPolicy(
+        type="allow-list",
+        rules=[EgressRule(domain=domain) for domain in NETWORK_ALLOWED_DOMAINS],
+    )
 
 
 def is_terminal_configured() -> bool:
@@ -158,7 +165,7 @@ async def run_terminal_command(session: dict[str, Any], command: Any) -> dict[st
                 plan="1c-2g",
                 timeout_seconds=SANDBOX_RUNTIME_SECONDS,
                 idle_timeout_seconds=SANDBOX_IDLE_SECONDS,
-                network_policy=NETWORK_POLICY,
+                network_policy=_network_policy(),
                 wait=True,
             )
             sandbox_id = sandbox.id
