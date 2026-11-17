@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
@@ -1459,6 +1459,7 @@ WEB_FETCH_TIMEOUT = 15.0        # segundos por página
 WEB_SEARCH_TIMEOUT = 30.0       # segundos por busca
 WEB_MAX_TURNS = 10              # voltas máximas do modelo
 WEB_MAX_FETCHES = 5             # URLs lidas por pergunta
+WEB_MAX_TERMINAL_CALLS = 6       # comandos VPS por solicitação do agente
 WEB_FIELD_LIMIT = 8000          # corte por campo
 
 WEB_TOOLS_SPEC = """
@@ -1954,20 +1955,24 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             system_prompt += "\n\nO navegador visual ainda não está conectado: não alegue que clicou ou navegou em páginas."
         if is_terminal_configured():
             system_prompt += (
-                "\n\nTERMINAL LINUX ISOLADO DISPONÍVEL: use a ferramenta terminal para executar comandos Linux, "
-                "Python, Node.js, Git, compilar, testar, instalar pacotes e criar/editar arquivos no workspace persistente "
-                "desta sessão. Envie um comando por chamada em JSON: "
+                "\n\nTERMINAL LINUX VPS DISPONÍVEL: use a ferramenta terminal para executar comandos Linux, "
+                "Python, Node.js, Git, compilar, testar, instalar dependências e criar/editar arquivos. "
+                "Envie um comando por chamada em JSON: "
                 '{"tool":"terminal","args":{"command":"pwd && ls -la"}}. '
-                "O workspace é /home/render/ada-workspace. Cada comando começa em um novo shell; use "
-                "'cd pasta && comando' para mudar de diretório. O ambiente é uma microVM isolada e não recebe "
-                "as chaves da ADA-M. A rede é limitada a repositórios e registries comuns. "
-                "Não tente acessar dados do host nem segredos. Peça autorização antes de exclusões, comandos destrutivos, "
-                "push/publicação ou ações externas irreversíveis."
+                "O workspace persistente é /home/ada-runner/workspace e os comandos são executados como ada-runner, "
+                "um usuário Linux restrito, sem privilégios de administrador. Cada chamada começa em um novo shell; "
+                "use 'cd /home/ada-runner/workspace && comando' para escolher o diretório. "
+                "Para tarefas com várias etapas, inspecione, execute, leia o resultado e continue até verificar a conclusão; "
+                "são permitidas até 6 chamadas de terminal por solicitação. "
+                "Prefira ambientes virtuais Python e dependências locais Node.js; não use sudo nem tente contornar permissões. "
+                "Não tente acessar segredos ou arquivos privados fora do workspace. Peça autorização antes de exclusões, "
+                "comandos destrutivos, push/publicação ou ações externas irreversíveis."
             )
         else:
             system_prompt += (
                 "\n\nTERMINAL LINUX: ainda não configurado. Não chame a ferramenta terminal nem simule comandos. "
-                "Explique que o Render precisa das variáveis RENDER_API_KEY e RENDER_WORKSPACE_ID."
+                "Explique que é necessário configurar o executor VPS (ADA_EXECUTOR_URL, ADA_EXECUTOR_TOKEN, "
+                "CF_ACCESS_CLIENT_ID e CF_ACCESS_CLIENT_SECRET) ou as credenciais do Render Sandbox."
             )
     if sources:
         grounding_summary = next((source.get("summary", "") for source in sources if source.get("summary")), "")
@@ -2013,7 +2018,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     
     # Se precisa gerar código, adiciona instrução específica
-    if code_generation_needed:
+    if code_generation_needed and not agent_mode_active:
         messages.append({
             "role": "system",
             "content": "Você é um programador Python avançado. Gere um script Python completo e funcional para atender ao pedido do usuário. O código deve ser executável, sem erros de sintaxe, e deve imprimir o resultado no stdout. Não use input() nem bibliotecas externas que não estejam instaladas. Responda APENAS com o código Python, sem explicações."
@@ -2089,7 +2094,15 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if MODEL_BASE_URL.startswith("https://api.groq.com"):
         payload["reasoning_effort"] = "low"
 
-    web_loop_active = bool((((should_search and not search_unavailable) or agent_mode_active) and not summary_requested) and (not code_generation_needed or terminal_task))
+    web_loop_active = should_run_agent_loop(
+        agent_mode_active=agent_mode_active,
+        summary_requested=summary_requested,
+        code_generation_needed=code_generation_needed,
+        terminal_task=terminal_task,
+        terminal_configured=is_terminal_configured(),
+        should_search=should_search,
+        search_unavailable=search_unavailable,
+    )
     fetched_urls: set[str] = set()
     loop_messages: list[dict[str, Any]] = list(messages)
     loop_status: dict[str, str] = {"status": ""}
@@ -2312,14 +2325,15 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             return (
                 heading + "\\n\\n"
                 + output[:10000]
-                + f"\\n\\nCódigo de saída: {exit_code}\\nWorkspace: {result.get('workspace', '/home/render/ada-workspace')}"
+                + f"\\n\\nCódigo de saída: {exit_code}\\nWorkspace: {result.get('workspace', '/home/ada-runner/workspace')}"
             )
 
         if terminal_task:
             if not is_terminal_configured():
                 return (
-                    "❌ **Terminal indisponível:** o serviço não reconheceu RENDER_API_KEY e "
-                    "RENDER_WORKSPACE_ID. Confira se ambas estão configuradas no serviço principal da ADA-M no Render."
+                    "❌ **Terminal indisponível:** o executor não está configurado. Confira ADA_EXECUTOR_URL, "
+                    "ADA_EXECUTOR_TOKEN, CF_ACCESS_CLIENT_ID e CF_ACCESS_CLIENT_SECRET no Render; "
+                    "ou as credenciais do Render Sandbox, caso esteja usando esse modo."
                 ), {"model": active_model_name}
             explicit_command = extract_terminal_command(last_user_message)
             if explicit_command:
@@ -2328,8 +2342,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 print(f"[webloop] forced terminal execution -> {str(result)[:300]}")
                 return terminal_reply(result), {"model": active_model_name}
 
+        terminal_calls = 0
         for turn in range(1, WEB_MAX_TURNS + 1):
-            use_tools = turn < WEB_MAX_TURNS  # na volta 9 retira as ferramentas
+            use_tools = turn < WEB_MAX_TURNS  # reserva a última rodada para a resposta final
             loop_status["status"] = "Pesquisando…" if turn == 1 else "Processando…"
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 resp = await _model_post(client, loop_messages, use_tools)
@@ -2344,14 +2359,14 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
             call = parse_tool_call(content_out) if use_tools else None
             if not call:
-                if terminal_task:
+                if terminal_task and terminal_calls == 0:
                     if turn < WEB_MAX_TURNS - 1:
                         loop_messages.append({
                             "role": "system",
                             "content": (
-                                "O usuário solicitou explicitamente o uso do terminal. Você ainda não executou a ferramenta. "
+                                "O usuário solicitou explicitamente o uso do terminal e nenhuma execução ocorreu ainda. "
                                 "Não responda em prosa nem descreva um ambiente hipotético. Emita somente um JSON válido "
-                                "chamando a ferramenta terminal com um comando Linux real."
+                                "chamando a ferramenta terminal com um comando Linux real e seguro para começar a tarefa."
                             ),
                         })
                         continue
@@ -2374,10 +2389,16 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 loop_status["status"] = "Navegando…"
                 result = await tool_browser_action(session_id, **args)
             elif name == "terminal":
-                loop_status["status"] = "Executando no terminal isolado…"
-                result = await run_terminal_command(http_request.session, args["command"])
-                print(f"[webloop] terminal tool -> {str(result)[:300]}")
-                return terminal_reply(result), data
+                if terminal_calls >= WEB_MAX_TERMINAL_CALLS:
+                    result = {
+                        "ok": False,
+                        "error": f"Limite de {WEB_MAX_TERMINAL_CALLS} execuções de terminal por solicitação atingido. Pare e resuma o que foi concluído e o que falta.",
+                    }
+                else:
+                    terminal_calls += 1
+                    loop_status["status"] = f"Executando etapa {terminal_calls}/{WEB_MAX_TERMINAL_CALLS} no terminal…"
+                    result = await run_terminal_command(http_request.session, args["command"])
+                print(f"[webloop] terminal step={terminal_calls} -> {str(result)[:300]}")
             else:
                 if len(fetched_urls) >= WEB_MAX_FETCHES:
                     result = {"ok": False, "error": "Limite de 5 páginas lidas nesta pergunta atingido"}
@@ -2393,7 +2414,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         # Esgotou as voltas: força resposta final sem ferramentas
         loop_messages.append({
             "role": "system",
-            "content": "Limite de rodadas de pesquisa atingido. Responda agora ao usuário com o material que você tem, citando as fontes.",
+            "content": (
+                "Limite de rodadas/ferramentas atingido. Pare de executar ações e responda agora. "
+                "Resuma somente o que foi confirmado pelos resultados das ferramentas, informe testes e erros reais "
+                "e liste claramente qualquer etapa que ficou pendente. Nunca declare sucesso sem evidência."
+            ),
         })
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=8.0)) as client:
             resp = await _model_post(client, loop_messages, use_tools=False)

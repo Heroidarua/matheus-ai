@@ -9,6 +9,7 @@ from app.agent_runtime import (
     normalize_tool_url,
     parse_tool_call,
     run_tool_loop,
+    should_run_agent_loop,
 )
 
 
@@ -193,3 +194,64 @@ def test_parse_nested_browser_tool_json_with_wrappers(response):
 def test_parse_tool_call_ignores_thinking_json_without_tool_call():
     response = '<thinking>{"analysis":"not a tool"}</thinking> Resposta normal.'
     assert parse_tool_call(response, {"browser"}) is None
+
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_supports_multiple_terminal_steps():
+    executed = []
+
+    async def model(messages, tools_enabled):
+        if not executed:
+            return '{"tool":"terminal","args":{"command":"pwd"}}'
+        if len(executed) == 1:
+            assert "ada-runner/workspace" in messages[-1]["content"]
+            return '{"tool":"terminal","args":{"command":"python3 --version"}}'
+        assert "Python 3." in messages[-1]["content"]
+        return "Projeto verificado com sucesso."
+
+    async def terminal(command):
+        executed.append(command)
+        if command == "pwd":
+            return {"stdout": "/home/ada-runner/workspace", "exit_code": 0}
+        return {"stdout": "Python 3.12.3", "exit_code": 0}
+
+    tools = {
+        "terminal": ToolDefinition(
+            "terminal", "restricted Linux terminal", ("command",), terminal
+        )
+    }
+    result = await run_tool_loop(
+        [{"role": "user", "content": "Crie e teste um projeto"}],
+        model,
+        tools,
+        max_steps=4,
+    )
+    assert result == "Projeto verificado com sucesso."
+    assert executed == ["pwd", "python3 --version"]
+
+
+
+@pytest.mark.parametrize(
+    "agent_mode,summary,codegen,terminal_task,terminal_ready,search,search_failed,expected",
+    [
+        (True, False, True, False, True, False, False, True),
+        (True, False, True, False, False, False, False, False),
+        (False, False, True, False, True, False, False, False),
+        (True, True, False, False, True, False, False, False),
+        (False, False, False, False, False, True, False, True),
+        (False, False, False, False, False, True, True, False),
+    ],
+)
+def test_agent_loop_activation_for_coding_and_search(
+    agent_mode, summary, codegen, terminal_task, terminal_ready, search, search_failed, expected
+):
+    assert should_run_agent_loop(
+        agent_mode_active=agent_mode,
+        summary_requested=summary,
+        code_generation_needed=codegen,
+        terminal_task=terminal_task,
+        terminal_configured=terminal_ready,
+        should_search=search,
+        search_unavailable=search_failed,
+    ) is expected
