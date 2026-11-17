@@ -45,6 +45,7 @@ from app.companion import (
 )
 from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
+from app.response_artifacts import get_response_artifact, save_response_artifact
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -320,6 +321,26 @@ async def home() -> FileResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "app": "ADA-M"}
+
+@app.get("/api/response-artifacts/{artifact_id}", dependencies=[Depends(require_app_key)])
+async def download_response_artifact(artifact_id: str, http_request: Request) -> Response:
+    """Download a long Markdown report owned by the current browser session."""
+    owner_id = http_request.session.get("companion_id")
+    artifact = await asyncio.to_thread(get_response_artifact, owner_id, artifact_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado ou não pertence a esta sessão.")
+    file_name, content = artifact
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "-", file_name)[:120] or "relatorio-ada-m.md"
+    return Response(
+        content=content,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
 
 
 @app.get("/api/tts/status", dependencies=[Depends(require_app_key)])
@@ -2140,6 +2161,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             stream_payload["stream"] = True
             streamed_reply = ""
             stream_finish_reason = None
+            upstream_completed = False
             try:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=15.0)) as stream_client:
                     if USE_ANTHROPIC:
@@ -2162,6 +2184,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                     break
                                 try:
                                     event_data = json.loads(raw)
+                                    if event_data.get("type") == "message_stop":
+                                        upstream_completed = True
                                     delta = event_data.get("delta") or {}
                                     token = delta.get("text", "") if delta.get("type") == "text_delta" else ""
                                     if token:
@@ -2217,6 +2241,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                     continue
                                 raw = line[5:].strip()
                                 if raw == "[DONE]":
+                                    upstream_completed = True
                                     break
                                 try:
                                     chunk = json.loads(raw)
@@ -2231,6 +2256,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                         yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
                                 except (ValueError, TypeError, IndexError):
                                     continue
+                # A ausência do marcador final do protocolo indica possível interrupção.
+                if not upstream_completed:
+                    stream_finish_reason = "length"
                 # Continua tanto em cortes sinalizados pelo provedor quanto em finais
                 # estruturalmente incompletos (por exemplo, uma definição Python terminando em ':').
                 needs_continuation = (
@@ -2276,9 +2304,23 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 if needs_continuation:
                     warning = "\n\n⚠️ A resposta ainda parece incompleta após várias continuações. Peça para a ADA-M continuar."
                     yield "data: " + json.dumps({"token": warning}, ensure_ascii=False) + "\n\n"
+                artifact = None
+                if not needs_continuation:
+                    try:
+                        artifact = await asyncio.to_thread(save_response_artifact, session_id, streamed_reply)
+                    except Exception as artifact_error:
+                        print(f"Response artifact save failed ({type(artifact_error).__name__})")
                 DIAGNOSTICS["successes"] += 1
                 DIAGNOSTICS["last_error"] = None
-                yield "event: done\ndata: " + json.dumps({"model": active_model_name, "sources": sources}, ensure_ascii=False) + "\n\n"
+                done_payload = {"model": active_model_name, "sources": sources}
+                if artifact:
+                    done_payload["artifact"] = artifact
+                elif len(streamed_reply) >= 5000:
+                    done_payload["artifact_warning"] = (
+                        "A resposta foi concluída, mas o relatório baixável não pôde ser arquivado. "
+                        "Verifique se DATABASE_URL aponta para um PostgreSQL acessível."
+                    )
+                yield "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
             except httpx.TimeoutException:
                 DIAGNOSTICS["errors"] += 1
                 DIAGNOSTICS["last_error"] = "Tempo esgotado no provedor do modelo (stream)"
@@ -2522,7 +2564,15 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     import json
                     for offset in range(0, len(reply), 180):
                         yield "data: " + json.dumps({"token": reply[offset:offset + 180]}, ensure_ascii=False) + "\n\n"
-                    yield "event: done\ndata: " + json.dumps({"model": str(data.get("model", active_model_name)), "sources": sources}, ensure_ascii=False) + "\n\n"
+                    artifact = None
+                    try:
+                        artifact = await asyncio.to_thread(save_response_artifact, session_id, reply)
+                    except Exception as artifact_error:
+                        print(f"Agent response artifact save failed ({type(artifact_error).__name__})")
+                    done_payload = {"model": str(data.get("model", active_model_name)), "sources": sources}
+                    if artifact:
+                        done_payload["artifact"] = artifact
+                    yield "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
                 return StreamingResponse(completed_agent_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
         else:
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
