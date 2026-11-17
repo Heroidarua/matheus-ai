@@ -136,6 +136,30 @@ def is_terminal_task(message: str) -> bool:
     ))
 
 
+def requires_terminal_execution(
+    message: str,
+    *,
+    agent_mode_active: bool,
+    terminal_configured: bool,
+    explicit_terminal_task: bool = False,
+    browser_task: bool = False,
+) -> bool:
+    """Exige terminal para tarefas de arquivos/código feitas pelo agente."""
+    if explicit_terminal_task:
+        return True
+    if not agent_mode_active or not terminal_configured or browser_task:
+        return False
+    text = (message or "").casefold()
+    file_or_code_work = re.search(
+        r"\b(?:arquivo(?:s)?|pasta(?:s)?|workspace|projeto|script|c[oó]digo|"
+        r"programa|programar|implementar|implementa[cç][aã]o|corrigir|debug|"
+        r"teste(?:s)?|unittest|pytest|python|javascript|typescript|backend|frontend|"
+        r"\.py|\.js|\.ts|\.html|\.css|\.json|\.md)\b",
+        text,
+    )
+    return bool(file_or_code_work)
+
+
 def should_run_agent_loop(
     *,
     agent_mode_active: bool,
@@ -237,7 +261,8 @@ Regras:
 - Se a página responder com conteúdo binário, formato não suportado, bloqueio ou erro, informe a limitação; nunca reproduza bytes ou conteúdo ilegível como se fosse texto.
 - Use calculate somente para expressões matemáticas simples.
 - Quando o usuário pedir para criar, implementar, editar, corrigir, executar ou testar um projeto de software e o terminal estiver disponível, a execução via terminal é obrigatória; não entregue apenas trechos de código como se a tarefa estivesse concluída. Use o terminal para inspecionar, criar/editar arquivos, instalar dependências, executar scripts, compilar e testar.
-- O terminal permite um fluxo de várias etapas: inspecione o workspace, execute uma ação por chamada, leia o stdout/stderr/código de saída e então decida o próximo passo. NÃO encerre após a primeira chamada se ainda houver etapas necessárias. Continue até verificar a conclusão ou identificar um bloqueio.
+- O terminal permite um fluxo de várias etapas: inspecione o workspace, execute uma ação por chamada, leia o stdout/stderr/código de saída e então decida o próximo passo. NÃO encerre após a primeira chamada se ainda houver etapas necessárias.
+- Para tarefas com vários arquivos, NÃO coloque todo o projeto em um único comando/heredoc. Divida em etapas curtas: criar pasta, gravar um arquivo por chamada, executar testes e corrigir. Mantenha cada JSON de ferramenta compacto (preferencialmente abaixo de 1800 caracteres) e sempre feche todas as aspas e chaves. Nunca mostre o JSON da ferramenta como resposta final. Continue até verificar a conclusão ou identificar um bloqueio.
 - Você pode fazer até 6 chamadas de terminal por solicitação e até 9 rodadas totais de ferramentas. Se atingir o limite, pare e informe exatamente o que ficou pendente.
 - O workspace persistente da VPS é /home/ada-runner/workspace. Cada chamada começa em um novo shell; use "cd /home/ada-runner/workspace && ..." para escolher o diretório correto. Arquivos criados ali permanecem disponíveis entre solicitações.
 - Antes de modificar um projeto, execute pwd e ls -la e examine os arquivos de configuração relevantes (por exemplo, pyproject.toml, requirements.txt, package.json ou README).
