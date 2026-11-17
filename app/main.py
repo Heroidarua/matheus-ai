@@ -1689,7 +1689,7 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
                 parsed_error = response.json()
                 detail = parsed_error.get("detail", "Falha no serviço de navegador") if isinstance(parsed_error, dict) else "Falha no serviço de navegador"
             except (ValueError, AttributeError):
-                detail = re.sub(r"\\s+", " ", re.sub(r"<[^>]+>", " ", response.text[:1200])).strip()
+                detail = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", response.text[:1200])).strip()
                 detail = detail[:180] or "Resposta HTML/texto inválida do proxy"
             print(f"[browser] service_http_error status={response.status_code} action={action} detail={str(detail)[:220]}")
             return {
