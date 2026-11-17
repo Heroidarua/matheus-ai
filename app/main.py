@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
@@ -2018,7 +2018,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     
     # Se precisa gerar código, adiciona instrução específica
-    if code_generation_needed:
+    if code_generation_needed and not agent_mode_active:
         messages.append({
             "role": "system",
             "content": "Você é um programador Python avançado. Gere um script Python completo e funcional para atender ao pedido do usuário. O código deve ser executável, sem erros de sintaxe, e deve imprimir o resultado no stdout. Não use input() nem bibliotecas externas que não estejam instaladas. Responda APENAS com o código Python, sem explicações."
@@ -2094,7 +2094,15 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if MODEL_BASE_URL.startswith("https://api.groq.com"):
         payload["reasoning_effort"] = "low"
 
-    web_loop_active = bool((((should_search and not search_unavailable) or agent_mode_active) and not summary_requested) and (not code_generation_needed or terminal_task))
+    web_loop_active = should_run_agent_loop(
+        agent_mode_active=agent_mode_active,
+        summary_requested=summary_requested,
+        code_generation_needed=code_generation_needed,
+        terminal_task=terminal_task,
+        terminal_configured=is_terminal_configured(),
+        should_search=should_search,
+        search_unavailable=search_unavailable,
+    )
     fetched_urls: set[str] = set()
     loop_messages: list[dict[str, Any]] = list(messages)
     loop_status: dict[str, str] = {"status": ""}
