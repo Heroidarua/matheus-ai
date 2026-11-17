@@ -334,7 +334,7 @@ def test_agent_prompt_documents_installed_tools_and_authorization_boundaries():
     for tool in ("nmap", "sqlmap", "nikto", "gobuster", "jq", "netcat"):
         assert tool in AGENT_TOOLS_SPEC
     assert "autorização explícita" in AGENT_TOOLS_SPEC
-    assert "Não faça varredura ampla da internet" in AGENT_TOOLS_SPEC
+    assert "Nunca faça varredura ampla da internet" in AGENT_TOOLS_SPEC
 
 
 def test_agent_prompt_checks_binaries_on_remote_executor():
