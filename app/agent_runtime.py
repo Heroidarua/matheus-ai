@@ -98,12 +98,13 @@ def is_browser_task(message: str) -> bool:
 
 
 _SHELL_COMMAND_PREFIX = re.compile(
-    r"^(?:\\$\\s*)?(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
+    r"^(?:\$\s*)?(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
     r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|which|whereis|env|printenv|"
     r"mkdir|touch|cp|mv|chmod|curl|wget|apt(?:-get)?|sudo|bash|sh|make|cmake|"
-    r"gcc|g\\+\\+|date|df|free|ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\\b",
+    r"gcc|g\+\+|date|df|free|ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\b",
     re.IGNORECASE,
 )
+
 
 def _raw_shell_command(message: str) -> str:
     """Recognize a raw shell command or fenced shell command."""
@@ -118,20 +119,22 @@ def _raw_shell_command(message: str) -> str:
         return value.removeprefix("$ ").strip()
     return ""
 
+
 def is_terminal_task(message: str) -> bool:
     """Detecta pedidos de terminal, inclusive comandos enviados sem explicação."""
-    text = re.sub(r"\\s+", " ", (message or "").strip().casefold())
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
     if _raw_shell_command(message):
         return True
-    if not re.search(r"\\b(terminal|shell|linha de comando|prompt de comando)\\b", text):
+    if not re.search(r"\b(terminal|shell|linha de comando|prompt de comando)\b", text):
         return False
     return bool(re.search(
-        r"\\b(usa|use|utilize|executa|execute|executar|rode|rodar|instale|instalar|crie|criar|"
-        r"compile|compilar|teste|testar|comando|comandos|abra|abrir|trabalhe|trabalhar)\\b",
+        r"\b(usa|use|utilize|executa|execute|executar|rode|rodar|instale|instalar|crie|criar|"
+        r"compile|compilar|teste|testar|comando|comandos|abra|abrir|trabalhe|trabalhar)\b",
         text,
     ))
+
 
 def extract_terminal_command(message: str) -> str | None:
     """Extract an explicitly supplied shell command from a terminal request."""
