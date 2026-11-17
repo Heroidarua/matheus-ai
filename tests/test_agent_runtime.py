@@ -312,3 +312,33 @@ def test_detects_truncated_tool_call_attempts_without_executing_them():
     assert looks_like_tool_call('prefix {"tool": "browser", "args":')
     assert not looks_like_tool_call('{"analysis":"not a tool call"}')
     assert not looks_like_tool_call('Resposta normal sem ferramenta.')
+
+
+
+@pytest.mark.parametrize("command", [
+    "nmap -sV --top-ports 20 192.0.2.10",
+    "sqlmap -u https://example.invalid/item?id=1 --batch --risk=1 --level=1",
+    "nikto -h https://example.invalid",
+    "gobuster dir -u https://example.invalid -w /tmp/wordlist",
+    "jq --version",
+    "nc -vz 192.0.2.10 443",
+])
+def test_installed_audit_tools_are_recognized_as_terminal_commands(command):
+    assert is_terminal_task(command)
+    assert extract_terminal_command(command) == command
+
+
+def test_agent_prompt_documents_installed_tools_and_authorization_boundaries():
+    from app.agent_runtime import AGENT_TOOLS_SPEC
+
+    for tool in ("nmap", "sqlmap", "nikto", "gobuster", "jq", "netcat"):
+        assert tool in AGENT_TOOLS_SPEC
+    assert "autorização explícita" in AGENT_TOOLS_SPEC
+    assert "Nunca faça varredura ampla da internet" in AGENT_TOOLS_SPEC
+
+
+def test_agent_prompt_checks_binaries_on_remote_executor():
+    from app.agent_runtime import AGENT_TOOLS_SPEC
+
+    assert "command -v nmap sqlmap nikto gobuster jq nc" in AGENT_TOOLS_SPEC
+    assert "não presuma que instalar pacotes no Dockerfile da API os instalou na VPS" in AGENT_TOOLS_SPEC

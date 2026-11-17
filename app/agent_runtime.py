@@ -110,7 +110,7 @@ def is_browser_task(message: str) -> bool:
 
 _SHELL_COMMAND_PREFIX = re.compile(
     r"^(?:\$\s*)?(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
-    r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|which|whereis|env|printenv|"
+    r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|which|whereis|env|printenv|nmap|nc|netcat|sqlmap|nikto|gobuster|jq|"
     r"mkdir|touch|cp|mv|chmod|curl|wget|apt(?:-get)?|sudo|bash|sh|make|cmake|"
     r"gcc|g\+\+|date|df|free|ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\b",
     re.IGNORECASE,
@@ -236,7 +236,7 @@ def extract_terminal_command(message: str) -> str | None:
     if not re.match(
         r"^(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
         r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|pytest-asyncio|"
-        r"which|whereis|env|printenv|mkdir|touch|cp|mv|chmod|curl|wget|"
+        r"which|whereis|env|printenv|mkdir|touch|cp|mv|chmod|curl|wget|nmap|nc|netcat|sqlmap|nikto|gobuster|jq|"
         r"apt(?:-get)?|sudo|bash|sh|make|cmake|gcc|g\+\+|date|df|free|"
         r"ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\b",
         first,
@@ -258,6 +258,22 @@ def normalize_tool_url(value: Any) -> str:
 
 AGENT_TOOLS_SPEC = """
 MODO AGENTE — FERRAMENTAS DISPONÍVEIS
+FERRAMENTAS LINUX PREVISTAS PARA O EXECUTOR:
+- Diagnóstico/rede: nmap, nc (netcat), curl, wget, jq.
+- Auditoria web: nikto e gobuster.
+- Auditoria SQL: sqlmap.
+- Desenvolvimento e automação: python3, pip, git e utilitários Linux.
+IMPORTANTE: o terminal pode executar em uma VPS remota separada do container da API. Antes de usar qualquer ferramenta, verifique no próprio terminal remoto com "command -v nmap sqlmap nikto gobuster jq nc". Só use os binários confirmados nesse executor. Se algum estiver ausente, informe exatamente qual falta; não presuma que instalar pacotes no Dockerfile da API os instalou na VPS.
+
+REGRAS OBRIGATÓRIAS DE SEGURANÇA PARA TESTES:
+- Antes de qualquer varredura, confirme que o alvo pertence ao usuário ou que ele tem autorização explícita para testá-lo. Se o alvo, a propriedade ou o escopo não estiver claro, pergunte antes de executar.
+- Nunca faça varredura ampla da internet, de redes de terceiros, faixas públicas, infraestrutura compartilhada ou endereços descobertos incidentalmente.
+- Restrinja cada teste ao hostname/IP e às portas/caminhos expressamente autorizados. Prefira verificações leves e não intrusivas.
+- Para nmap, comece com descoberta limitada e sem scripts de exploração; não use -A, -sC, NSE vuln/exploit, spoofing ou varredura de faixas.
+- Para sqlmap, somente teste endpoints próprios/autorizados, sem extração/dump de dados, sem enumeração de bancos/usuários, sem tamper, sem evasão e sem opções de risco elevado. Use nível e risco mínimos e interrompa diante de instabilidade.
+- Para nikto e gobuster, limite requisições, use apenas hosts e caminhos autorizados e não tente autenticação, força bruta de credenciais ou contornar controles de acesso.
+- Não explore vulnerabilidades, não obtenha shell, não persista acesso, não exfiltre dados e não execute payloads destrutivos. Pare se houver impacto, bloqueio ou comportamento inesperado.
+- Relate achados como indícios, não como prova de invasão; não declare vulnerabilidade confirmada sem evidência verificável.
 Você pode executar ferramentas respondendo APENAS com um objeto JSON válido, sem texto antes/depois:
 {"tool":"web_search","args":{"query":"termo de busca","limit":8}}
 {"tool":"web_fetch","args":{"url":"https://exemplo.com"}}
