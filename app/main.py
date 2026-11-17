@@ -2265,8 +2265,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     if not isinstance(continuation_text, str) or not continuation_text.strip():
                         break
                     continuation_text = continuation_text.strip()
-                    streamed_reply += "\\n" + continuation_text
-                    yield "data: " + json.dumps({"token": "\\n" + continuation_text}, ensure_ascii=False) + "\\n\\n"
+                    streamed_reply += "\n" + continuation_text
+                    yield "data: " + json.dumps({"token": "\n" + continuation_text}, ensure_ascii=False) + "\n\n"
                     stream_finish_reason = continuation_choice.get("finish_reason")
                     needs_continuation = (
                         stream_finish_reason == "length" or response_looks_incomplete(streamed_reply)
@@ -2274,8 +2274,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     if not needs_continuation:
                         break
                 if needs_continuation:
-                    warning = "\\n\\n⚠️ A resposta ainda parece incompleta após várias continuações. Peça para a ADA-M continuar."
-                    yield "data: " + json.dumps({"token": warning}, ensure_ascii=False) + "\\n\\n"
+                    warning = "\n\n⚠️ A resposta ainda parece incompleta após várias continuações. Peça para a ADA-M continuar."
+                    yield "data: " + json.dumps({"token": warning}, ensure_ascii=False) + "\n\n"
                 DIAGNOSTICS["successes"] += 1
                 DIAGNOSTICS["last_error"] = None
                 yield "event: done\ndata: " + json.dumps({"model": active_model_name, "sources": sources}, ensure_ascii=False) + "\n\n"
