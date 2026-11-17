@@ -133,6 +133,13 @@ def extract_terminal_command(message: str) -> str | None:
                 re.IGNORECASE | re.DOTALL,
             )
             if not match:
+                match = re.search(
+                    r"\\b(?:execute|executa|executar|rode|rodar)\\s+"
+                    r"(?:o seguinte comando[: ]+)?(.+)$",
+                    message,
+                    re.IGNORECASE | re.DOTALL,
+                )
+            if not match:
                 return None
             command = match.group(1).strip()
 
