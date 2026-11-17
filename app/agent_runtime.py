@@ -134,7 +134,7 @@ def extract_terminal_command(message: str) -> str | None:
             )
             if not match:
                 match = re.search(
-                    r"\\b(?:execute|executa|executar|rode|rodar)\\s+"
+                    r"\b(?:execute|executa|executar|rode|rodar)\s+"
                     r"(?:o seguinte comando[: ]+)?(.+)$",
                     message,
                     re.IGNORECASE | re.DOTALL,
