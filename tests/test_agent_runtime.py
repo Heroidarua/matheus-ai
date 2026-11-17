@@ -9,6 +9,7 @@ from app.agent_runtime import (
     normalize_tool_url,
     parse_tool_call,
     run_tool_loop,
+    should_run_agent_loop,
 )
 
 
@@ -228,3 +229,29 @@ async def test_run_tool_loop_supports_multiple_terminal_steps():
     )
     assert result == "Projeto verificado com sucesso."
     assert executed == ["pwd", "python3 --version"]
+
+
+
+@pytest.mark.parametrize(
+    "agent_mode,summary,codegen,terminal_task,terminal_ready,search,search_failed,expected",
+    [
+        (True, False, True, False, True, False, False, True),
+        (True, False, True, False, False, False, False, False),
+        (False, False, True, False, True, False, False, False),
+        (True, True, False, False, True, False, False, False),
+        (False, False, False, False, False, True, False, True),
+        (False, False, False, False, False, True, True, False),
+    ],
+)
+def test_agent_loop_activation_for_coding_and_search(
+    agent_mode, summary, codegen, terminal_task, terminal_ready, search, search_failed, expected
+):
+    assert should_run_agent_loop(
+        agent_mode_active=agent_mode,
+        summary_requested=summary,
+        code_generation_needed=codegen,
+        terminal_task=terminal_task,
+        terminal_configured=terminal_ready,
+        should_search=search,
+        search_unavailable=search_failed,
+    ) is expected
