@@ -168,15 +168,15 @@ class ChatMessage(BaseModel):
     content: str | list[dict[str, Any]]
 
 
-# Limites de saída ampliados. O modelo configurado permanece inalterado.
-RESPONSE_TOKEN_BUDGETS = {"curta": 2048, "normal": 8192, "detalhada": 32768}
-RESPONSE_CONTINUATION_TOKENS = 16384
-RESPONSE_MAX_CONTINUATIONS = 6
+# Não impõe um teto total à resposta. Cada chamada usa um bloco grande;
+# se o provedor encerrar por limite de saída, a geração continua em novas chamadas.
+# O limite por chamada continua sendo definido pelo próprio provedor/modelo.
+RESPONSE_CHUNK_TOKENS = 32768
 
 
 def response_token_budget(response_length: str) -> int:
-    """Retorna um orçamento amplo de saída sem alterar o modelo configurado."""
-    return RESPONSE_TOKEN_BUDGETS.get(response_length, RESPONSE_TOKEN_BUDGETS["detalhada"])
+    """Mantém o mesmo bloco de saída para todos os níveis, sem truncar por preferência da UI."""
+    return RESPONSE_CHUNK_TOKENS
 
 
 def response_looks_incomplete(reply: str) -> bool:
@@ -2271,15 +2271,17 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 needs_continuation = (
                     stream_finish_reason == "length" or response_looks_incomplete(streamed_reply)
                 )
-                for continuation_index in range(RESPONSE_MAX_CONTINUATIONS if needs_continuation else 0):
+                last_continuation_text = None
+                while needs_continuation:
                     continuation_payload = dict(payload)
-                    continuation_payload["max_tokens"] = RESPONSE_CONTINUATION_TOKENS
+                    continuation_payload["max_tokens"] = RESPONSE_CHUNK_TOKENS
                     continuation_payload["messages"] = list(messages) + [
                         {"role": "assistant", "content": streamed_reply},
                         {"role": "user", "content": (
                             "Continue exatamente do ponto em que parou. Não repita conteúdo. "
                             "Se estiver no meio de código, complete a estrutura e feche os blocos "
-                            "necessários. Entregue a resposta inteira e finalize."
+                            "necessários. Continue em partes sucessivas até concluir toda a resposta. "
+                            "Não resuma nem encerre só porque a resposta ficou longa."
                         )},
                     ]
                     continuation_response = await _request_chat_completion(
@@ -2300,16 +2302,22 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     if not isinstance(continuation_text, str) or not continuation_text.strip():
                         break
                     continuation_text = continuation_text.strip()
+                    # Evita loop infinito se o provedor repetir exatamente o mesmo trecho
+                    # ou devolver novamente um trecho que já está no final da resposta.
+                    if continuation_text == last_continuation_text:
+                        break
+                    tail_window = streamed_reply[-max(len(continuation_text) * 2, 1):]
+                    if continuation_text in tail_window:
+                        break
+                    last_continuation_text = continuation_text
                     streamed_reply += "\n" + continuation_text
                     yield "data: " + json.dumps({"token": "\n" + continuation_text}, ensure_ascii=False) + "\n\n"
                     stream_finish_reason = continuation_choice.get("finish_reason")
                     needs_continuation = (
                         stream_finish_reason == "length" or response_looks_incomplete(streamed_reply)
                     )
-                    if not needs_continuation:
-                        break
                 if needs_continuation:
-                    warning = "\n\n⚠️ A resposta ainda parece incompleta após várias continuações. Peça para a ADA-M continuar."
+                    warning = "\n\n⚠️ O provedor interrompeu a continuação antes de concluir. O trecho recebido foi preservado; tente continuar a partir daqui."
                     yield "data: " + json.dumps({"token": warning}, ensure_ascii=False) + "\n\n"
                 artifact = None
                 if not needs_continuation:
