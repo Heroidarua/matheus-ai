@@ -14,6 +14,17 @@ def test_health_endpoint():
     assert response.json()["status"] == "ok"
 
 
+def test_response_token_budgets_support_complete_long_answers():
+    assert main.response_token_budget("curta") == 1024
+    assert main.response_token_budget("normal") == 4096
+    assert main.response_token_budget("detalhada") == 8192
+
+
+def test_chat_request_defaults_to_detailed_response():
+    request = main.ChatRequest(messages=[main.ChatMessage(role="user", content="Teste")])
+    assert request.response_length == "detalhada"
+
+
 @pytest.mark.parametrize(
     ("expression", "expected"),
     [
