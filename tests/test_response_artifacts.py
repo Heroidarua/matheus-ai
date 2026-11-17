@@ -79,9 +79,13 @@ def test_invalid_artifact_id_is_rejected_without_database(monkeypatch):
     assert response_artifacts.get_response_artifact("session-1", "../secret") is None
 
 
-def test_oversized_report_is_not_saved(monkeypatch):
+def test_very_large_report_is_saved_without_application_character_cap(monkeypatch):
+    database = FakeDatabase()
     monkeypatch.setenv("DATABASE_URL", "postgresql://test")
-    assert response_artifacts.save_response_artifact(
-        "session-1",
-        "x" * (response_artifacts.MAX_ARTIFACT_CHARS + 1),
-    ) is None
+    monkeypatch.setattr(response_artifacts.psycopg, "connect", database.connect)
+
+    report = "x" * 600_001
+    saved = response_artifacts.save_response_artifact("session-1", report)
+
+    assert saved is not None
+    assert saved["characters"] == len(report)
