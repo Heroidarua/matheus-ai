@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.response_artifacts import get_response_artifact, save_response_artifact
 from app.long_term_memory import (
@@ -1504,6 +1504,7 @@ WEB_SEARCH_TIMEOUT = 30.0       # segundos por busca
 WEB_MAX_TURNS = 10              # voltas máximas do modelo
 WEB_MAX_FETCHES = 5             # URLs lidas por pergunta
 WEB_MAX_TERMINAL_CALLS = 6       # comandos VPS por solicitação do agente
+TOOL_CALL_MAX_TOKENS = 4096      # orçamento por chamada estruturada; 512 truncava comandos
 WEB_FIELD_LIMIT = 8000          # corte por campo
 
 WEB_TOOLS_SPEC = """
@@ -2415,7 +2416,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         p = dict(payload)
         p["messages"] = msgs
         if use_tools:
-            p["max_tokens"] = 512
+            p["max_tokens"] = TOOL_CALL_MAX_TOKENS
         response = None
         for attempt in range(3):
             response = await _request_chat_completion(client, p, headers, active_model_base_url)
@@ -2494,25 +2495,33 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
             call = parse_tool_call(content_out) if use_tools else None
             if not call:
-                if terminal_required and terminal_calls == 0:
+                attempted_tool_call = looks_like_tool_call(content_out)
+                must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls == 0)
+                if must_recover_tool_call:
                     if malformed_tool_retries < 2 and turn < WEB_MAX_TURNS - 1:
                         malformed_tool_retries += 1
                         if content_out:
+                            # Preserve the malformed attempt for diagnosis, but never execute it.
                             loop_messages.append({"role": "assistant", "content": content_out[:6000]})
                         loop_messages.append({
                             "role": "system",
                             "content": (
-                                "A resposta anterior não foi uma chamada de ferramenta JSON válida; nenhum comando foi executado. "
-                                "Tente novamente agora. Responda APENAS com um JSON completo e válido no formato "
-                                '{"tool":"terminal","args":{"command":"comando Linux curto"}}. '
-                                "Não escreva explicações, não inclua vários arquivos num único heredoc e mantenha o comando "
-                                "curto; divida a tarefa em uma etapa por chamada. Feche todas as aspas e chaves."
+                                "A tentativa anterior de chamada de ferramenta veio incompleta ou inválida; "
+                                "NENHUMA ferramenta foi executada. Descarte o JSON anterior e gere uma chamada NOVA, "
+                                "completa e válida. Responda APENAS com um objeto JSON em uma linha. "
+                                "Para terminal, use exatamente o formato "
+                                '{"tool":"terminal","args":{"command":"um único comando Linux curto"}}. '
+                                "Faça somente uma etapa por chamada: não coloque vários arquivos em um heredoc, "
+                                "não inclua explicações nem Markdown, mantenha o comando preferencialmente abaixo "
+                                "de 1200 caracteres e feche todas as aspas e chaves. "
+                                "Se a tarefa for grande, crie ou altere apenas um arquivo por chamada."
                             ),
                         })
                         continue
                     return (
-                        "❌ Não consegui acionar o terminal com uma chamada válida. Nenhum comando foi executado. "
-                        "A resposta do modelo veio incompleta ou fora do formato JSON esperado; tente novamente com etapas menores."
+                        "❌ Não consegui obter uma chamada de ferramenta completa e válida após 2 tentativas de recuperação. "
+                        "Nenhuma chamada incompleta foi executada. A resposta bruta da ferramenta foi ocultada; "
+                        "tente dividir a tarefa em etapas menores."
                     ), data
                 return (content_out or "").strip(), data
             name, args = call
