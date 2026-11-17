@@ -1505,7 +1505,7 @@ const history = [];
       });
     }
 
-    function displayAssistantReply(bubble, text, sources = []) {
+    function displayAssistantReply(bubble, text, sources = [], artifact = null) {
       const rendered = renderMarkdown(text);
       addCodeCopyButtons(rendered);
       linkCitationReferences(rendered, sources);
@@ -1574,6 +1574,15 @@ const history = [];
         }
       }
       actions.append(copy, edit, speak, regenerate);
+      if (artifact && typeof artifact.id === 'string' && /^[0-9a-f-]{36}$/i.test(artifact.id)) {
+        const report = document.createElement('a');
+        report.className = 'tool-btn';
+        report.textContent = 'Baixar relatório completo (.md)';
+        report.href = '/api/response-artifacts/' + encodeURIComponent(artifact.id);
+        report.download = typeof artifact.file_name === 'string' ? artifact.file_name : 'relatorio-ada-m.md';
+        report.setAttribute('aria-label', 'Baixar relatório completo em Markdown');
+        actions.appendChild(report);
+      }
       bubble.appendChild(actions);
     }
 
@@ -1974,7 +1983,7 @@ const history = [];
         if (!response.body) throw new Error('Este navegador não oferece suporte à resposta em tempo real.');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let buffer = '', answer = '', streamSources = [];
+        let buffer = '', answer = '', streamSources = [], streamArtifact = null, streamDone = false;
         // No modo Live, comece a falar assim que chegar a primeira frase completa.
         // Usa a voz nativa do navegador para evitar esperar uma chamada TTS remota.
         let liveSpeechBuffer = '';
@@ -2000,7 +2009,12 @@ const history = [];
           let payload;
           try { payload = JSON.parse(dataText); } catch { return; }
           if (eventName === 'error') throw new Error(payload.detail || 'A geração falhou.');
-          if (eventName === 'done') { streamSources = Array.isArray(payload.sources) ? payload.sources : []; return; }
+          if (eventName === 'done') {
+            streamDone = true;
+            streamSources = Array.isArray(payload.sources) ? payload.sources : [];
+            streamArtifact = payload.artifact && typeof payload.artifact === 'object' ? payload.artifact : null;
+            return;
+          }
           if (typeof payload.status === 'string' && !answer) {
             // Status de pesquisa: mostra indicador na bolha
             pending.replaceChildren(renderMarkdown('⏳ ' + payload.status));
@@ -2031,8 +2045,18 @@ const history = [];
           if (buffer.trim()) consumeEvent(buffer);
         } finally { reader.releaseLock(); }
         if (!answer.trim()) throw new Error('O modelo encerrou a conexão sem retornar texto.');
+        if (!streamDone) {
+          speakLiveChunks(true);
+          displayAssistantReply(pending, stripThinking(answer), streamSources);
+          const warning = document.createElement('p');
+          warning.className = 'stream-incomplete-warning';
+          warning.textContent = '⚠️ A conexão terminou sem confirmação do servidor. Esta resposta é parcial e não foi salva no histórico como concluída.';
+          pending.appendChild(warning);
+          history.pop();
+          return;
+        }
         speakLiveChunks(true);
-        displayAssistantReply(pending, stripThinking(answer), streamSources);
+        displayAssistantReply(pending, stripThinking(answer), streamSources, streamArtifact);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
         chatTranscript.push({role:'assistant',text:answer}); persistCurrentConversation();
