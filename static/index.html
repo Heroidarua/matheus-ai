@@ -1505,7 +1505,7 @@ const history = [];
       });
     }
 
-    function displayAssistantReply(bubble, text, sources = [], artifact = null) {
+    function displayAssistantReply(bubble, text, sources = [], artifact = null, artifactWarning = '') {
       const rendered = renderMarkdown(text);
       addCodeCopyButtons(rendered);
       linkCitationReferences(rendered, sources);
@@ -1584,6 +1584,12 @@ const history = [];
         actions.appendChild(report);
       }
       bubble.appendChild(actions);
+      if (artifactWarning) {
+        const note = document.createElement('p');
+        note.className = 'stream-incomplete-warning';
+        note.textContent = '⚠️ ' + artifactWarning;
+        bubble.appendChild(note);
+      }
     }
 
     function contentText(content) {
@@ -1983,7 +1989,7 @@ const history = [];
         if (!response.body) throw new Error('Este navegador não oferece suporte à resposta em tempo real.');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let buffer = '', answer = '', streamSources = [], streamArtifact = null, streamDone = false;
+        let buffer = '', answer = '', streamSources = [], streamArtifact = null, streamArtifactWarning = '', streamDone = false;
         // No modo Live, comece a falar assim que chegar a primeira frase completa.
         // Usa a voz nativa do navegador para evitar esperar uma chamada TTS remota.
         let liveSpeechBuffer = '';
@@ -2013,6 +2019,7 @@ const history = [];
             streamDone = true;
             streamSources = Array.isArray(payload.sources) ? payload.sources : [];
             streamArtifact = payload.artifact && typeof payload.artifact === 'object' ? payload.artifact : null;
+            streamArtifactWarning = typeof payload.artifact_warning === 'string' ? payload.artifact_warning : '';
             return;
           }
           if (typeof payload.status === 'string' && !answer) {
@@ -2056,7 +2063,7 @@ const history = [];
           return;
         }
         speakLiveChunks(true);
-        displayAssistantReply(pending, stripThinking(answer), streamSources, streamArtifact);
+        displayAssistantReply(pending, stripThinking(answer), streamSources, streamArtifact, streamArtifactWarning);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
         chatTranscript.push({role:'assistant',text:answer}); persistCurrentConversation();
