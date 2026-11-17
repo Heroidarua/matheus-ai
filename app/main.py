@@ -167,10 +167,18 @@ class ChatMessage(BaseModel):
     content: str | list[dict[str, Any]]
 
 
+RESPONSE_TOKEN_BUDGETS = {"curta": 1024, "normal": 4096, "detalhada": 8192}
+
+
+def response_token_budget(response_length: str) -> int:
+    """Retorna um orçamento amplo de saída sem alterar o modelo configurado."""
+    return RESPONSE_TOKEN_BUDGETS.get(response_length, RESPONSE_TOKEN_BUDGETS["detalhada"])
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
     mode: str = Field(default="normal", pattern="^(normal|livre|programador|estudo|criativo|agente)$")
-    response_length: str = Field(default="normal", pattern="^(curta|normal|detalhada)$")
+    response_length: str = Field(default="detalhada", pattern="^(curta|normal|detalhada)$")
     web_search: bool = False
     stream: bool = False
     memory: list[str] = Field(default_factory=list, max_length=30)
@@ -941,7 +949,7 @@ def retrieve_knowledge(query: str) -> list[tuple[str, str]]:
     return selected
 
 
-def build_system_prompt(mode: str, query: str, memory: list[str] | None = None, response_length: str = "normal") -> str:
+def build_system_prompt(mode: str, query: str, memory: list[str] | None = None, response_length: str = "detalhada") -> str:
     prompt = FREE_MODE_SYSTEM_PROMPT if mode == "livre" else BASE_SYSTEM_PROMPT
     if mode == "livre":
         # Jailbreak ativo: injeta o protocolo de stress-test por cima do modo livre.
@@ -2081,9 +2089,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         fallback_model_base_url = ""
         fallback_model_name = ""
         fallback_headers = {}
-    # Limites adaptativos reduzem a geração excessiva e aceleram respostas longas.
-    # Resposta normal mais enxuta por padrão reduz o tempo de geração; o usuário ainda pode escolher detalhada.
-    max_output_tokens = {"curta": 384, "normal": 1024, "detalhada": 3072}.get(request.response_length, 1024)
+    # Orçamento maior evita cortes prematuros; o tamanho escolhido ainda orienta a concisão do texto.
+    max_output_tokens = response_token_budget(request.response_length)
     payload: dict[str, Any] = {
         "model": active_model_name,
         "messages": messages,
@@ -2116,6 +2123,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 yield "data: " + json.dumps({"status": "Pesquisa concluída"}, ensure_ascii=False) + "\n\n"
             stream_payload = dict(payload)
             stream_payload["stream"] = True
+            streamed_reply = ""
+            stream_finish_reason = None
             try:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as stream_client:
                     if USE_ANTHROPIC:
@@ -2141,7 +2150,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                     delta = event_data.get("delta") or {}
                                     token = delta.get("text", "") if delta.get("type") == "text_delta" else ""
                                     if token:
+                                        streamed_reply += token
                                         yield "data: " + json.dumps({"token": token}, ensure_ascii=False) + "\n\n"
+                                    if event_data.get("type") == "message_delta":
+                                        delta_meta = event_data.get("delta") or {}
+                                        if delta_meta.get("stop_reason") == "max_tokens":
+                                            stream_finish_reason = "length"
                                     if event_data.get("type") == "error":
                                         raise httpx.HTTPError("Anthropic stream error")
                                 except (ValueError, TypeError):
@@ -2192,13 +2206,52 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 try:
                                     chunk = json.loads(raw)
                                     choices = chunk.get("choices") or []
+                                    if choices:
+                                        stream_finish_reason = choices[0].get("finish_reason") or stream_finish_reason
                                     delta = (choices[0].get("delta") or {}).get("content", "") if choices else ""
                                     if isinstance(delta, list):
                                         delta = "".join(str(part.get("text", "")) for part in delta if isinstance(part, dict))
                                     if isinstance(delta, str) and delta:
+                                        streamed_reply += delta
                                         yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
                                 except (ValueError, TypeError, IndexError):
                                     continue
+                # Se o provedor encerrou por limite de saída, continue a partir do texto já enviado.
+                # O conteúdo anterior é preservado e a continuação também é transmitida em tempo real.
+                if stream_finish_reason == "length":
+                    for continuation_index in range(5):
+                        continuation_payload = dict(payload)
+                        continuation_payload["max_tokens"] = 8192
+                        continuation_payload["messages"] = list(messages) + [
+                            {"role": "assistant", "content": streamed_reply},
+                            {"role": "user", "content": "Continue exatamente de onde parou. Não repita o que já escreveu e conclua a resposta."},
+                        ]
+                        continuation_response = await _request_chat_completion(
+                            stream_client, continuation_payload, headers, active_model_base_url
+                        )
+                        continuation_response.raise_for_status()
+                        continuation_data = continuation_response.json()
+                        continuation_choices = continuation_data.get("choices") or []
+                        if not continuation_choices:
+                            break
+                        continuation_choice = continuation_choices[0]
+                        continuation_message = continuation_choice.get("message") or {}
+                        continuation_text = continuation_message.get("content", "")
+                        if isinstance(continuation_text, list):
+                            continuation_text = "".join(
+                                str(part.get("text", "")) for part in continuation_text if isinstance(part, dict)
+                            )
+                        if not isinstance(continuation_text, str) or not continuation_text.strip():
+                            break
+                        continuation_text = continuation_text.strip()
+                        streamed_reply += "\n" + continuation_text
+                        yield "data: " + json.dumps({"token": "\n" + continuation_text}, ensure_ascii=False) + "\n\n"
+                        stream_finish_reason = continuation_choice.get("finish_reason")
+                        if stream_finish_reason != "length":
+                            break
+                    if stream_finish_reason == "length":
+                        warning = "\n\n⚠️ O provedor atingiu o limite máximo de continuação; parte da resposta pode estar pendente."
+                        yield "data: " + json.dumps({"token": warning}, ensure_ascii=False) + "\n\n"
                 DIAGNOSTICS["successes"] += 1
                 DIAGNOSTICS["last_error"] = None
                 yield "event: done\ndata: " + json.dumps({"model": active_model_name, "sources": sources}, ensure_ascii=False) + "\n\n"
