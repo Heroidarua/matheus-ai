@@ -654,55 +654,15 @@ def executar_codigo_python(code: str, mode: str = "normal") -> str:
 
 
 async def ler_url_async(url: str, max_chars: int = 8000) -> str:
-    """Baixa uma página web e extrai o texto principal dos parágrafos."""
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-        }
-        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=10.0), follow_redirects=True) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code >= 400:
-                return f"Erro HTTP {resp.status_code} ao acessar a URL. A página pode não existir ou estar bloqueando robôs."
-            html = resp.text
-        
-        # Extrai todos os parágrafos <p> (contêm o texto real do artigo)
-        paragraphs = re.findall(r"<p[^>]*>(.*?)</p>", html, re.DOTALL | re.IGNORECASE)
-        
-        if not paragraphs:
-            # Fallback: remove tudo que não é <p>
-            text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
-            text = re.sub(r"<[^>]+>", " ", text)
-            text = re.sub(r"\s+", " ", text).strip()
-            return text[:max_chars] if text else "(página vazia ou sem texto)"
-        
-        # Limpa cada parágrafo
-        cleaned_paragraphs = []
-        for p in paragraphs:
-            # Remove tags internas (links, refs, etc.)
-            clean_p = re.sub(r"<[^>]+>", "", p)
-            # Remove espaços excessivos
-            clean_p = re.sub(r"\s+", " ", clean_p).strip()
-            # Ignora parágrafos muito curtos (< 20 chars)
-            if len(clean_p) >= 20:
-                cleaned_paragraphs.append(clean_p)
-        
-        # Junta os parágrafos com quebras de linha
-        text = "\n\n".join(cleaned_paragraphs)
-        
-        return text[:max_chars] if text else "(página vazia ou sem texto)"
-    except httpx.TimeoutException:
-        return "Erro: a página demorou demais para carregar."
-    except httpx.HTTPError as exc:
-        return f"Erro ao acessar a URL: {type(exc).__name__}: {str(exc)[:200]}"
-    except Exception as exc:
-        return f"Erro inesperado: {type(exc).__name__}: {str(exc)[:200]}"
-
+    """Lê URLs pela mesma extração protegida usada por web_fetch."""
+    # Evita que o caminho legado injete HTML de bloqueio, CSS ou fontes no chat.
+    result = await tool_web_fetch(url)
+    if result.get("ok"):
+        return str(result.get("text") or "")[:max_chars]
+    if result.get("found") is False:
+        return str(result.get("note") or "A página carregou, mas não apresentou texto legível.")[:max_chars]
+    reason = str(result.get("error") or "não foi possível extrair o conteúdo")
+    return f"Não foi possível ler esta página: {reason}"[:max_chars]
 
 def detectar_ferramenta(message: str) -> tuple[str, str] | None:
     """Detecta se a mensagem pede para usar uma ferramenta. Retorna (nome_ferramenta, argumento) ou None."""
@@ -1629,6 +1589,52 @@ async def tool_web_fetch(url: str) -> dict:
                     "content_type": content_type or "desconhecido",
                 }
             html = r.text
+
+            # Detecta páginas intermediárias de bloqueio antes de enviar qualquer
+            # conteúdo ao modelo. Algumas proteções retornam HTTP 200 e HTML válido,
+            # mas o corpo contém apenas "Blocked" e CSS/fontes incorporadas.
+            title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+            page_title = re.sub(r"<[^>]+>", " ", title_match.group(1) if title_match else "")
+            page_title = re.sub(r"\s+", " ", page_title).strip().casefold()
+            css_artifacts = bool(re.search(
+                r"@font-face|data:font/|base64,|font-family\s*:|src\s*:\s*url\(",
+                html,
+                re.IGNORECASE,
+            ))
+            visible_probe = re.sub(
+                r"(?is)<(script|style|noscript|svg|template|head)\b[^>]*>.*?</\1>",
+                " ",
+                html,
+            )
+            visible_probe = re.sub(r"<[^>]+>", " ", visible_probe)
+            visible_probe = re.sub(r"\s+", " ", visible_probe).strip().casefold()
+            challenge_markers = (
+                "access denied", "request blocked", "you have been blocked",
+                "attention required", "verify you are human", "checking your browser",
+                "security check", "unusual traffic", "automated requests",
+            )
+            is_block_page = (
+                page_title in {"blocked", "access denied", "just a moment"}
+                or (visible_probe.startswith("blocked") and css_artifacts)
+                or any(marker in visible_probe[:2500] for marker in challenge_markers)
+            )
+            if is_block_page:
+                return {
+                    "ok": False,
+                    "error": "O site retornou uma página de bloqueio ou verificação antirobô, não o conteúdo solicitado. Tente o navegador Chromium ou outra fonte.",
+                    "url": str(r.url)[:2000],
+                    "status_code": r.status_code,
+                    "blocked": True,
+                }
+
+            # Remove conteúdo não visível para impedir vazamento de CSS, scripts,
+            # fontes Base64 e elementos de interface na extração textual.
+            html = re.sub(
+                r"(?is)<(script|style|noscript|svg|template)\b[^>]*>.*?</\1>",
+                " ",
+                html,
+            )
+            html = re.sub(r"(?s)<!--.*?-->", " ", html)
     except httpx.TimeoutException:
         return {"ok": False, "error": f"Timeout de {int(WEB_FETCH_TIMEOUT)}s após {WEB_FETCH_RETRIES + 1} tentativa(s) ao carregar {url[:200]}"}
     except httpx.HTTPStatusError as exc:

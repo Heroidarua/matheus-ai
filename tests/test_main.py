@@ -533,3 +533,37 @@ async def test_web_fetch_retries_transient_502(monkeypatch):
     assert result["ok"] is True
     assert "conteúdo de teste" in result["text"]
     assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_rejects_blocked_html_instead_of_returning_css(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = '<html><head><title>Blocked</title><style>@font-face { font-family: "Roobert"; src: url("data:font/woff2;base64,AAAA"); }</style></head><body>Blocked</body></html>'
+        headers = {"content-type": "text/html; charset=utf-8"}
+        url = "https://example.com/"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
+
+    result = await main.tool_web_fetch("https://example.com/")
+
+    assert result["ok"] is False
+    assert result["blocked"] is True
+    assert "bloqueio" in result["error"].lower()
+    assert "@font-face" not in result["error"]
