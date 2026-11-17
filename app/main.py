@@ -186,10 +186,9 @@ def response_looks_incomplete(reply: str) -> bool:
     if text.count("```") % 2:
         return True
     last_line = text.splitlines()[-1].strip()
-    if re.match(r"(?:(?:async\\s+)?def|class|if|elif|else|for|while|try|except|with)\\b.*:\\s*$", last_line):
+    if re.match(r"(?:(?:async\s+)?def|class|if|elif|else|for|while|try|except|with)\b.*:\s*$", last_line):
         return True
-    return text.endswith((":", "=", "->", ",", "(", "[", "{", "\\\\"))
-
+    return text.endswith((":", "=", "->", ",", "(", "[", "{", "\\"))
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
