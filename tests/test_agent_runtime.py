@@ -79,7 +79,7 @@ def test_terminal_intent_requires_an_execution_action(message):
     ("Use seu terminal Linux: pwd && python3 --version", "pwd && python3 --version"),
     ("Execute no terminal \`git --version\`", "git --version"),
     ("Use o terminal e execute pwd", "pwd"),
-    ("Use o terminal para executar:\\n\\```bash\\npwd && ls -la\\n\\```", "pwd && ls -la"),
+    ("Use o terminal para executar:\n```bash\npwd && ls -la\n```", "pwd && ls -la"),
 ])
 def test_extracts_explicit_terminal_commands(message, expected):
     assert extract_terminal_command(message) == expected
