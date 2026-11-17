@@ -65,6 +65,15 @@ def test_detects_terminal_intent(message):
     assert is_terminal_task(message)
 
 
+@pytest.mark.parametrize("message,expected", [
+    ("pwd && python3 --version && node --version && git --version", "pwd && python3 --version && node --version && git --version"),
+    ("git --version", "git --version"),
+    (chr(96) * 3 + "bash\\npwd && ls -la\\n" + chr(96) * 3, "pwd && ls -la"),
+])
+def test_detects_and_extracts_raw_shell_commands(message, expected):
+    assert is_terminal_task(message)
+    assert extract_terminal_command(message) == expected
+
 @pytest.mark.parametrize("message", [
     "O que é um terminal Linux?",
     "Como funciona o shell?",
