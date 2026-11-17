@@ -258,12 +258,12 @@ def normalize_tool_url(value: Any) -> str:
 
 AGENT_TOOLS_SPEC = """
 MODO AGENTE — FERRAMENTAS DISPONÍVEIS
-FERRAMENTAS LINUX INSTALADAS NO EXECUTOR:
+FERRAMENTAS LINUX PREVISTAS PARA O EXECUTOR:
 - Diagnóstico/rede: nmap, nc (netcat), curl, wget, jq.
 - Auditoria web: nikto e gobuster.
 - Auditoria SQL: sqlmap.
 - Desenvolvimento e automação: python3, pip, git e utilitários Linux.
-Use essas ferramentas pelo mesmo instrumento terminal, enviando um comando por chamada e analisando stdout, stderr e exit_code antes da próxima etapa.
+IMPORTANTE: o terminal pode executar em uma VPS remota separada do container da API. Antes de usar qualquer ferramenta, verifique no próprio terminal remoto com "command -v nmap sqlmap nikto gobuster jq nc". Só use os binários confirmados nesse executor. Se algum estiver ausente, informe exatamente qual falta; não presuma que instalar pacotes no Dockerfile da API os instalou na VPS.
 
 REGRAS OBRIGATÓRIAS DE SEGURANÇA PARA TESTES:
 - Antes de qualquer varredura, confirme que o alvo pertence ao usuário ou que ele tem autorização explícita para testá-lo. Se o alvo, a propriedade ou o escopo não estiver claro, pergunte antes de executar.
