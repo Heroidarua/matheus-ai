@@ -15,9 +15,22 @@ def test_health_endpoint():
 
 
 def test_response_token_budgets_support_complete_long_answers():
-    assert main.response_token_budget("curta") == 1024
-    assert main.response_token_budget("normal") == 4096
-    assert main.response_token_budget("detalhada") == 8192
+    assert main.response_token_budget("curta") == 2048
+    assert main.response_token_budget("normal") == 8192
+    assert main.response_token_budget("detalhada") == 32768
+
+
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [
+        ("def multiplicacao(a, b):", True),
+        ("\`\`\`python\nprint('teste')", True),
+        ("def multiplicacao(a, b):\n    return a * b", False),
+        ("A resposta foi concluída corretamente.", False),
+    ],
+)
+def test_response_looks_incomplete_detects_truncated_code(reply, expected):
+    assert main.response_looks_incomplete(reply) is expected
 
 
 def test_chat_request_defaults_to_detailed_response():
