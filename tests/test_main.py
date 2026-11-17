@@ -14,9 +14,9 @@ def test_health_endpoint():
     assert response.json()["status"] == "ok"
 
 
-def test_response_token_budgets_support_complete_long_answers():
-    assert main.response_token_budget("curta") == 2048
-    assert main.response_token_budget("normal") == 8192
+def test_response_token_budget_does_not_shrink_output_by_ui_preference():
+    assert main.response_token_budget("curta") == 32768
+    assert main.response_token_budget("normal") == 32768
     assert main.response_token_budget("detalhada") == 32768
 
 
