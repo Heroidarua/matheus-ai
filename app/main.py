@@ -1499,7 +1499,8 @@ async def search_web(query: str) -> list[dict[str, str]]:
     return diverse[:6]
 
 # ── Loop de pesquisa web em tempo real (ferramentas) ─────────────────────────
-WEB_FETCH_TIMEOUT = 15.0        # segundos por página
+WEB_FETCH_TIMEOUT = 22.0        # segundos por página, incluindo páginas lentas
+WEB_FETCH_RETRIES = 1           # uma nova tentativa somente em falhas transitórias
 WEB_SEARCH_TIMEOUT = 30.0       # segundos por busca
 WEB_MAX_TURNS = 10              # voltas máximas do modelo
 WEB_MAX_FETCHES = 5             # URLs lidas por pergunta
@@ -1597,21 +1598,42 @@ async def tool_web_fetch(url: str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(WEB_FETCH_TIMEOUT, connect=8.0),
                                      headers=headers, follow_redirects=True) as client:
-            r = await client.get(url)
-            r.raise_for_status()
+            response = None
+            for attempt in range(WEB_FETCH_RETRIES + 1):
+                try:
+                    response = await client.get(url)
+                    if response.status_code in {502, 503, 504} and attempt < WEB_FETCH_RETRIES:
+                        print(f"[web_fetch] transient_http={response.status_code} retry={attempt + 1} url={url[:180]}")
+                        await asyncio.sleep(0.6 * (attempt + 1))
+                        continue
+                    response.raise_for_status()
+                    break
+                except httpx.TimeoutException:
+                    if attempt >= WEB_FETCH_RETRIES:
+                        raise
+                    print(f"[web_fetch] timeout retry={attempt + 1} url={url[:180]}")
+                    await asyncio.sleep(0.6 * (attempt + 1))
+            if response is None:
+                return {"ok": False, "error": "A leitura da página não recebeu uma resposta válida."}
+            r = response
+            if not _public_http_url(str(r.url)):
+                return {"ok": False, "error": "Redirecionamento bloqueado: o destino final não é um endereço público."}
             content_type = r.headers.get("content-type", "").split(";", 1)[0].strip().lower()
             readable_types = {"text/html", "application/xhtml+xml", "text/plain", "application/json", "application/ld+json"}
             if not (content_type.startswith("text/") or content_type in readable_types):
                 return {
                     "ok": False,
-                    "error": "A página respondeu com conteúdo binário ou não textual; o conteúdo bruto foi bloqueado para evitar texto ilegível. Tente abrir pelo navegador Chromium.",
+                    "error": "A página respondeu com conteúdo binário ou não textual; o conteúdo bruto foi bloqueado. Tente abrir pelo navegador Chromium.",
                     "url": str(r.url)[:2000],
                     "status_code": r.status_code,
                     "content_type": content_type or "desconhecido",
                 }
             html = r.text
     except httpx.TimeoutException:
-        return {"ok": False, "error": f"Timeout de {int(WEB_FETCH_TIMEOUT)}s ao carregar {url[:200]}"}
+        return {"ok": False, "error": f"Timeout de {int(WEB_FETCH_TIMEOUT)}s após {WEB_FETCH_RETRIES + 1} tentativa(s) ao carregar {url[:200]}"}
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        return {"ok": False, "error": f"HTTP {status} ao carregar {url[:200]}", "status_code": status}
     except (httpx.HTTPError, ValueError) as exc:
         return {"ok": False, "error": f"Falha ao carregar {url[:200]}: {type(exc).__name__}"}
     text = ""
@@ -1638,29 +1660,48 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
     if action not in allowed_actions:
         return {"ok": False, "error": "Ação de navegador não permitida."}
     payload = {"session_id": session_id, "action": action, **arguments}
+    retryable_action = action in {"open", "inspect", "text", "tabs"}
+    max_attempts = 3 if retryable_action else 1
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=6.0)) as client:
-            response = await client.post(
-                f"{BROWSER_SERVICE_URL}/v1/action",
-                headers={"X-ADA-Browser-Key": BROWSER_SERVICE_API_KEY},
-                json=payload,
-            )
+        async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=8.0)) as client:
+            response = None
+            for attempt in range(max_attempts):
+                try:
+                    response = await client.post(
+                        f"{BROWSER_SERVICE_URL}/v1/action",
+                        headers={"X-ADA-Browser-Key": BROWSER_SERVICE_API_KEY},
+                        json=payload,
+                    )
+                    if response.status_code in {502, 503, 504} and attempt + 1 < max_attempts:
+                        print(f"[browser] transient_http={response.status_code} retry={attempt + 1}/{max_attempts - 1} action={action}")
+                        await asyncio.sleep(0.7 * (attempt + 1))
+                        continue
+                    break
+                except httpx.TimeoutException:
+                    if attempt + 1 >= max_attempts:
+                        raise
+                    print(f"[browser] transient_timeout retry={attempt + 1}/{max_attempts - 1} action={action}")
+                    await asyncio.sleep(0.7 * (attempt + 1))
+            if response is None:
+                return {"ok": False, "error": "O serviço Chromium não retornou uma resposta."}
         if response.status_code >= 400:
             try:
-                detail = response.json().get("detail", "Falha no serviço de navegador")
+                parsed_error = response.json()
+                detail = parsed_error.get("detail", "Falha no serviço de navegador") if isinstance(parsed_error, dict) else "Falha no serviço de navegador"
             except (ValueError, AttributeError):
-                detail = response.text[:300] or "Resposta sem detalhe"
-            print(
-                f"[browser] service_http_error status={response.status_code} "
-                f"url={BROWSER_SERVICE_URL}/v1/action detail={str(detail)[:300]}"
-            )
+                detail = re.sub(r"\\s+", " ", re.sub(r"<[^>]+>", " ", response.text[:1200])).strip()
+                detail = detail[:180] or "Resposta HTML/texto inválida do proxy"
+            print(f"[browser] service_http_error status={response.status_code} action={action} detail={str(detail)[:220]}")
             return {
                 "ok": False,
-                "error": f"Serviço de navegador HTTP {response.status_code}: {str(detail)[:400]}",
+                "error": f"Serviço Chromium HTTP {response.status_code}: {str(detail)[:220]}",
+                "status_code": response.status_code,
+                "retryable": response.status_code in {502, 503, 504},
             }
         result = response.json()
-        # A imagem não deve ser despejada no contexto textual do modelo; mantemos o resultado compacto.
-        if action == "screenshot" and isinstance(result, dict) and result.get("image_base64"):
+        if not isinstance(result, dict):
+            return {"ok": False, "error": "O serviço Chromium retornou um formato JSON inesperado."}
+        if action == "screenshot" and result.get("image_base64"):
             result = {
                 "ok": bool(result.get("ok")),
                 "screenshot_captured": True,
@@ -1668,17 +1709,17 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
                 "size_bytes": len(result["image_base64"]) * 3 // 4,
                 "url": result.get("url", ""),
             }
-        if isinstance(result, dict) and isinstance(result.get("text"), str):
+        if isinstance(result.get("text"), str):
             result["text"] = result["text"][:6000]
         return result
     except httpx.TimeoutException as exc:
         print(f"[browser] service_timeout type={type(exc).__name__} url={BROWSER_SERVICE_URL}/v1/action")
-        return {"ok": False, "error": "Tempo esgotado aguardando o serviço Chromium."}
+        return {"ok": False, "error": "Tempo esgotado aguardando o serviço Chromium.", "retryable": True}
     except httpx.HTTPError as exc:
-        print(f"[browser] service_connection_error type={type(exc).__name__} detail={str(exc)[:300]} url={BROWSER_SERVICE_URL}/v1/action")
-        return {"ok": False, "error": f"Falha de conexão com serviço Chromium ({type(exc).__name__})."}
+        print(f"[browser] service_connection_error type={type(exc).__name__} detail={str(exc)[:220]} url={BROWSER_SERVICE_URL}/v1/action")
+        return {"ok": False, "error": f"Falha de conexão com serviço Chromium ({type(exc).__name__}).", "retryable": True}
     except ValueError as exc:
-        print(f"[browser] service_invalid_response type={type(exc).__name__} detail={str(exc)[:300]}")
+        print(f"[browser] service_invalid_response type={type(exc).__name__} detail={str(exc)[:220]}")
         return {"ok": False, "error": "O serviço Chromium retornou uma resposta inválida."}
 
 
@@ -2538,6 +2579,19 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             elif name == "browser":
                 loop_status["status"] = "Navegando…"
                 result = await tool_browser_action(session_id, **args)
+                if not result.get("ok") and args.get("action") == "open" and args.get("url"):
+                    browser_error = result.get("error", "Falha desconhecida no Chromium")
+                    fallback = await tool_web_fetch(args["url"])
+                    if fallback.get("ok"):
+                        result = {
+                            "ok": True,
+                            "fallback_used": "web_fetch",
+                            "browser_interaction_available": False,
+                            "browser_error": browser_error,
+                            "url": fallback.get("url", args["url"]),
+                            "text": fallback.get("text", ""),
+                            "note": "O Chromium falhou ao abrir a página. O texto foi obtido por web_fetch em modo somente leitura; cliques, formulários e navegação interativa não foram executados.",
+                        }
             elif name == "terminal":
                 if terminal_calls >= WEB_MAX_TERMINAL_CALLS:
                     result = {
@@ -2556,6 +2610,21 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     loop_status["status"] = "Lendo a página…"
                     fetched_urls.add(args["url"])
                     result = await tool_web_fetch(args["url"])
+                    if not result.get("ok") and re.search(
+                        r"Timeout|HTTP (?:502|503|504)|ConnectError|ReadError|RemoteProtocolError",
+                        str(result.get("error", "")),
+                        re.IGNORECASE,
+                    ):
+                        fetch_error = result.get("error", "Falha transitória na leitura")
+                        browser_fallback = await tool_browser_action(session_id, "open", url=args["url"])
+                        if browser_fallback.get("ok"):
+                            result = {
+                                "ok": True,
+                                "fallback_used": "browser",
+                                "web_fetch_error": fetch_error,
+                                "browser_result": browser_fallback,
+                                "note": "web_fetch falhou; a página foi aberta pelo Chromium como alternativa.",
+                            }
             print(f"[webloop] turn={turn} tool={name} -> {str(result)[:160]}")
             loop_messages.append({
                 "role": "user",
