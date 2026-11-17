@@ -24,7 +24,7 @@ def test_response_token_budgets_support_complete_long_answers():
     ("reply", "expected"),
     [
         ("def multiplicacao(a, b):", True),
-        ("\`\`\`python\nprint('teste')", True),
+        ("```python\nprint('teste')", True),
         ("def multiplicacao(a, b):\n    return a * b", False),
         ("A resposta foi concluída corretamente.", False),
     ],
