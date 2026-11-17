@@ -167,13 +167,28 @@ class ChatMessage(BaseModel):
     content: str | list[dict[str, Any]]
 
 
-RESPONSE_TOKEN_BUDGETS = {"curta": 1024, "normal": 4096, "detalhada": 8192}
+# Limites de saída ampliados. O modelo configurado permanece inalterado.
+RESPONSE_TOKEN_BUDGETS = {"curta": 2048, "normal": 8192, "detalhada": 32768}
+RESPONSE_CONTINUATION_TOKENS = 16384
+RESPONSE_MAX_CONTINUATIONS = 6
 
 
 def response_token_budget(response_length: str) -> int:
     """Retorna um orçamento amplo de saída sem alterar o modelo configurado."""
     return RESPONSE_TOKEN_BUDGETS.get(response_length, RESPONSE_TOKEN_BUDGETS["detalhada"])
 
+
+def response_looks_incomplete(reply: str) -> bool:
+    """Detecta finais claramente interrompidos mesmo quando o provedor diz 'stop'."""
+    text = (reply or "").rstrip()
+    if not text:
+        return False
+    if text.count("```") % 2:
+        return True
+    last_line = text.splitlines()[-1].strip()
+    if re.match(r"(?:(?:async\s+)?def|class|if|elif|else|for|while|try|except|with)\b.*:\s*$", last_line):
+        return True
+    return text.endswith((":", "=", "->", ",", "(", "[", "{", "\\"))
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
@@ -2126,7 +2141,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             streamed_reply = ""
             stream_finish_reason = None
             try:
-                async with httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=8.0)) as stream_client:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=15.0)) as stream_client:
                     if USE_ANTHROPIC:
                         async with stream_client.stream("POST", _anthropic_endpoint(), headers={
                             "Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}",
@@ -2216,42 +2231,51 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                         yield "data: " + json.dumps({"token": delta}, ensure_ascii=False) + "\n\n"
                                 except (ValueError, TypeError, IndexError):
                                     continue
-                # Se o provedor encerrou por limite de saída, continue a partir do texto já enviado.
-                # O conteúdo anterior é preservado e a continuação também é transmitida em tempo real.
-                if stream_finish_reason == "length":
-                    for continuation_index in range(5):
-                        continuation_payload = dict(payload)
-                        continuation_payload["max_tokens"] = 8192
-                        continuation_payload["messages"] = list(messages) + [
-                            {"role": "assistant", "content": streamed_reply},
-                            {"role": "user", "content": "Continue exatamente de onde parou. Não repita o que já escreveu e conclua a resposta."},
-                        ]
-                        continuation_response = await _request_chat_completion(
-                            stream_client, continuation_payload, headers, active_model_base_url
+                # Continua tanto em cortes sinalizados pelo provedor quanto em finais
+                # estruturalmente incompletos (por exemplo, uma definição Python terminando em ':').
+                needs_continuation = (
+                    stream_finish_reason == "length" or response_looks_incomplete(streamed_reply)
+                )
+                for continuation_index in range(RESPONSE_MAX_CONTINUATIONS if needs_continuation else 0):
+                    continuation_payload = dict(payload)
+                    continuation_payload["max_tokens"] = RESPONSE_CONTINUATION_TOKENS
+                    continuation_payload["messages"] = list(messages) + [
+                        {"role": "assistant", "content": streamed_reply},
+                        {"role": "user", "content": (
+                            "Continue exatamente do ponto em que parou. Não repita conteúdo. "
+                            "Se estiver no meio de código, complete a estrutura e feche os blocos "
+                            "necessários. Entregue a resposta inteira e finalize."
+                        )},
+                    ]
+                    continuation_response = await _request_chat_completion(
+                        stream_client, continuation_payload, headers, active_model_base_url
+                    )
+                    continuation_response.raise_for_status()
+                    continuation_data = continuation_response.json()
+                    continuation_choices = continuation_data.get("choices") or []
+                    if not continuation_choices:
+                        break
+                    continuation_choice = continuation_choices[0]
+                    continuation_message = continuation_choice.get("message") or {}
+                    continuation_text = continuation_message.get("content", "")
+                    if isinstance(continuation_text, list):
+                        continuation_text = "".join(
+                            str(part.get("text", "")) for part in continuation_text if isinstance(part, dict)
                         )
-                        continuation_response.raise_for_status()
-                        continuation_data = continuation_response.json()
-                        continuation_choices = continuation_data.get("choices") or []
-                        if not continuation_choices:
-                            break
-                        continuation_choice = continuation_choices[0]
-                        continuation_message = continuation_choice.get("message") or {}
-                        continuation_text = continuation_message.get("content", "")
-                        if isinstance(continuation_text, list):
-                            continuation_text = "".join(
-                                str(part.get("text", "")) for part in continuation_text if isinstance(part, dict)
-                            )
-                        if not isinstance(continuation_text, str) or not continuation_text.strip():
-                            break
-                        continuation_text = continuation_text.strip()
-                        streamed_reply += "\n" + continuation_text
-                        yield "data: " + json.dumps({"token": "\n" + continuation_text}, ensure_ascii=False) + "\n\n"
-                        stream_finish_reason = continuation_choice.get("finish_reason")
-                        if stream_finish_reason != "length":
-                            break
-                    if stream_finish_reason == "length":
-                        warning = "\n\n⚠️ O provedor atingiu o limite máximo de continuação; parte da resposta pode estar pendente."
-                        yield "data: " + json.dumps({"token": warning}, ensure_ascii=False) + "\n\n"
+                    if not isinstance(continuation_text, str) or not continuation_text.strip():
+                        break
+                    continuation_text = continuation_text.strip()
+                    streamed_reply += "\n" + continuation_text
+                    yield "data: " + json.dumps({"token": "\n" + continuation_text}, ensure_ascii=False) + "\n\n"
+                    stream_finish_reason = continuation_choice.get("finish_reason")
+                    needs_continuation = (
+                        stream_finish_reason == "length" or response_looks_incomplete(streamed_reply)
+                    )
+                    if not needs_continuation:
+                        break
+                if needs_continuation:
+                    warning = "\n\n⚠️ A resposta ainda parece incompleta após várias continuações. Peça para a ADA-M continuar."
+                    yield "data: " + json.dumps({"token": warning}, ensure_ascii=False) + "\n\n"
                 DIAGNOSTICS["successes"] += 1
                 DIAGNOSTICS["last_error"] = None
                 yield "event: done\ndata: " + json.dumps({"model": active_model_name, "sources": sources}, ensure_ascii=False) + "\n\n"
