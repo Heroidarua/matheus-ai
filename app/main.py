@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.response_artifacts import get_response_artifact, save_response_artifact
 from app.long_term_memory import (
@@ -1966,6 +1966,13 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         )
     agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message)
     terminal_task = is_terminal_task(last_user_message)
+    terminal_required = requires_terminal_execution(
+        last_user_message,
+        agent_mode_active=agent_mode_active,
+        terminal_configured=is_terminal_configured(),
+        explicit_terminal_task=terminal_task,
+        browser_task=is_browser_task(last_user_message),
+    )
     if should_search and not search_unavailable:
         system_prompt += (
             "\n\n" + WEB_TOOLS_SPEC +
@@ -2447,7 +2454,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 + f"\\n\\nCódigo de saída: {exit_code}\\nWorkspace: {result.get('workspace', '/home/ada-runner/workspace')}"
             )
 
-        if terminal_task:
+        if terminal_required:
             if not is_terminal_configured():
                 return (
                     "❌ **Terminal indisponível:** o executor não está configurado. Confira ADA_EXECUTOR_URL, "
@@ -2462,6 +2469,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 return terminal_reply(result), {"model": active_model_name}
 
         terminal_calls = 0
+        malformed_tool_retries = 0
         for turn in range(1, WEB_MAX_TURNS + 1):
             use_tools = turn < WEB_MAX_TURNS  # reserva a última rodada para a resposta final
             loop_status["status"] = "Pesquisando…" if turn == 1 else "Processando…"
@@ -2478,19 +2486,25 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
             call = parse_tool_call(content_out) if use_tools else None
             if not call:
-                if terminal_task and terminal_calls == 0:
-                    if turn < WEB_MAX_TURNS - 1:
+                if terminal_required and terminal_calls == 0:
+                    if malformed_tool_retries < 2 and turn < WEB_MAX_TURNS - 1:
+                        malformed_tool_retries += 1
+                        if content_out:
+                            loop_messages.append({"role": "assistant", "content": content_out[:6000]})
                         loop_messages.append({
                             "role": "system",
                             "content": (
-                                "O usuário solicitou explicitamente o uso do terminal e nenhuma execução ocorreu ainda. "
-                                "Não responda em prosa nem descreva um ambiente hipotético. Emita somente um JSON válido "
-                                "chamando a ferramenta terminal com um comando Linux real e seguro para começar a tarefa."
+                                "A resposta anterior não foi uma chamada de ferramenta JSON válida; nenhum comando foi executado. "
+                                "Tente novamente agora. Responda APENAS com um JSON completo e válido no formato "
+                                '{"tool":"terminal","args":{"command":"comando Linux curto"}}. '
+                                "Não escreva explicações, não inclua vários arquivos num único heredoc e mantenha o comando "
+                                "curto; divida a tarefa em uma etapa por chamada. Feche todas as aspas e chaves."
                             ),
                         })
                         continue
                     return (
-                        "❌ Não consegui acionar a ferramenta de terminal. Nenhum comando foi executado e não há saída para apresentar."
+                        "❌ Não consegui acionar o terminal com uma chamada válida. Nenhum comando foi executado. "
+                        "A resposta do modelo veio incompleta ou fora do formato JSON esperado; tente novamente com etapas menores."
                     ), data
                 return (content_out or "").strip(), data
             name, args = call
