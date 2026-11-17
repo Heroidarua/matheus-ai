@@ -398,3 +398,7 @@ def test_main_parser_accepts_isolated_terminal_tool():
         '{"tool":"terminal","args":{"command":"pwd && ls -la"}}'
     )
     assert call == ("terminal", {"command": "pwd && ls -la"})
+
+
+def test_tool_call_output_budget_is_higher_than_previous_512_token_limit():
+    assert main.TOOL_CALL_MAX_TOKENS == 4096
