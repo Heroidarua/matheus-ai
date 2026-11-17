@@ -77,7 +77,7 @@ def test_terminal_intent_requires_an_execution_action(message):
 
 @pytest.mark.parametrize("message,expected", [
     ("Use seu terminal Linux: pwd && python3 --version", "pwd && python3 --version"),
-    ("Execute no terminal \`git --version\`", "git --version"),
+    ("Execute no terminal `git --version`", "git --version"),
     ("Use o terminal e execute pwd", "pwd"),
     ("Use o terminal para executar:\n```bash\npwd && ls -la\n```", "pwd && ls -la"),
 ])
