@@ -13,7 +13,6 @@ from typing import Any
 import psycopg
 
 MIN_ARTIFACT_CHARS = 5000
-MAX_ARTIFACT_CHARS = 500_000
 
 
 def _database_url() -> str:
@@ -49,7 +48,7 @@ def _connect():
 def save_response_artifact(owner_id: str, content: str) -> dict[str, Any] | None:
     """Save only substantial completed responses; return safe download metadata."""
     text = content if isinstance(content, str) else ""
-    if not owner_id or len(text) < MIN_ARTIFACT_CHARS or len(text) > MAX_ARTIFACT_CHARS:
+    if not owner_id or len(text) < MIN_ARTIFACT_CHARS:
         return None
     conn = _connect()
     if conn is None:
