@@ -67,10 +67,9 @@ def _client():
     )
 
 
-async def _run_in_sandbox(sandbox_id: str, command: str) -> dict[str, Any]:
+async def _run_in_sandbox(client, sandbox_id: str, command: str) -> dict[str, Any]:
     from render.sandbox import SandboxExecExit, SandboxExecOutput
 
-    client = _client()
     script = (
         f"mkdir -p {shlex.quote(WORKSPACE)} && "
         f"cd {shlex.quote(WORKSPACE)} && {command}"
@@ -133,11 +132,14 @@ async def run_terminal_command(session: dict[str, Any], command: Any) -> dict[st
             ),
         }
 
+    stage = "initializing Render SDK client"
     try:
         client = _client()
         sandbox_id = str(session.get("ada_terminal_sandbox_id") or "")
         reused = bool(sandbox_id)
+
         if sandbox_id:
+            stage = "retrieving existing sandbox"
             try:
                 sandbox = await client.sandboxes.from_id(sandbox_id)
                 if sandbox.status in {"terminated", "errored"}:
@@ -151,6 +153,7 @@ async def run_terminal_command(session: dict[str, Any], command: Any) -> dict[st
                     raise
 
         if not sandbox_id:
+            stage = "creating sandbox"
             sandbox = await client.sandboxes.create(
                 plan="1c-2g",
                 timeout_seconds=SANDBOX_RUNTIME_SECONDS,
@@ -161,8 +164,9 @@ async def run_terminal_command(session: dict[str, Any], command: Any) -> dict[st
             sandbox_id = sandbox.id
             session["ada_terminal_sandbox_id"] = sandbox_id
 
+        stage = "executing command in sandbox"
         result = await asyncio.wait_for(
-            _run_in_sandbox(sandbox_id, clean_command),
+            _run_in_sandbox(client, sandbox_id, clean_command),
             timeout=COMMAND_TIMEOUT_SECONDS + 25,
         )
         result["sandbox_reused"] = reused
@@ -179,11 +183,18 @@ async def run_terminal_command(session: dict[str, Any], command: Any) -> dict[st
             ),
         }
     except Exception as exc:
-        print(f"[terminal] sandbox operation failed ({type(exc).__name__})")
+        # Keep credentials and request headers out of logs; include the actual
+        # exception message and operation stage so SDK/API mismatches are debuggable.
+        detail = str(exc).strip().replace("\n", " ")[:500]
+        print(
+            f"[terminal] sandbox operation failed "
+            f"stage={stage!r} error={type(exc).__name__} detail={detail!r}"
+        )
         return {
             "ok": False,
             "error": (
-                f"Falha no terminal isolado ({type(exc).__name__}). "
-                "Confira as credenciais, o workspace e os limites do Render."
+                f"Falha no terminal isolado durante '{stage}' "
+                f"({type(exc).__name__}: {detail or 'sem detalhes'}). "
+                "Consulte os logs do serviço ADA-M no Render."
             ),
         }
