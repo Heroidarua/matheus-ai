@@ -141,7 +141,7 @@ def should_run_agent_loop(
     agent_mode_active: bool,
     summary_requested: bool,
     code_generation_needed: bool,
-    terminal_required: bool,
+    terminal_task: bool,
     terminal_configured: bool,
     should_search: bool,
     search_unavailable: bool,
@@ -152,7 +152,7 @@ def should_run_agent_loop(
         return False
     if not code_generation_needed:
         return True
-    return terminal_required or (agent_mode_active and terminal_configured)
+    return terminal_task or (agent_mode_active and terminal_configured)
 
 
 def extract_terminal_command(message: str) -> str | None:
