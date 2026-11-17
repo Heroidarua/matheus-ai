@@ -2,6 +2,7 @@ import pytest
 
 from app.agent_runtime import (
     ToolDefinition,
+    extract_terminal_command,
     is_agent_task,
     is_browser_task,
     is_terminal_task,
@@ -71,6 +72,26 @@ def test_detects_terminal_intent(message):
 ])
 def test_terminal_intent_requires_an_execution_action(message):
     assert not is_terminal_task(message)
+
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("Use seu terminal Linux: pwd && python3 --version", "pwd && python3 --version"),
+    ("Execute no terminal `git --version`", "git --version"),
+    ("Use o terminal e execute pwd", "pwd"),
+    ("Use o terminal para executar:\n```bash\npwd && ls -la\n```", "pwd && ls -la"),
+])
+def test_extracts_explicit_terminal_commands(message, expected):
+    assert extract_terminal_command(message) == expected
+
+
+@pytest.mark.parametrize("message", [
+    "Use o terminal para verificar o ambiente",
+    "O que é um terminal Linux?",
+    "Execute uma tarefa no terminal sem especificar comando",
+])
+def test_does_not_invent_terminal_commands(message):
+    assert extract_terminal_command(message) is None
 
 
 def test_terminal_tool_call_is_accepted_by_allowlist():

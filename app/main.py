@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, normalize_tool_url, parse_tool_call as parse_agent_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
@@ -1920,6 +1920,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
         )
     agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message)
+    terminal_task = is_terminal_task(last_user_message)
     if should_search and not search_unavailable:
         system_prompt += (
             "\n\n" + WEB_TOOLS_SPEC +
@@ -2088,7 +2089,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if MODEL_BASE_URL.startswith("https://api.groq.com"):
         payload["reasoning_effort"] = "low"
 
-    web_loop_active = bool(((should_search and not search_unavailable) or agent_mode_active) and not code_generation_needed and not summary_requested)
+    web_loop_active = bool((((should_search and not search_unavailable) or agent_mode_active) and not summary_requested) and (not code_generation_needed or terminal_task))
     fetched_urls: set[str] = set()
     loop_messages: list[dict[str, Any]] = list(messages)
     loop_status: dict[str, str] = {"status": ""}
@@ -2289,8 +2290,44 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         return response
 
     async def _run_web_loop() -> tuple[str, dict]:
-        """Loop de ferramentas: o modelo chama web_search/web_fetch até responder."""
+        """Loop de ferramentas com execução determinística para pedidos explícitos de terminal."""
         nonlocal sources, fetched_urls
+
+        def terminal_reply(result: dict[str, Any]) -> str:
+            if result.get("error"):
+                return "❌ **O terminal não conseguiu executar o comando.**\\n\\n" + str(result["error"])
+            stdout = str(result.get("stdout") or "")
+            stderr = str(result.get("stderr") or "")
+            output = stdout
+            if stderr:
+                output += ("\\n" if output else "") + "[stderr]\\n" + stderr
+            if not output:
+                output = "(comando executado sem saída)"
+            exit_code = result.get("exit_code", 0)
+            heading = (
+                "✅ **Comando executado no terminal Linux isolado.**"
+                if exit_code == 0
+                else "⚠️ **Comando executado, mas terminou com erro.**"
+            )
+            return (
+                heading + "\\n\\n"
+                + output[:10000]
+                + f"\\n\\nCódigo de saída: {exit_code}\\nWorkspace: {result.get('workspace', '/home/render/ada-workspace')}"
+            )
+
+        if terminal_task:
+            if not is_terminal_configured():
+                return (
+                    "❌ **Terminal indisponível:** o serviço não reconheceu RENDER_API_KEY e "
+                    "RENDER_WORKSPACE_ID. Confira se ambas estão configuradas no serviço principal da ADA-M no Render."
+                ), {"model": active_model_name}
+            explicit_command = extract_terminal_command(last_user_message)
+            if explicit_command:
+                loop_status["status"] = "Executando no terminal isolado…"
+                result = await run_terminal_command(http_request.session, explicit_command)
+                print(f"[webloop] forced terminal execution -> {str(result)[:300]}")
+                return terminal_reply(result), {"model": active_model_name}
+
         for turn in range(1, WEB_MAX_TURNS + 1):
             use_tools = turn < WEB_MAX_TURNS  # na volta 9 retira as ferramentas
             loop_status["status"] = "Pesquisando…" if turn == 1 else "Processando…"
@@ -2307,6 +2344,20 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
             call = parse_tool_call(content_out) if use_tools else None
             if not call:
+                if terminal_task:
+                    if turn < WEB_MAX_TURNS - 1:
+                        loop_messages.append({
+                            "role": "system",
+                            "content": (
+                                "O usuário solicitou explicitamente o uso do terminal. Você ainda não executou a ferramenta. "
+                                "Não responda em prosa nem descreva um ambiente hipotético. Emita somente um JSON válido "
+                                "chamando a ferramenta terminal com um comando Linux real."
+                            ),
+                        })
+                        continue
+                    return (
+                        "❌ Não consegui acionar a ferramenta de terminal. Nenhum comando foi executado e não há saída para apresentar."
+                    ), data
                 return (content_out or "").strip(), data
             name, args = call
             loop_messages.append({"role": "assistant", "content": content_out})
@@ -2325,6 +2376,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             elif name == "terminal":
                 loop_status["status"] = "Executando no terminal isolado…"
                 result = await run_terminal_command(http_request.session, args["command"])
+                print(f"[webloop] terminal tool -> {str(result)[:300]}")
+                return terminal_reply(result), data
             else:
                 if len(fetched_urls) >= WEB_MAX_FETCHES:
                     result = {"ok": False, "error": "Limite de 5 páginas lidas nesta pergunta atingido"}
