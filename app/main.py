@@ -1602,7 +1602,7 @@ async def tool_web_fetch(url: str) -> dict:
                 re.IGNORECASE,
             ))
             visible_probe = re.sub(
-                r"(?is)<(script|style|noscript|svg|template|head)\\b[^>]*>.*?</\1>",
+                r"(?is)<(script|style|noscript|svg|template|head)\b[^>]*>.*?</\1>",
                 " ",
                 html,
             )
@@ -1630,7 +1630,7 @@ async def tool_web_fetch(url: str) -> dict:
             # Remove conteúdo não visível para impedir vazamento de CSS, scripts,
             # fontes Base64 e elementos de interface na extração textual.
             html = re.sub(
-                r"(?is)<(script|style|noscript|svg|template)\\b[^>]*>.*?</\1>",
+                r"(?is)<(script|style|noscript|svg|template)\b[^>]*>.*?</\1>",
                 " ",
                 html,
             )
