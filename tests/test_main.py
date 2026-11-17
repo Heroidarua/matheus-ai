@@ -402,3 +402,134 @@ def test_main_parser_accepts_isolated_terminal_tool():
 
 def test_tool_call_output_budget_is_higher_than_previous_512_token_limit():
     assert main.TOOL_CALL_MAX_TOKENS == 4096
+
+
+@pytest.mark.asyncio
+async def test_browser_open_retries_transient_502(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, status_code, payload=None, text=""):
+            self.status_code = status_code
+            self._payload = payload
+            self.text = text
+
+        def json(self):
+            if self._payload is None:
+                raise ValueError("not json")
+            return self._payload
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            calls.append(kwargs["json"]["action"])
+            if len(calls) == 1:
+                return FakeResponse(502, text="<html>Bad Gateway</html>")
+            return FakeResponse(200, payload={"ok": True, "title": "Example Domain", "text": "Example text"})
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(main, "BROWSER_SERVICE_ENABLED", True)
+    monkeypatch.setattr(main, "BROWSER_SERVICE_URL", "https://browser.example")
+    monkeypatch.setattr(main, "BROWSER_SERVICE_API_KEY", "test-key")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(main.asyncio, "sleep", no_sleep)
+
+    result = await main.tool_browser_action("a" * 24, "open", url="https://example.com")
+
+    assert result["ok"] is True
+    assert result["title"] == "Example Domain"
+    assert calls == ["open", "open"]
+
+
+@pytest.mark.asyncio
+async def test_browser_does_not_retry_non_idempotent_click(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        status_code = 502
+        text = "<html>Bad Gateway</html>"
+
+        def json(self):
+            raise ValueError("not json")
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, *args, **kwargs):
+            calls.append(kwargs["json"]["action"])
+            return FakeResponse()
+
+    monkeypatch.setattr(main, "BROWSER_SERVICE_ENABLED", True)
+    monkeypatch.setattr(main, "BROWSER_SERVICE_URL", "https://browser.example")
+    monkeypatch.setattr(main, "BROWSER_SERVICE_API_KEY", "test-key")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
+
+    result = await main.tool_browser_action("a" * 24, "click", selector="#submit")
+
+    assert result["ok"] is False
+    assert result["status_code"] == 502
+    assert "Bad Gateway" in result["error"]
+    assert calls == ["click"]
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_retries_transient_502(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, status_code, text):
+            self.status_code = status_code
+            self.text = text
+            self.headers = {"content-type": "text/html; charset=utf-8"}
+            self.url = "https://example.com/"
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                request = httpx.Request("GET", self.url)
+                raise httpx.HTTPStatusError("upstream error", request=request,
+                    response=httpx.Response(self.status_code, request=request, text=self.text))
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url):
+            calls.append(url)
+            if len(calls) == 1:
+                return FakeResponse(502, "Bad Gateway")
+            return FakeResponse(200, "<html><body><p>Este é um conteúdo de teste suficientemente longo para extração.</p></body></html>")
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(main.asyncio, "sleep", no_sleep)
+
+    result = await main.tool_web_fetch("https://example.com/")
+
+    assert result["ok"] is True
+    assert "conteúdo de teste" in result["text"]
+    assert len(calls) == 2
