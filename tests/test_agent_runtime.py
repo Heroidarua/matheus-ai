@@ -335,3 +335,10 @@ def test_agent_prompt_documents_installed_tools_and_authorization_boundaries():
         assert tool in AGENT_TOOLS_SPEC
     assert "autorização explícita" in AGENT_TOOLS_SPEC
     assert "Não faça varredura ampla da internet" in AGENT_TOOLS_SPEC
+
+
+def test_agent_prompt_checks_binaries_on_remote_executor():
+    from app.agent_runtime import AGENT_TOOLS_SPEC
+
+    assert "command -v nmap sqlmap nikto gobuster jq nc" in AGENT_TOOLS_SPEC
+    assert "não presuma que instalar pacotes no Dockerfile da API os instalou na VPS" in AGENT_TOOLS_SPEC
