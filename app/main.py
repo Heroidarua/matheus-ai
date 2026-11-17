@@ -2315,6 +2315,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 done_payload = {"model": active_model_name, "sources": sources}
                 if artifact:
                     done_payload["artifact"] = artifact
+                elif len(streamed_reply) >= 5000:
+                    done_payload["artifact_warning"] = (
+                        "A resposta foi concluída, mas o relatório baixável não pôde ser arquivado. "
+                        "Verifique se DATABASE_URL aponta para um PostgreSQL acessível."
+                    )
                 yield "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
             except httpx.TimeoutException:
                 DIAGNOSTICS["errors"] += 1
