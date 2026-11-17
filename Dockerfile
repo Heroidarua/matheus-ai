@@ -10,12 +10,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Ferramentas de diagnóstico e auditoria disponíveis no container.
+# Dependências básicas do container da API. Ferramentas de auditoria devem ser instaladas no executor VPS, não nesta imagem.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
        python3 python3-pip git curl wget \
-       nmap netcat-openbsd sqlmap nikto gobuster jq \
+       nmap netcat-openbsd sqlmap gobuster jq \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
