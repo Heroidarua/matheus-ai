@@ -141,7 +141,7 @@ def should_run_agent_loop(
     agent_mode_active: bool,
     summary_requested: bool,
     code_generation_needed: bool,
-    terminal_task: bool,
+    terminal_required: bool,
     terminal_configured: bool,
     should_search: bool,
     search_unavailable: bool,
@@ -152,7 +152,7 @@ def should_run_agent_loop(
         return False
     if not code_generation_needed:
         return True
-    return terminal_task or (agent_mode_active and terminal_configured)
+    return terminal_required or (agent_mode_active and terminal_configured)
 
 
 def extract_terminal_command(message: str) -> str | None:
@@ -236,7 +236,7 @@ Regras:
 - Use web_fetch apenas para extração simples de texto de páginas públicas; nunca use essa ferramenta para interpretar arquivos binários.
 - Se a página responder com conteúdo binário, formato não suportado, bloqueio ou erro, informe a limitação; nunca reproduza bytes ou conteúdo ilegível como se fosse texto.
 - Use calculate somente para expressões matemáticas simples.
-- Em pedidos de desenvolvimento ou execução, use o terminal quando ele for necessário para inspecionar, criar/editar arquivos, instalar dependências, executar scripts, compilar e testar.
+- Quando o usuário pedir para criar, implementar, editar, corrigir, executar ou testar um projeto de software e o terminal estiver disponível, a execução via terminal é obrigatória; não entregue apenas trechos de código como se a tarefa estivesse concluída. Use o terminal para inspecionar, criar/editar arquivos, instalar dependências, executar scripts, compilar e testar.
 - O terminal permite um fluxo de várias etapas: inspecione o workspace, execute uma ação por chamada, leia o stdout/stderr/código de saída e então decida o próximo passo. NÃO encerre após a primeira chamada se ainda houver etapas necessárias. Continue até verificar a conclusão ou identificar um bloqueio.
 - Você pode fazer até 6 chamadas de terminal por solicitação e até 9 rodadas totais de ferramentas. Se atingir o limite, pare e informe exatamente o que ficou pendente.
 - O workspace persistente da VPS é /home/ada-runner/workspace. Cada chamada começa em um novo shell; use "cd /home/ada-runner/workspace && ..." para escolher o diretório correto. Arquivos criados ali permanecem disponíveis entre solicitações.
