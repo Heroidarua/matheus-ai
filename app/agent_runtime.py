@@ -103,7 +103,7 @@ def is_terminal_task(message: str) -> bool:
     if not text or not re.search(r"\b(terminal|shell|linha de comando|prompt de comando)\b", text):
         return False
     return bool(re.search(
-        r"\b(usa|use|utilize|executa|execute|rode|rodar|instale|instalar|crie|criar|"
+        r"\b(usa|use|utilize|executa|execute|executar|rode|rodar|instale|instalar|crie|criar|"
         r"compile|compilar|teste|testar|comando|comandos|abra|abrir|trabalhe|trabalhar)\b",
         text,
     ))
