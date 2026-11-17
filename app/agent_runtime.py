@@ -97,10 +97,37 @@ def is_browser_task(message: str) -> bool:
                 re.search(browser_terms + r".{0,100}" + action_terms, text))
 
 
+_SHELL_COMMAND_PREFIX = re.compile(
+    r"^(?:\$\s*)?(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
+    r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|which|whereis|env|printenv|"
+    r"mkdir|touch|cp|mv|chmod|curl|wget|apt(?:-get)?|sudo|bash|sh|make|cmake|"
+    r"gcc|g\+\+|date|df|free|ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\b",
+    re.IGNORECASE,
+)
+
+
+def _raw_shell_command(message: str) -> str:
+    """Recognize a raw shell command or fenced shell command."""
+    value = (message or "").strip()
+    fence = chr(96) * 3
+    if value.startswith(fence):
+        first_newline = value.find("\n")
+        closing = value.rfind(fence)
+        if first_newline >= 0 and closing > first_newline:
+            value = value[first_newline + 1:closing].strip()
+    if _SHELL_COMMAND_PREFIX.match(value):
+        return value.removeprefix("$ ").strip()
+    return ""
+
+
 def is_terminal_task(message: str) -> bool:
-    """Detecta pedidos explícitos para usar terminal ou shell."""
+    """Detecta pedidos de terminal, inclusive comandos enviados sem explicação."""
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
-    if not text or not re.search(r"\b(terminal|shell|linha de comando|prompt de comando)\b", text):
+    if not text:
+        return False
+    if _raw_shell_command(message):
+        return True
+    if not re.search(r"\b(terminal|shell|linha de comando|prompt de comando)\b", text):
         return False
     return bool(re.search(
         r"\b(usa|use|utilize|executa|execute|executar|rode|rodar|instale|instalar|crie|criar|"
@@ -113,6 +140,9 @@ def extract_terminal_command(message: str) -> str | None:
     """Extract an explicitly supplied shell command from a terminal request."""
     if not isinstance(message, str) or not message.strip():
         return None
+    raw_command = _raw_shell_command(message)
+    if raw_command:
+        return raw_command
 
     fenced = re.search(
         r"```(?:bash|sh|shell|zsh)?\s*\n(.*?)\n?```",
