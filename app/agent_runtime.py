@@ -97,22 +97,181 @@ def is_browser_task(message: str) -> bool:
                 re.search(browser_terms + r".{0,100}" + action_terms, text))
 
 
+_SHELL_COMMAND_PREFIX = re.compile(
+    r"^(?:\\$\\s*)?(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
+    r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|which|whereis|env|printenv|"
+    r"mkdir|touch|cp|mv|chmod|curl|wget|apt(?:-get)?|sudo|bash|sh|make|cmake|"
+    r"gcc|g\\+\\+|date|df|free|ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\\b",
+    re.IGNORECASE,
+)
+
+def _raw_shell_command(message: str) -> str:
+    """Recognize a raw shell command or fenced shell command."""
+    value = (message or "").strip()
+    fence = chr(96) * 3
+    if value.startswith(fence):
+        first_newline = value.find("\n")
+        closing = value.rfind(fence)
+        if first_newline >= 0 and closing > first_newline:
+            value = value[first_newline + 1:closing].strip()
+    if _SHELL_COMMAND_PREFIX.match(value):
+        return value.removeprefix("$ ").strip()
+    return ""
+
 def is_terminal_task(message: str) -> bool:
-    """Detecta pedidos explícitos para usar terminal ou shell."""
-    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
-    if not text or not re.search(r"\b(terminal|shell|linha de comando|prompt de comando)\b", text):
+    """Detecta pedidos de terminal, inclusive comandos enviados sem explicação."""
+    text = re.sub(r"\\s+", " ", (message or "").strip().casefold())
+    if not text:
+        return False
+    if _raw_shell_command(message):
+        return True
+    if not re.search(r"\\b(terminal|shell|linha de comando|prompt de comando)\\b", text):
         return False
     return bool(re.search(
-        r"\b(usa|use|utilize|executa|execute|executar|rode|rodar|instale|instalar|crie|criar|"
-        r"compile|compilar|teste|testar|comando|comandos|abra|abrir|trabalhe|trabalhar)\b",
+        r"\\b(usa|use|utilize|executa|execute|executar|rode|rodar|instale|instalar|crie|criar|"
+        r"compile|compilar|teste|testar|comando|comandos|abra|abrir|trabalhe|trabalhar)\\b",
         text,
     ))
 
+def extract_terminal_command(message: str) -> str | None:
+    """Extract an explicitly supplied shell command from a terminal request."""
+"""Bounded, allow-listed tool protocol for ADA-M's autonomous agent.
+
+This module deliberately does not execute arbitrary model-generated code. Tool
+implementations are injected by the application, making permissions explicit
+and keeping orchestration separate from the model/provider.
+"""
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from typing import Any, Awaitable, Callable, Mapping
+
+
+MAX_TOOL_NAME_LENGTH = 40
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolDefinition:
+    name: str
+    description: str
+    required: tuple[str, ...]
+    handler: Callable[..., Any]
+
+
+def parse_tool_call(
+    response: str,
+    allowed_tools: Mapping[str, ToolDefinition] | set[str] | tuple[str, ...],
+) -> ToolCall | None:
+    """Parse one JSON tool call and reject unknown tools or malformed arguments."""
+    if not isinstance(response, str) or not response.strip():
+        return None
+
+    # A resposta pode incluir <thinking>, Markdown ou texto antes/depois do JSON.
+    # JSONDecoder.raw_decode respeita objetos aninhados; regexes simples truncam
+    # chamadas reais que possuem o objeto args dentro do objeto principal.
+    decoder = json.JSONDecoder()
+    payloads: list[dict[str, Any]] = []
+    for index, char in enumerate(response):
+        if char != "{":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(response, index)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(payload, dict) and "tool" in payload:
+            payloads.append(payload)
+    allowed = set(allowed_tools.keys()) if isinstance(allowed_tools, Mapping) else set(allowed_tools)
+    for payload in payloads:
+        name = payload.get("tool")
+        arguments = payload.get("args", {})
+        if not isinstance(name, str) or len(name) > MAX_TOOL_NAME_LENGTH or name not in allowed:
+            continue
+        if not isinstance(arguments, dict):
+            continue
+        if isinstance(allowed_tools, Mapping):
+            definition = allowed_tools[name]
+            if any(key not in arguments for key in definition.required):
+                continue
+        return ToolCall(name=name, arguments=arguments)
+    return None
+
+
+def is_agent_task(message: str) -> bool:
+    """Detect explicit action requests without treating ordinary questions as jobs."""
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
+    if not text:
+        return False
+    patterns = (
+        r"^(?:por favor[, ]*)?(?:faça|faz|crie|criar|construa|construir|"
+        r"implemente|implementar|corrija|corrigir|conserte|consertar|"
+        r"edite|editar|modifique|modificar|configure|configurar|"
+        r"acesse|acessar|abra|abrir|entre|entrar|envie|enviar|"
+        r"organize|organizar|execute|executar|rode|rodar|"
+        r"instale|instalar|publique|publicar|prepare|preparar|"
+        r"analise|analisar|verifique|verificar|pesquise|pesquisar)\b",
+        r"^(?:quero que (?:a )?ada-m?\s+)?(?:faça|crie|corrija|conserte|acesse|abra|execute|analise|verifique)\b",
+    )
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def is_browser_task(message: str) -> bool:
+    """Recognize browser requests even when a URL or context precedes the verb."""
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
+    if not text:
+        return False
+    browser_terms = r"(?:navegador|chromium|browser)"
+    action_terms = r"(?:acesse|acessar|abra|abrir|entre|entrar|visite|visitar|navegue|navegar|inspecione|inspecionar|analise|analisar|verifique|verificar)"
+    # Require both an explicit navigation action and an explicit browser reference.
+    return bool(re.search(action_terms + r".{0,100}" + browser_terms, text) or
+                re.search(browser_terms + r".{0,100}" + action_terms, text))
+
+
+_SHELL_COMMAND_PREFIX = re.compile(
+    r"^(?:\\$\\s*)?(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
+    r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|which|whereis|env|printenv|"
+    r"mkdir|touch|cp|mv|chmod|curl|wget|apt(?:-get)?|sudo|bash|sh|make|cmake|"
+    r"gcc|g\\+\\+|date|df|free|ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\\b",
+    re.IGNORECASE,
+)
+
+def _raw_shell_command(message: str) -> str:
+    """Recognize a raw shell command or fenced shell command."""
+    value = (message or "").strip()
+    fence = chr(96) * 3
+    if value.startswith(fence):
+        first_newline = value.find("\n")
+        closing = value.rfind(fence)
+        if first_newline >= 0 and closing > first_newline:
+            value = value[first_newline + 1:closing].strip()
+    if _SHELL_COMMAND_PREFIX.match(value):
+        return value.removeprefix("$ ").strip()
+    return ""
+
+def is_terminal_task(message: str) -> bool:
+    """Detecta pedidos de terminal, inclusive comandos enviados sem explicação."""
+    text = re.sub(r"\\s+", " ", (message or "").strip().casefold())
+    if not text:
+        return False
+    if _raw_shell_command(message):
+        return True
+    if not re.search(r"\\b(terminal|shell|linha de comando|prompt de comando)\\b", text):
+        return False
+    return bool(re.search(
+        r"\\b(usa|use|utilize|executa|execute|executar|rode|rodar|instale|instalar|crie|criar|"
+        r"compile|compilar|teste|testar|comando|comandos|abra|abrir|trabalhe|trabalhar)\\b",
+        text,
+    ))
 
 def extract_terminal_command(message: str) -> str | None:
     """Extract an explicitly supplied shell command from a terminal request."""
-    if not isinstance(message, str) or not message.strip():
-        return None
 
     fenced = re.search(
         r"```(?:bash|sh|shell|zsh)?\s*\n(.*?)\n?```",
