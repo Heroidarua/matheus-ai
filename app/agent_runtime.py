@@ -67,6 +67,17 @@ def parse_tool_call(
     return None
 
 
+
+def looks_like_tool_call(response: str) -> bool:
+    """Detect a tool-call attempt even when its JSON was truncated or malformed.
+
+    This only classifies the response. Incomplete arguments are never repaired
+    or executed; the orchestrator must request a fresh, complete call.
+    """
+    if not isinstance(response, str) or not response.strip():
+        return False
+    return bool(re.search(r'\{\s*["\']tool["\']\s*:', response))
+
 def is_agent_task(message: str) -> bool:
     """Detect explicit action requests without treating ordinary questions as jobs."""
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
