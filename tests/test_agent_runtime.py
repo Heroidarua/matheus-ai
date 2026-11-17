@@ -302,3 +302,13 @@ def test_explicit_terminal_task_reports_unavailable_executor_instead_of_skipping
         terminal_configured=False,
         explicit_terminal_task=True,
     )
+
+
+
+def test_detects_truncated_tool_call_attempts_without_executing_them():
+    from app.agent_runtime import looks_like_tool_call
+
+    assert looks_like_tool_call('{"tool":"terminal","args":{"command":"cat << EOF')
+    assert looks_like_tool_call('prefix {"tool": "browser", "args":')
+    assert not looks_like_tool_call('{"analysis":"not a tool call"}')
+    assert not looks_like_tool_call('Resposta normal sem ferramenta.')
