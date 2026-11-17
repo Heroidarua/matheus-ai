@@ -9,9 +9,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 WORKDIR /app
+
+# Ferramentas de diagnóstico e auditoria disponíveis no container.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates \
+       python3 python3-pip git curl wget \
+       nmap netcat-openbsd sqlmap nikto gobuster jq \
     && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
