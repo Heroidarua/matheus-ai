@@ -24,8 +24,8 @@ from pydantic import BaseModel, Field
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 API_KEY = os.getenv("ADA_BROWSER_API_KEY", "").strip()
-MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "2")), 10))
-MAX_TABS = max(1, min(int(os.getenv("BROWSER_MAX_TABS", "2")), 4))
+MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "1")), 10))
+MAX_TABS = max(1, min(int(os.getenv("BROWSER_MAX_TABS", "1")), 4))
 SESSION_TTL = max(60, min(int(os.getenv("BROWSER_SESSION_TTL", "1800")), 86400))
 ACTION_TIMEOUT_MS = max(3000, min(int(os.getenv("BROWSER_ACTION_TIMEOUT_MS", "15000")), 30000))
 MAX_TEXT_CHARS = 12000
@@ -228,7 +228,7 @@ async def lifespan(_: FastAPI):
     if not API_KEY:
         raise RuntimeError("ADA_BROWSER_API_KEY é obrigatória; não inicie o serviço sem autenticação.")
     playwright = await async_playwright().start()
-    browser = await playwright.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-background-networking"])
+    browser = await playwright.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-background-networking", "--disable-extensions", "--disable-default-apps", "--disable-sync", "--disable-gpu"])
     try:
         yield
     finally:
