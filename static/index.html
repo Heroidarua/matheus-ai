@@ -515,7 +515,7 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
 .ada-terminal-preview-command{color:#8fd6a8;margin-bottom:8px}
 .ada-terminal-preview-output{color:#d8dee9}
 .ada-terminal-preview-exit{border-top:1px solid #30343b;padding:7px 12px;color:#9aa4b2;font:11px system-ui,sans-serif}
-</style>\n
+</style>
   <style id="ada-header-alignment-fix">
     /* Cabeçalho e conteúdo com margens consistentes em telas estreitas. */
     @media (max-width: 899px) {
@@ -534,6 +534,14 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
           max(16px, env(safe-area-inset-right))
           max(12px, env(safe-area-inset-bottom))
           max(16px, env(safe-area-inset-left));
+      }
+      .app-header-v2 {
+        width: calc(100% + 32px);
+        max-width: none;
+        margin-left: -16px;
+        margin-right: -16px;
+        padding-left: 16px;
+        padding-right: 16px;
       }
       .app-header-v2 {
         width: 100%;
