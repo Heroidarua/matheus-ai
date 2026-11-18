@@ -5,6 +5,8 @@ from app.agent_runtime import (
     extract_terminal_command,
     is_agent_task,
     is_admin_install_tools_request,
+    is_admin_diagnostics_request,
+    is_admin_install_tools_status_request,
     is_security_audit_request,
     is_browser_task,
     is_terminal_task,
@@ -451,3 +453,36 @@ def test_vps_diagnostics_request_requires_terminal_in_agent_mode():
         agent_mode_active=True,
         terminal_configured=True,
     )
+
+
+@pytest.mark.parametrize("message,expected", [
+    (
+        "ADA-M, execute ada-admin diagnostics na VPS conectada. Mostre o diagnóstico completo do servidor, incluindo hostname, uptime, memória, espaço em disco, estado dos serviços e disponibilidade das ferramentas. Não altere nenhuma configuração.",
+        "ada-admin diagnostics",
+    ),
+    (
+        "ADA-M, verifique o estado da minha VPS e mostre o diagnóstico do servidor.",
+        "ada-admin diagnostics",
+    ),
+    (
+        "ADA-M, execute ada-admin install-tools-status e mostre o resultado da instalação na VPS.",
+        "ada-admin install-tools-status",
+    ),
+])
+def test_natural_language_vps_readonly_admin_requests_route_deterministically(message, expected):
+    if expected == "ada-admin diagnostics":
+        assert is_admin_diagnostics_request(message)
+    else:
+        assert is_admin_install_tools_status_request(message)
+    assert is_terminal_task(message)
+    assert extract_terminal_command(message) == expected
+
+
+@pytest.mark.parametrize("message", [
+    "Como funciona o diagnóstico de uma VPS?",
+    "Quais ferramentas devo instalar no servidor?",
+    "O que significa status de instalação?",
+])
+def test_admin_readonly_natural_language_detection_does_not_match_questions(message):
+    assert not is_admin_diagnostics_request(message)
+    assert not is_admin_install_tools_status_request(message)
