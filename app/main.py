@@ -2098,7 +2098,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 "use 'cd /home/ada-runner/workspace && comando' para escolher o diretório. "
                 "Para tarefas com várias etapas, inspecione, execute, leia o resultado e continue até verificar a conclusão; "
                 "são permitidas até 6 chamadas de terminal por etapa, com teto acumulado de 24 chamadas por tarefa. "
-                "A ADA-M salva checkpoints e histórico após cada ferramenta; ao pausar, o usuário pode enviar \\"continuar\\" para retomar sem repetir etapas confirmadas. "
+                "A ADA-M salva checkpoints e histórico após cada ferramenta; ao pausar, o usuário pode enviar 'continuar' para retomar sem repetir etapas confirmadas. "
                 "O usuário pode consultar /tarefas e /historico terminal. "
                 "Prefira ambientes virtuais Python e dependências locais Node.js; não use sudo nem tente contornar permissões. "
                 "Não tente acessar segredos ou arquivos privados fora do workspace. Peça autorização antes de exclusões, "
@@ -2634,11 +2634,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             explicit_command = extract_terminal_command(last_user_message) if not resume_agent_job else None
             if explicit_command:
                 pending_tool = {"name": "terminal", "args": {"command": explicit_command}}
+                terminal_calls_total += 1
+                step_count += 1
                 await persist_job("running")
                 loop_status["status"] = "Executando no terminal isolado…"
                 result = await run_terminal_command(http_request.session, explicit_command)
-                terminal_calls_total += 1
-                step_count += 1
                 events.append({
                     "step": step_count, "tool": "terminal", "command": explicit_command,
                     "ok": bool(result.get("ok")), "exit_code": result.get("exit_code"),
