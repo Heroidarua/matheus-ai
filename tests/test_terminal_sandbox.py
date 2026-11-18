@@ -120,7 +120,7 @@ async def test_vps_executor_streams_real_command_output(monkeypatch):
     assert captured["json"] == {"command": "pwd", "timeout": 37}
     assert result["ok"] is True
     assert result["exit_code"] == 0
-    assert result["stdout"] == "/home/ada-runner/workspace\\n"
+    assert result["stdout"] == "/home/ada-runner/workspace\n"
     assert result["workspace"] == "/home/ada-runner/workspace"
     assert result["executor"] == "VPS"
     assert [event["event"] for event in events] == ["start", "output", "output", "complete"]
@@ -164,37 +164,6 @@ async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(mon
             return False
 
         def stream(self, *args, **kwargs):
-            return FakeResponse()
-
-    monkeypatch.setattr(terminal_sandbox.httpx, "AsyncClient", FakeAsyncClient)
-
-    result = await terminal_sandbox.run_terminal_command({}, "nmap --version")
-
-    assert result["ok"] is False
-    assert result["exit_code"] == 127
-    assert result["stderr"] == "nmap: not found"
-
-
-    class FakeResponse:
-        status_code = 200
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {"returncode": 127, "stdout": "", "stderr": "nmap: not found"}
-
-    class FakeAsyncClient:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return False
-
-        async def post(self, *args, **kwargs):
             return FakeResponse()
 
     monkeypatch.setattr(terminal_sandbox.httpx, "AsyncClient", FakeAsyncClient)
