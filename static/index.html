@@ -2049,6 +2049,13 @@ const history = [];
               view.panel.dataset.state='running'; view.state.textContent=payload.status || 'Executando…';
               view.command.textContent='$ '+String(payload.command || 'comando não informado');
               view.output.textContent='Aguardando a saída confirmada do executor…'; view.footer.hidden=true;
+            } else if (payload.phase === 'output') {
+              const prefix = payload.stream === 'stderr' ? '[stderr] ' : '';
+              const nextText = prefix + String(payload.text || '');
+              const currentText = view.output.textContent === 'Aguardando a saída confirmada do executor…' ? '' : view.output.textContent;
+              view.output.textContent = (currentText + nextText).slice(-12000);
+              view.panel.dataset.state = 'running';
+              view.state.textContent = payload.stream === 'stderr' ? 'Executando — stderr' : 'Executando…';
             } else if (payload.phase === 'result') {
               const chunks=[];
               if(payload.stdout) chunks.push(String(payload.stdout));
