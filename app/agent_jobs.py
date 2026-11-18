@@ -21,7 +21,13 @@ _MAX_STATE_BYTES = 450_000
 def _db():
     import os
     url = os.getenv("DATABASE_URL", "").strip()
-    return psycopg.connect(url, connect_timeout=4) if url else None
+    if not url:
+        return None
+    try:
+        return psycopg.connect(url, connect_timeout=4)
+    except Exception as exc:
+        print(f"Agent job database unavailable ({type(exc).__name__}); using process memory")
+        return None
 
 
 def _ensure(cur) -> None:
