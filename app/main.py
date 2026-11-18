@@ -2669,7 +2669,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             call = parse_tool_call(content_out) if use_tools else None
             if not call:
                 attempted_tool_call = looks_like_tool_call(content_out)
-                must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls_this_run == 0 and not resume_agent_job)
+                must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls_this_run == 0)
                 if must_recover_tool_call:
                     if malformed_tool_retries < 2 and turn < WEB_MAX_TURNS - 1:
                         malformed_tool_retries += 1
