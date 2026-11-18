@@ -383,11 +383,21 @@ def test_long_term_memory_retrieval_is_contextual(monkeypatch):
         ('{"tool":"browser","args":{"action":"inspect"}}', ("browser", {"action": "inspect"})),
         ('{"tool":"browser","args":{"action":"click","index":2}}', ("browser", {"action": "click", "index": 2})),
         ('{"tool":"browser","args":{"action":"fill","index":3,"text":"hello"}}', ("browser", {"action": "fill", "index": 3, "text": "hello"})),
+        ('{"tool":"browser","args":{"action":"hover","index":4}}', ("browser", {"action": "hover", "index": 4})),
+        ('{"tool":"browser","args":{"action":"scroll","delta_y":900}}', ("browser", {"action": "scroll", "delta_y": 900})),
+        ('{"tool":"browser","args":{"action":"scroll"}}', ("browser", {"action": "scroll", "delta_y": 700})),
     ],
 )
 def test_browser_tool_parser_accepts_inspection_and_indexed_actions(payload, expected):
     assert main.parse_tool_call(payload) == expected
 
+
+
+
+def test_browser_tool_parser_rejects_invalid_scroll_distance_and_hover_target():
+    assert main.parse_tool_call('{"tool":"browser","args":{"action":"scroll","delta_y":5000}}') is None
+    assert main.parse_tool_call('{"tool":"browser","args":{"action":"scroll","delta_y":"down"}}') is None
+    assert main.parse_tool_call('{"tool":"browser","args":{"action":"hover"}}') is None
 
 def test_browser_tool_parser_rejects_unknown_actions():
     assert main.parse_tool_call('{"tool":"browser","args":{"action":"delete_all"}}') is None

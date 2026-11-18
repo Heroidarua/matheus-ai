@@ -57,6 +57,7 @@ class BrowserAction(BaseModel):
     tab: int | None = Field(default=None, ge=0, le=7)
     index: int | None = Field(default=None, ge=0, le=79)
     full_page: bool = False
+    delta_y: int = Field(default=700, ge=-3000, le=3000)
 
 
 async def is_public_url(value: str) -> bool:
@@ -268,7 +269,7 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
     require_key(x_ada_browser_key)
     if not SESSION_ID_RE.fullmatch(payload.session_id):
         raise HTTPException(status_code=400, detail="Identificador de sessão inválido.")
-    allowed = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
+    allowed = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close", "hover", "scroll"}
     if payload.action not in allowed:
         raise HTTPException(status_code=400, detail="Ação de navegador não permitida.")
 
@@ -324,6 +325,20 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
             if payload.action == "inspect":
                 elements = await page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").evaluate_all("""els => els.filter(el => el.getClientRects().length).slice(0, 80).map((el, index) => ({index, tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || el.getAttribute("aria-label") || "").trim().replace(/\\s+/g, " ").slice(0, 180), role: el.getAttribute("role") || "", aria_label: el.getAttribute("aria-label") || "", href: el.getAttribute("href") || "", type: el.getAttribute("type") || "", name: el.getAttribute("name") || "", placeholder: el.getAttribute("placeholder") || ""}))""")
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "elements": elements}
+            if payload.action == "hover":
+                if not payload.selector and payload.index is None:
+                    raise HTTPException(status_code=400, detail="A ação hover exige selector ou index obtido em inspect.")
+                target = page.locator(payload.selector).first if payload.selector else page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").nth(payload.index)
+                await target.hover()
+                await page.wait_for_timeout(150)
+                extracted = await extract_page_content(page)
+                return {"ok": True, "url": page.url, **extracted}
+            if payload.action == "scroll":
+                await page.mouse.wheel(0, payload.delta_y)
+                await page.wait_for_timeout(350)
+                extracted = await extract_page_content(page)
+                scroll_y = await page.evaluate("() => window.scrollY")
+                return {"ok": True, "url": page.url, "scroll_y": scroll_y, **extracted}
             if payload.action == "click":
                 if not payload.selector and payload.index is None:
                     raise HTTPException(status_code=400, detail="A ação click exige selector ou index obtido em inspect.")
