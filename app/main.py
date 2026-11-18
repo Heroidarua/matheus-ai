@@ -2269,9 +2269,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
     def redact_terminal_preview(value: Any) -> str:
         text_value = str(value or "")
-        text_value = re.sub(r"(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,;]+", r"\\1[REDACTED]", text_value)
-        text_value = re.sub(r"(?i)(\\b(?:api[_-]?key|access[_-]?token|token|secret|password|passwd)\\b\\s*[:=]\\s*)[^\\s,;]+", r"\\1[REDACTED]", text_value)
-        text_value = re.sub(r"(?i)\\b(sk-[a-z0-9_-]{12,})\\b", "[REDACTED]", text_value)
+        text_value = re.sub(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+", r"\1[REDACTED]", text_value)
+        text_value = re.sub(r"(?i)(\b(?:api[_-]?key|access[_-]?token|token|secret|password|passwd)\b\s*[:=]\s*)[^\s,;]+", r"\1[REDACTED]", text_value)
+        text_value = re.sub(r"(?i)\b(sk-[a-z0-9_-]{12,})\b", "[REDACTED]", text_value)
         return text_value[:10000]
 
     if request.stream and not web_loop_active:
@@ -2890,14 +2890,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
     try:
         if web_loop_active:
-            response = None
-            data = None
-            reply, data = await _run_web_loop()
-            # O loop de ferramentas precisa terminar antes de transmitir a resposta.
-            # Mantemos o protocolo SSE do frontend e não enviamos JSON bruto ao cliente.
-            DIAGNOSTICS["successes"] += 1
-            DIAGNOSTICS["last_error"] = None
-            print(f"Web/agent loop completed in {time.perf_counter() - started_at:.2f}s")
             if request.stream:
                 async def completed_agent_stream():
                     import json
@@ -2906,12 +2898,14 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         while not task.done() or not terminal_preview_queue.empty():
                             try:
                                 terminal_event = await asyncio.wait_for(terminal_preview_queue.get(), timeout=0.25)
-                                yield "event: terminal\\ndata: " + json.dumps(terminal_event, ensure_ascii=False) + "\\n\\n"
+                                yield "event: terminal\ndata: " + json.dumps(terminal_event, ensure_ascii=False) + "\n\n"
                             except asyncio.TimeoutError:
                                 continue
                         streamed_reply, streamed_data = await task
+                        DIAGNOSTICS["successes"] += 1
+                        DIAGNOSTICS["last_error"] = None
                         for offset in range(0, len(streamed_reply), 180):
-                            yield "data: " + json.dumps({"token": streamed_reply[offset:offset + 180]}, ensure_ascii=False) + "\\n\\n"
+                            yield "data: " + json.dumps({"token": streamed_reply[offset:offset + 180]}, ensure_ascii=False) + "\n\n"
                         artifact = None
                         try:
                             artifact = await asyncio.to_thread(save_response_artifact, session_id, streamed_reply)
@@ -2920,13 +2914,16 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         done_payload = {"model": str(streamed_data.get("model", active_model_name)), "sources": sources}
                         if artifact:
                             done_payload["artifact"] = artifact
-                        yield "event: done\\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\\n\\n"
+                        yield "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
                     except Exception as stream_error:
                         print(f"Agent SSE failed ({type(stream_error).__name__}): {str(stream_error)[:200]}")
-                        yield "event: error\\ndata: " + json.dumps({"detail": "A execução do agente falhou antes de concluir. Consulte os eventos do terminal exibidos acima."}, ensure_ascii=False) + "\\n\\n"
+                        yield "event: error\ndata: " + json.dumps({"detail": "A execução do agente falhou antes de concluir. Consulte os eventos do terminal exibidos acima."}, ensure_ascii=False) + "\n\n"
                 return StreamingResponse(completed_agent_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
+            reply, data = await _run_web_loop()
+            DIAGNOSTICS["successes"] += 1
+            DIAGNOSTICS["last_error"] = None
+            print(f"Web/agent loop completed in {time.perf_counter() - started_at:.2f}s")
 
-        else:
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 response = None
                 # Erros 429/5xx podem ser temporários. Fazer no máximo 2 novas
