@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-}" in
+  install-tools)
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+      python3 python3-venv python3-pip \
+      git curl wget jq \
+      nmap netcat-openbsd sqlmap gobuster
+    ;;
+
+  diagnostics)
+    printf 'hostname=%s\n' "$(hostname)"
+    printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || true)"
+    printf 'memory=%s\n' "$(free -h 2>/dev/null | awk 'NR==2 {print $3 \" / \" $2}')"
+    printf 'disk_root=%s\n' "$(df -hP / 2>/dev/null | awk 'NR==2 {print $3 \" / \" $2 \" (\" $5 \" used)\"}')"
+
+    for unit in ada-executor.service ada-admin-install-tools.service; do
+      state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+      printf 'service.%s=%s\n' "$unit" "${state:-unknown}"
+    done
+
+    for tool in python3 git curl wget jq nmap nc sqlmap gobuster; do
+      if path="$(command -v "$tool" 2>/dev/null)"; then
+        printf 'tool.%s=%s\n' "$tool" "$path"
+      else
+        printf 'tool.%s=missing\n' "$tool"
+      fi
+    done
+    ;;
+
+  install-tools-status)
+    systemctl show ada-admin-install-tools.service \
+      --no-pager \
+      -p LoadState \
+      -p ActiveState \
+      -p SubState \
+      -p Result \
+      -p ExecMainStatus \
+      -p ActiveEnterTimestamp
+    ;;
+
+  *)
+    echo "Operação administrativa não autorizada"
+    exit 64
+    ;;
+esac
