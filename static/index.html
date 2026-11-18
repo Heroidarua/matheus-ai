@@ -2118,11 +2118,13 @@ const history = [];
         chatTranscript.push({role:'assistant',text:answer}); persistCurrentConversation();
       } catch (error) {
         if (error.name === 'AbortError') {
-          pending.textContent = 'Geração interrompida.';
+          pending.replaceChildren(document.createTextNode('Geração interrompida.'));
+          if (pending.__adaTerminalPreview) pending.appendChild(pending.__adaTerminalPreview.panel);
           pending.classList.add('error');
           history.pop();
         } else {
-          pending.textContent = 'Erro: ' + (error.message || 'Falha de conexão.');
+          pending.replaceChildren(document.createTextNode('Erro: ' + (error.message || 'Falha de conexão.')));
+          if (pending.__adaTerminalPreview) pending.appendChild(pending.__adaTerminalPreview.panel);
           pending.classList.add('error');
           history.pop();
         }
