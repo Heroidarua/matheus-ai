@@ -2052,9 +2052,9 @@ const history = [];
             } else if (payload.phase === 'result') {
               const chunks=[];
               if(payload.stdout) chunks.push(String(payload.stdout));
-              if(payload.stderr) chunks.push('[stderr]\\n'+String(payload.stderr));
-              if(payload.error) chunks.push('[erro]\\n'+String(payload.error));
-              view.output.textContent=chunks.join('\\n') || '(comando executado sem saída)';
+              if(payload.stderr) chunks.push('[stderr]\n'+String(payload.stderr));
+              if(payload.error) chunks.push('[erro]\n'+String(payload.error));
+              view.output.textContent=chunks.join('\n') || '(comando executado sem saída)';
               const success=payload.ok===true || payload.status==='started';
               view.panel.dataset.state=success?'done':'error';
               view.state.textContent=payload.status==='started'?'Iniciado — conclusão pendente':(success?'Concluído':'Falhou');
