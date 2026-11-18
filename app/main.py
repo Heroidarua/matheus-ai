@@ -1463,10 +1463,10 @@ async def search_web(query: str) -> list[dict[str, str]]:
 WEB_FETCH_TIMEOUT = 22.0        # segundos por página, incluindo páginas lentas
 WEB_FETCH_RETRIES = 1           # uma nova tentativa somente em falhas transitórias
 WEB_SEARCH_TIMEOUT = 30.0       # segundos por busca
-WEB_MAX_TURNS = 10              # voltas máximas do modelo
+WEB_MAX_TURNS = 10              # voltas máximas para pesquisa comum
 WEB_MAX_FETCHES = 5             # URLs lidas por pergunta
-WEB_MAX_TERMINAL_CALLS = 6       # comandos VPS por etapa de execução
-AGENT_MAX_TERMINAL_CALLS_PER_TASK = 24  # teto acumulado por tarefa, entre retomadas
+AGENT_MAX_TURNS = 101            # 100 rodadas de ferramentas + uma rodada reservada à resposta final
+WEB_MAX_TERMINAL_CALLS = 100      # chamadas de terminal por rodada de agente
 TOOL_CALL_MAX_TOKENS = 4096      # orçamento por chamada estruturada; 512 truncava comandos
 WEB_FIELD_LIMIT = 8000          # corte por campo
 
@@ -1935,7 +1935,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 state = item.get("state") or {}
                 lines.append(
                     f"• {item.get('status', 'desconhecido').upper()} — {item.get('task', 'Tarefa sem título')} "
-                    f"({state.get('terminal_calls_total', 0)}/24 execuções de terminal)"
+                    f"({state.get('terminal_calls_total', 0)} execuções de terminal)"
                 )
             tool_result = "\n".join(lines)
     elif normalized_command in {"/historico terminal", "historico terminal", "histórico terminal"}:
@@ -2117,7 +2117,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 "um usuário Linux restrito, sem privilégios de administrador. Cada chamada começa em um novo shell; "
                 "use 'cd /home/ada-runner/workspace && comando' para escolher o diretório. "
                 "Para tarefas com várias etapas, inspecione, execute, leia o resultado e continue até verificar a conclusão; "
-                "são permitidas até 6 chamadas de terminal por etapa, com teto acumulado de 24 chamadas por tarefa. "
+                "o agente pode realizar até 100 chamadas de terminal por execução, sem teto acumulado de comandos por tarefa. "
+                "Tarefas longas mantêm checkpoints e podem ser retomadas sem repetir comandos confirmados. "
                 "A ADA-M salva checkpoints e histórico após cada ferramenta; ao pausar, o usuário pode enviar 'continuar' para retomar sem repetir etapas confirmadas. "
                 "O usuário pode consultar /tarefas e /historico terminal. "
                 "Prefira ambientes virtuais Python e dependências locais Node.js; não use sudo nem tente contornar permissões. "
@@ -2694,8 +2695,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
         terminal_calls = 0
         malformed_tool_retries = 0
-        for turn in range(1, WEB_MAX_TURNS + 1):
-            use_tools = turn < WEB_MAX_TURNS  # reserva a última rodada para a resposta final
+        max_turns = AGENT_MAX_TURNS if terminal_required else WEB_MAX_TURNS
+        for turn in range(1, max_turns + 1):
+            use_tools = turn < max_turns  # reserva a última rodada para a resposta final
             loop_status["status"] = "Pesquisando…" if turn == 1 else "Processando…"
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 resp = await _model_post(client, loop_messages, use_tools)
@@ -2713,7 +2715,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 attempted_tool_call = looks_like_tool_call(content_out)
                 must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls_this_run == 0)
                 if must_recover_tool_call:
-                    if malformed_tool_retries < 2 and turn < WEB_MAX_TURNS - 1:
+                    if malformed_tool_retries < 2 and turn < max_turns - 1:
                         malformed_tool_retries += 1
                         if content_out:
                             loop_messages.append({"role": "assistant", "content": content_out[:6000]})
@@ -2762,19 +2764,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 })
                 pause_reason = f"Limite de {WEB_MAX_TERMINAL_CALLS} execuções por etapa atingido."
                 break
-            if name == "terminal" and terminal_calls_total >= AGENT_MAX_TERMINAL_CALLS_PER_TASK:
-                loop_messages.append({"role": "assistant", "content": content_out})
-                loop_messages.append({
-                    "role": "user",
-                    "content": (
-                        f"O teto acumulado de {AGENT_MAX_TERMINAL_CALLS_PER_TASK} comandos desta tarefa foi atingido. "
-                        "A chamada sugerida NÃO foi executada. Pare as ações e produza o relatório final."
-                    ),
-                })
-                pause_reason = f"Teto acumulado de {AGENT_MAX_TERMINAL_CALLS_PER_TASK} execuções por tarefa atingido."
-                budget_exhausted = True
-                break
-
             loop_messages.append({"role": "assistant", "content": content_out})
             pending_tool = {"name": name, "args": args}
             step_count += 1
@@ -2852,8 +2841,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             pending_tool = None
             await persist_job("running")
 
-        if not pause_reason and terminal_required and job_id and terminal_calls_total < AGENT_MAX_TERMINAL_CALLS_PER_TASK:
-            pause_reason = f"Limite de {WEB_MAX_TURNS} rodadas desta etapa atingido."
+        if not pause_reason and terminal_required and job_id:
+            pause_reason = f"Limite de {max_turns} rodadas desta execução atingido."
         if pause_reason:
             loop_messages.append({
                 "role": "system",
