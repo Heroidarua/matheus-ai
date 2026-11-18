@@ -161,6 +161,40 @@ def is_admin_install_tools_request(message: str) -> bool:
     target = re.search(r"\b(vps|servidor|linux|ubuntu|debian)\b", text)
     return bool(intent and ((bundle and target) or security_bundle))
 
+
+def is_admin_diagnostics_request(message: str) -> bool:
+    """Recognize explicit natural-language requests for the fixed read-only VPS diagnostic."""
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
+    action = re.search(
+        r"\b(execute|executa|executar|rode|rodar|verifique|verificar|"
+        r"consulte|consultar|mostre|mostrar|obtenha|obter|diagnostique|diagnosticar)\b",
+        text,
+    )
+    command = re.search(r"\bada-admin\s+diagnostics\b", text)
+    natural = (
+        re.search(r"\b(diagn[oó]stico|diagnosticar|estado|status)\b", text)
+        and re.search(r"\b(vps|servidor)\b", text)
+    )
+    return bool(action and (command or natural))
+
+
+def is_admin_install_tools_status_request(message: str) -> bool:
+    """Recognize explicit requests for the fixed read-only installation status."""
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
+    action = re.search(
+        r"\b(execute|executa|executar|rode|rodar|verifique|verificar|"
+        r"consulte|consultar|mostre|mostrar|obtenha|obter)\b",
+        text,
+    )
+    command = re.search(r"\bada-admin\s+install-tools-status\b", text)
+    natural = (
+        re.search(r"\b(status|situa[cç][aã]o|resultado)\b", text)
+        and re.search(r"\b(instala[cç][aã]o|ferramentas|pacotes)\b", text)
+        and re.search(r"\b(vps|servidor)\b", text)
+    )
+    return bool(action and (command or natural))
+
+
 def is_security_audit_request(message: str) -> bool:
     """Recognize requests to assess a website/server's security."""
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
@@ -192,6 +226,8 @@ def is_terminal_task(message: str) -> bool:
     if not text:
         return False
     if _raw_shell_command(message):
+        return True
+    if is_admin_diagnostics_request(message) or is_admin_install_tools_status_request(message):
         return True
     if is_authorized_security_audit_request(message):
         return True
@@ -253,6 +289,10 @@ def extract_terminal_command(message: str) -> str | None:
     # language model to invent or choose a privileged shell command.
     if is_admin_install_tools_request(message):
         return "ada-admin install-tools"
+    if is_admin_diagnostics_request(message):
+        return "ada-admin diagnostics"
+    if is_admin_install_tools_status_request(message):
+        return "ada-admin install-tools-status"
     if not isinstance(message, str) or not message.strip():
         return None
     raw_command = _raw_shell_command(message)
