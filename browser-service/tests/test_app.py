@@ -40,6 +40,9 @@ def test_accepts_readable_content_types(content_type):
 
 
 @pytest.mark.parametrize("content_type", [
+    "text/css",
+    "text/javascript",
+    "application/javascript",
     "application/octet-stream",
     "application/pdf",
     "image/png",
