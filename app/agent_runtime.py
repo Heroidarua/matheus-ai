@@ -455,7 +455,7 @@ Regras:
 - Quando o usuário pedir para criar, implementar, editar, corrigir, executar ou testar um projeto de software e o terminal estiver disponível, a execução via terminal é obrigatória; não entregue apenas trechos de código como se a tarefa estivesse concluída. Use o terminal para inspecionar, criar/editar arquivos, instalar dependências, executar scripts, compilar e testar.
 - O terminal permite um fluxo de várias etapas: inspecione o workspace, execute uma ação por chamada, leia o stdout/stderr/código de saída e então decida o próximo passo. NÃO encerre após a primeira chamada se ainda houver etapas necessárias.
 - Para tarefas com vários arquivos, NÃO coloque todo o projeto em um único comando/heredoc. Divida em etapas curtas: criar pasta, gravar um arquivo por chamada, executar testes e corrigir. Mantenha cada JSON de ferramenta compacto (preferencialmente abaixo de 1800 caracteres) e sempre feche todas as aspas e chaves. Nunca mostre o JSON da ferramenta como resposta final. Continue até verificar a conclusão ou identificar um bloqueio.
-- Não imponha teto acumulado de chamadas de terminal por tarefa. Continue executando, verificando resultados, corrigindo falhas e avançando pelas etapas necessárias até concluir o objetivo ou identificar um bloqueio real. A execução admite até 100 chamadas de terminal por requisição; se esse limite de duração/rodadas for alcançado, salve checkpoint e histórico e retome sem repetir etapas confirmadas. Use /tarefas e /historico terminal para consultar o progresso.
+- Não imponha teto numérico fixo de chamadas de terminal por tarefa. Continue executando, verificando resultados, corrigindo falhas e avançando pelas etapas necessárias até concluir o objetivo ou identificar um bloqueio real. Não pare apenas porque uma chamada falhou: leia stdout, stderr e exit_code, adapte a próxima etapa e tente uma correção segura. Salve checkpoint após cada ferramenta e preserve o histórico para retomada automática da mesma execução. Só pause por bloqueio real (permissão ausente, credencial inválida, serviço indisponível, risco/ação que exige autorização, cancelamento ou repetição sem progresso após tentativas de correção). Nunca declare concluída uma tarefa sem verificar o resultado. Use /tarefas e /historico terminal para consultar o progresso.
 - O workspace persistente da VPS é /home/ada-runner/workspace. Cada chamada começa em um novo shell; use "cd /home/ada-runner/workspace && ..." para escolher o diretório correto. Arquivos criados ali permanecem disponíveis entre solicitações.
 - Antes de modificar um projeto, execute pwd e ls -la e examine os arquivos de configuração relevantes (por exemplo, pyproject.toml, requirements.txt, package.json ou README).
 - Crie ou edite arquivos somente dentro do workspace, salvo se o usuário indicar explicitamente outro caminho permitido. Prefira alterações pequenas e verificáveis.
@@ -477,14 +477,16 @@ async def run_tool_loop(
     model_call: Callable[[list[dict[str, Any]], bool], Awaitable[str]],
     tools: Mapping[str, ToolDefinition],
     *,
-    max_steps: int = 100,
+    max_steps: int | None = None,
     on_tool_start: Callable[[str], None] | None = None,
 ) -> str:
-    """Run the registered-tool loop with a generous default budget and explicit checkpointing at the app layer."""
-    if max_steps < 1:
-        raise ValueError("max_steps must be positive")
+    """Run tools until the model finishes; max_steps is an optional caller-supplied safety bound."""
+    if max_steps is not None and max_steps < 1:
+        raise ValueError("max_steps must be positive when provided")
     conversation = list(messages)
-    for _ in range(max_steps):
+    step = 0
+    while max_steps is None or step < max_steps:
+        step += 1
         response = await model_call(conversation, True)
         call = parse_tool_call(response, tools)
         if call is None:
