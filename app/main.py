@@ -2262,6 +2262,18 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     loop_messages: list[dict[str, Any]] = list(messages)
     loop_status: dict[str, str] = {"status": ""}
 
+    terminal_preview_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+    def publish_terminal_preview(event: dict[str, Any]) -> None:
+        terminal_preview_queue.put_nowait(event)
+
+    def redact_terminal_preview(value: Any) -> str:
+        text_value = str(value or "")
+        text_value = re.sub(r"(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,;]+", r"\\1[REDACTED]", text_value)
+        text_value = re.sub(r"(?i)(\\b(?:api[_-]?key|access[_-]?token|token|secret|password|passwd)\\b\\s*[:=]\\s*)[^\\s,;]+", r"\\1[REDACTED]", text_value)
+        text_value = re.sub(r"(?i)\\b(sk-[a-z0-9_-]{12,})\\b", "[REDACTED]", text_value)
+        return text_value[:10000]
+
     if request.stream and not web_loop_active:
         async def stream_reply():
             import json
@@ -2658,7 +2670,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 step_count += 1
                 await persist_job("running")
                 loop_status["status"] = "Executando no terminal isolado…"
+                publish_terminal_preview({"phase":"start","step":step_count,"command":redact_terminal_preview(explicit_command),"status":"Comando enviado ao executor real. Aguardando a saída."})
                 result = await run_terminal_command(http_request.session, explicit_command)
+                publish_terminal_preview({"phase":"result","step":step_count,"stdout":redact_terminal_preview(result.get("stdout")),"stderr":redact_terminal_preview(result.get("stderr")),"exit_code":result.get("exit_code"),"ok":result.get("ok"),"error":redact_terminal_preview(result.get("error")),"status":result.get("message") or result.get("error") or ""})
                 events.append({
                     "step": step_count, "tool": "terminal", "command": explicit_command,
                     "ok": bool(result.get("ok")), "exit_code": result.get("exit_code"),
@@ -2788,7 +2802,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             elif name == "terminal":
                 terminal_calls += 1
                 loop_status["status"] = f"Executando etapa {terminal_calls_this_run}/{WEB_MAX_TERMINAL_CALLS} no terminal…"
+                publish_terminal_preview({"phase":"start","step":step_count,"command":redact_terminal_preview(args["command"]),"status":"Comando enviado ao executor real. Aguardando a saída."})
                 result = await run_terminal_command(http_request.session, args["command"])
+                publish_terminal_preview({"phase":"result","step":step_count,"stdout":redact_terminal_preview(result.get("stdout")),"stderr":redact_terminal_preview(result.get("stderr")),"exit_code":result.get("exit_code"),"ok":result.get("ok"),"error":redact_terminal_preview(result.get("error")),"status":result.get("message") or result.get("error") or ""})
                 print(f"[webloop] terminal step={terminal_calls_total} total -> {str(result)[:300]}")
             else:
                 if len(fetched_urls) >= WEB_MAX_FETCHES:
@@ -2885,18 +2901,31 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             if request.stream:
                 async def completed_agent_stream():
                     import json
-                    for offset in range(0, len(reply), 180):
-                        yield "data: " + json.dumps({"token": reply[offset:offset + 180]}, ensure_ascii=False) + "\n\n"
-                    artifact = None
+                    task = asyncio.create_task(_run_web_loop())
                     try:
-                        artifact = await asyncio.to_thread(save_response_artifact, session_id, reply)
-                    except Exception as artifact_error:
-                        print(f"Agent response artifact save failed ({type(artifact_error).__name__})")
-                    done_payload = {"model": str(data.get("model", active_model_name)), "sources": sources}
-                    if artifact:
-                        done_payload["artifact"] = artifact
-                    yield "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
+                        while not task.done() or not terminal_preview_queue.empty():
+                            try:
+                                terminal_event = await asyncio.wait_for(terminal_preview_queue.get(), timeout=0.25)
+                                yield "event: terminal\\ndata: " + json.dumps(terminal_event, ensure_ascii=False) + "\\n\\n"
+                            except asyncio.TimeoutError:
+                                continue
+                        streamed_reply, streamed_data = await task
+                        for offset in range(0, len(streamed_reply), 180):
+                            yield "data: " + json.dumps({"token": streamed_reply[offset:offset + 180]}, ensure_ascii=False) + "\\n\\n"
+                        artifact = None
+                        try:
+                            artifact = await asyncio.to_thread(save_response_artifact, session_id, streamed_reply)
+                        except Exception as artifact_error:
+                            print(f"Agent response artifact save failed ({type(artifact_error).__name__})")
+                        done_payload = {"model": str(streamed_data.get("model", active_model_name)), "sources": sources}
+                        if artifact:
+                            done_payload["artifact"] = artifact
+                        yield "event: done\\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\\n\\n"
+                    except Exception as stream_error:
+                        print(f"Agent SSE failed ({type(stream_error).__name__}): {str(stream_error)[:200]}")
+                        yield "event: error\\ndata: " + json.dumps({"detail": "A execução do agente falhou antes de concluir. Consulte os eventos do terminal exibidos acima."}, ensure_ascii=False) + "\\n\\n"
                 return StreamingResponse(completed_agent_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
+
         else:
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 response = None
