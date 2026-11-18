@@ -265,3 +265,15 @@ A integração usa o SDK oficial Python `render>=1.8.0` e o plano de sandbox `1c
 Peça no chat, por exemplo: “Use o terminal para criar um projeto Python, instalar as dependências e executar os testes”. A ADA-M poderá executar várias chamadas sequenciais no mesmo workspace. Cada comando abre um novo shell; use `cd pasta && comando` para mudar de diretório. O workspace fica em `/home/render/ada-workspace`.
 
 **Segurança:** os comandos são executados fora do servidor principal, em microVM própria, com limite de 45 segundos por comando, saída limitada e egress HTTPS allow-list. Não são compartilhadas variáveis secretas nem arquivos privados da ADA-M com o ambiente de execução. Operações destrutivas ou externas ainda exigem autorização explícita. Para detalhes, consulte a [documentação oficial do Render Sandboxes](https://render.com/docs/sandboxes).
+
+## Administração controlada do executor VPS
+
+O executor VPS pode expor consultas administrativas autenticadas sem conceder um shell root ao modelo. A fase inicial adiciona duas consultas fixas:
+
+- `ada-admin diagnostics`: estado básico do host, memória, disco, serviços ADA-M e presença das ferramentas previstas.
+- `ada-admin install-tools-status`: resultado e estado do serviço systemd que instala o conjunto fixo de ferramentas.
+- `ada-admin install-tools`: mantém a instalação administrativa já existente, sem aceitar nomes de pacotes arbitrários.
+
+As duas consultas são somente leitura. A API não recebe nomes livres de serviços, pacotes ou comandos privilegiados. Para ativá-las na VPS, siga [deploy/ada-executor/README.md](deploy/ada-executor/README.md) e execute o instalador de atualização como root. O instalador cria backup, valida os arquivos, reinicia o executor e restaura a versão anterior se o health check falhar.
+
+**Deploy separado:** o deploy do serviço principal no Render não atualiza automaticamente o executor instalado em `/opt/ada-executor` na VPS. Atualize primeiro o executor VPS com o pacote acima e depois faça o deploy do backend ADA-M. As variáveis existentes `ADA_EXECUTOR_URL`, `ADA_EXECUTOR_TOKEN`, `CF_ACCESS_CLIENT_ID` e `CF_ACCESS_CLIENT_SECRET` permanecem as mesmas.
