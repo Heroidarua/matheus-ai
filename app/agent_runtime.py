@@ -103,7 +103,7 @@ def is_browser_task(message: str) -> bool:
     if not text:
         return False
     browser_terms = r"(?:navegador|chromium|browser)"
-    action_terms = r"(?:acesse|acessar|abra|abrir|entre|entrar|visite|visitar|navegue|navegar|inspecione|inspecionar|analise|analisar|verifique|verificar)"
+    action_terms = r"(?:acesse|acessar|abra|abrir|entre|entrar|visite|visitar|navegue|navegar|explore|explorar|descubra|descobrir|inspecione|inspecionar|analise|analisar|verifique|verificar|role|rolar|scroll)"
     # Require both an explicit navigation action and an explicit browser reference.
     return bool(re.search(action_terms + r".{0,100}" + browser_terms, text) or
                 re.search(browser_terms + r".{0,100}" + action_terms, text))
