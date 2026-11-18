@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 
 MAX_COMMAND_CHARS = 4000
-MAX_OUTPUT_CHARS = 10000
+MAX_OUTPUT_CHARS = 100000
 COMMAND_TIMEOUT_SECONDS = 45
 SANDBOX_RUNTIME_SECONDS = 3600
 SANDBOX_IDLE_SECONDS = 900
@@ -81,6 +81,7 @@ async def _run_on_vps(command: str, on_event=None) -> dict[str, Any]:
     stdout_parts: list[str] = []
     stderr_parts: list[str] = []
     collected = 0
+    output_truncated = False
     exit_code: int | None = None
     stream_error: str | None = None
 
@@ -135,6 +136,8 @@ async def _run_on_vps(command: str, on_event=None) -> dict[str, Any]:
                         stream_name = "stderr" if payload.get("stream") == "stderr" else "stdout"
                         chunk = str(payload.get("text") or "")
                         remaining = max(0, MAX_OUTPUT_CHARS - collected)
+                        if len(chunk) > remaining:
+                            output_truncated = True
                         if remaining:
                             chunk = chunk[:remaining]
                             (stderr_parts if stream_name == "stderr" else stdout_parts).append(chunk)
@@ -150,8 +153,8 @@ async def _run_on_vps(command: str, on_event=None) -> dict[str, Any]:
 
         stdout = "".join(stdout_parts)
         stderr = "".join(stderr_parts)
-        if collected >= MAX_OUTPUT_CHARS:
-            stderr += "\n[saída truncada pelo limite de segurança]"
+        if output_truncated:
+            stderr += "\n[saída excedeu o limite de 100.000 caracteres desta chamada; solicite apenas o trecho necessário ou divida a leitura em partes]"
         if stream_error:
             return {
                 "ok": False, "error": stream_error, "stdout": stdout, "stderr": stderr,
@@ -294,10 +297,13 @@ async def _run_in_sandbox(client, sandbox_id: str, command: str) -> dict[str, An
     stderr: list[str] = []
     exit_code: int | None = None
     collected = 0
+    output_truncated = False
     async for event in client.sandboxes.exec(sandbox_id, wrapped):
         if isinstance(event, SandboxExecOutput):
             chunk = str(event.data or "")
             remaining = max(0, MAX_OUTPUT_CHARS - collected)
+            if len(chunk) > remaining:
+                output_truncated = True
             if remaining:
                 clipped = chunk[:remaining]
                 (stderr if event.stream == "stderr" else stdout).append(clipped)
@@ -307,8 +313,8 @@ async def _run_in_sandbox(client, sandbox_id: str, command: str) -> dict[str, An
     if exit_code is None:
         return {"ok": False, "error": "A execução terminou sem um código de saída confirmado.", "stdout": "".join(stdout), "stderr": "".join(stderr)}
     out, err = "".join(stdout), "".join(stderr)
-    if len(out) + len(err) >= MAX_OUTPUT_CHARS:
-        err += "\n[saída truncada pelo limite de segurança]"
+    if output_truncated:
+        err += "\n[saída excedeu o limite de 100.000 caracteres desta chamada; solicite apenas o trecho necessário ou divida a leitura em partes]"
     return {"ok": exit_code == 0, "exit_code": exit_code, "stdout": out, "stderr": err, "workspace": WORKSPACE, "timeout_seconds": COMMAND_TIMEOUT_SECONDS}
 
 
