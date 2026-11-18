@@ -2836,12 +2836,19 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             elif name == "browser":
                 loop_status["status"] = "Navegando…"
                 result = await tool_browser_action(session_id, **args)
-                if (
-                    result.get("ok")
-                    and not result.get("fallback_used")
-                    and args.get("action") in required_browser_steps
-                ):
-                    completed_browser_steps.add(args["action"])
+                action = args.get("action")
+                action_confirmed = bool(result.get("ok") and not result.get("fallback_used"))
+                if action == "open":
+                    action_confirmed = action_confirmed and bool(result.get("url"))
+                elif action == "inspect":
+                    action_confirmed = action_confirmed and isinstance(result.get("elements"), list)
+                elif action == "scroll":
+                    action_confirmed = action_confirmed and all(
+                        isinstance(result.get(key), (int, float)) and not isinstance(result.get(key), bool)
+                        for key in ("requested_delta_y", "scroll_y_before", "scroll_y_after", "actual_delta_y")
+                    )
+                if action_confirmed and action in required_browser_steps:
+                    completed_browser_steps.add(action)
                 if not result.get("ok") and args.get("action") == "open" and args.get("url"):
                     browser_error = result.get("error", "Falha desconhecida no Chromium")
                     fallback = await tool_web_fetch(args["url"])
@@ -2897,6 +2904,17 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 "ok": bool(result.get("ok", True)) if isinstance(result, dict) else True,
                 "exit_code": result.get("exit_code") if isinstance(result, dict) else None,
                 "error": result.get("error") if isinstance(result, dict) else None,
+                "browser_evidence": ({
+                    "url": result.get("url"),
+                    "title": result.get("title"),
+                    "requested_delta_y": result.get("requested_delta_y"),
+                    "scroll_y_before": result.get("scroll_y_before"),
+                    "scroll_y_after": result.get("scroll_y_after"),
+                    "actual_delta_y": result.get("actual_delta_y"),
+                    "scrolled": result.get("scrolled"),
+                    "visible_text": str(result.get("visible_text") or "")[:1200],
+                    "elements": (result.get("elements") or [])[:12] if isinstance(result.get("elements"), list) else [],
+                } if name == "browser" and isinstance(result, dict) else None),
             })
             pending_tool = None
             await persist_job("running")
@@ -2931,6 +2949,36 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         if isinstance(content_out, list):
             content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
         final_text = (content_out or "").strip()
+        if required_browser_steps:
+            evidence_lines = ["**Comprovação técnica do Chromium**"]
+            for action in required_browser_steps:
+                event = next((
+                    item for item in reversed(events)
+                    if item.get("tool") == "browser" and item.get("action") == action and item.get("ok")
+                ), None)
+                evidence = (event or {}).get("browser_evidence") or {}
+                if not event:
+                    evidence_lines.append(f"- {action}: não confirmado pelo serviço Chromium.")
+                elif action == "scroll":
+                    evidence_lines.append(
+                        "- scroll: solicitado "
+                        f"{evidence.get('requested_delta_y')} px; scrollY "
+                        f"{evidence.get('scroll_y_before')} → {evidence.get('scroll_y_after')}; "
+                        f"deslocamento real {evidence.get('actual_delta_y')} px."
+                    )
+                    if evidence.get("visible_text"):
+                        evidence_lines.append("  Trecho visível após a rolagem: " + evidence["visible_text"][:800].replace("\n", " | "))
+                elif action == "inspect":
+                    elements = evidence.get("elements") or []
+                    evidence_lines.append(f"- inspect: {len(elements)} elementos visíveis registrados (amostra de até 12).")
+                    for element in elements[:8]:
+                        label = str(element.get("text") or element.get("aria_label") or "").strip()
+                        evidence_lines.append(f"  • {element.get('tag', 'elemento')}: {label[:120] or '(sem texto)'}")
+                elif action == "open":
+                    evidence_lines.append(
+                        f"- open: página aberta; título: {evidence.get('title') or '(sem título)'}; URL: {evidence.get('url') or '(não retornada)'}."
+                    )
+            final_text = (final_text + "\n\n" if final_text else "") + "\n".join(evidence_lines)
         if pause_reason:
             final_text = (final_text + "\n\n" if final_text else "") + (
                 "🟡 **Tarefa pausada com checkpoint salvo.** "

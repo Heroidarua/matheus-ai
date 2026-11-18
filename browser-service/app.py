@@ -60,6 +60,19 @@ class BrowserAction(BaseModel):
     delta_y: int = Field(default=700, ge=-3000, le=3000)
 
 
+def build_scroll_evidence(requested_delta_y: int, before: float, after: float, visible_text: str) -> dict[str, Any]:
+    """Build explicit evidence distinguishing a requested wheel action from actual page movement."""
+    actual_delta_y = after - before
+    return {
+        "requested_delta_y": requested_delta_y,
+        "scroll_y_before": before,
+        "scroll_y_after": after,
+        "actual_delta_y": actual_delta_y,
+        "scrolled": actual_delta_y != 0,
+        "visible_text": visible_text[:5000],
+    }
+
+
 async def is_public_url(value: str) -> bool:
     """Reject non-HTTP URLs, credentials, local names, and non-public DNS targets."""
     try:
@@ -334,11 +347,40 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 extracted = await extract_page_content(page)
                 return {"ok": True, "url": page.url, **extracted}
             if payload.action == "scroll":
+                scroll_y_before = await page.evaluate("() => window.scrollY")
                 await page.mouse.wheel(0, payload.delta_y)
                 await page.wait_for_timeout(350)
-                extracted = await extract_page_content(page)
-                scroll_y = await page.evaluate("() => window.scrollY")
-                return {"ok": True, "url": page.url, "scroll_y": scroll_y, **extracted}
+                scroll_y_after = await page.evaluate("() => window.scrollY")
+                visible_text = await page.evaluate("""() => {
+                    const width = window.innerWidth;
+                    const height = window.innerHeight;
+                    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                    const lines = [];
+                    const seen = new Set();
+                    let node;
+                    while ((node = walker.nextNode()) && lines.length < 60) {
+                        const value = (node.nodeValue || "").replace(/\\s+/g, " ").trim();
+                        if (value.length < 2 || seen.has(value)) continue;
+                        const parent = node.parentElement;
+                        if (!parent) continue;
+                        const style = window.getComputedStyle(parent);
+                        if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") continue;
+                        const range = document.createRange();
+                        range.selectNode(node);
+                        const rects = [...range.getClientRects()];
+                        if (!rects.some(rect => rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < height && rect.right > 0 && rect.left < width)) continue;
+                        seen.add(value);
+                        lines.push(value.slice(0, 240));
+                    }
+                    return lines.join("\\n").slice(0, 5000);
+                }""")
+                return {
+                    "ok": True,
+                    "action": "scroll",
+                    "url": page.url,
+                    "title": (await page.title())[:300],
+                    **build_scroll_evidence(payload.delta_y, scroll_y_before, scroll_y_after, visible_text),
+                }
             if payload.action == "click":
                 if not payload.selector and payload.index is None:
                     raise HTTPException(status_code=400, detail="A ação click exige selector ou index obtido em inspect.")
