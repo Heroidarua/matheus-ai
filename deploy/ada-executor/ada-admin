@@ -46,7 +46,7 @@ case "${1:-}" in
       disk_info="$(df -hP / 2>/dev/null | awk 'NR==2 {print $3 " used / " $2 " total (" $5 " used)"}')" || true
     fi
     if [[ -z "$disk_info" ]] && command -v python3 >/dev/null 2>&1; then
-      disk_info="$(python3 -c 'import shutil; u=shutil.disk_usage("/"); f=lambda n: f"{n/2**30:.2f} GiB"; print(f"{u.used} used / {f(u.total)} total ({u.used*100/u.total:.1f}% used)")' 2>/dev/null)" || true
+      disk_info="$(python3 -c 'import shutil; u=shutil.disk_usage("/"); f=lambda n: f"{n/2**30:.2f} GiB"; print(f"{f(u.used)} used / {f(u.total)} total ({u.used*100/u.total:.1f}% used)")' 2>/dev/null)" || true
     fi
     if [[ -z "$disk_info" ]]; then
       disk_info="unavailable (df and Python disk query failed)"
