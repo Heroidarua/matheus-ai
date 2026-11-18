@@ -1937,18 +1937,18 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     f"• {item.get('status', 'desconhecido').upper()} — {item.get('task', 'Tarefa sem título')} "
                     f"({state.get('terminal_calls_total', 0)}/24 execuções de terminal)"
                 )
-            tool_result = "\\n".join(lines)
+            tool_result = "\n".join(lines)
     elif normalized_command in {"/historico terminal", "historico terminal", "histórico terminal"}:
         jobs = await asyncio.to_thread(list_agent_jobs, session_id, 10)
         lines = ["**Histórico de execuções do terminal:**"]
         for item in jobs:
             state = item.get("state") or {}
-            lines.append(f"\\n**{item.get('task', 'Tarefa')} — {item.get('status', 'desconhecido')}**")
+            lines.append(f"\n**{item.get('task', 'Tarefa')} — {item.get('status', 'desconhecido')}**")
             for event in (state.get("events") or [])[-12:]:
                 command = event.get("command") or event.get("tool") or "ferramenta"
                 outcome = "OK" if event.get("ok") else "falha/sem confirmação"
                 lines.append(f"  • {command} — {outcome}")
-        tool_result = "\\n".join(lines) if jobs else "Ainda não há execuções registradas nesta sessão."
+        tool_result = "\n".join(lines) if jobs else "Ainda não há execuções registradas nesta sessão."
     elif continuation_requested:
         if resume_agent_job:
             tool_result = None
@@ -2735,8 +2735,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
             loop_messages.append({"role": "assistant", "content": content_out})
             pending_tool = {"name": name, "args": args}
-            await persist_job("running")
             step_count += 1
+            if name == "terminal":
+                terminal_calls_total += 1
+                terminal_calls_this_run += 1
+            await persist_job("running")
             if name == "web_search":
                 loop_status["status"] = "Pesquisando…"
                 result = await tool_web_search(args["query"], args["limit"])
@@ -2764,8 +2767,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         }
             elif name == "terminal":
                 terminal_calls += 1
-                terminal_calls_this_run += 1
-                terminal_calls_total += 1
                 loop_status["status"] = f"Executando etapa {terminal_calls_this_run}/{WEB_MAX_TERMINAL_CALLS} no terminal…"
                 result = await run_terminal_command(http_request.session, args["command"])
                 print(f"[webloop] terminal step={terminal_calls_total} total -> {str(result)[:300]}")
