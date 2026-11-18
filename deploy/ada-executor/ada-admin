@@ -18,9 +18,40 @@ case "${1:-}" in
 
   diagnostics)
     printf 'hostname=%s\n' "$(hostname)"
-    printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || true)"
-    printf 'memory=%s\n' "$(free -h 2>/dev/null | awk 'NR==2 {print $3 \" / \" $2}')"
-    printf 'disk_root=%s\n' "$(df -hP / 2>/dev/null | awk 'NR==2 {print $3 \" / \" $2 \" (\" $5 \" used)\"}')"
+    printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || echo unavailable)"
+
+    # Do not depend on the optional "free" utility: read the kernel's
+    # memory counters directly so minimal VPS images still report RAM.
+    memory_info="$(awk '
+      /^MemTotal:/ { total=$2 }
+      /^MemAvailable:/ { available=$2 }
+      END {
+        if (total > 0 && available >= 0) {
+          used = total - available
+          printf "%.2f GiB used / %.2f GiB total (%.1f%% used)", used/1048576, total/1048576, used*100/total
+        } else {
+          exit 1
+        }
+      }
+    ' /proc/meminfo 2>/dev/null)" || memory_info=""
+    if [[ -z "$memory_info" ]]; then
+      memory_info="unavailable (/proc/meminfo could not be read)"
+    fi
+    printf 'memory=%s\n' "$memory_info"
+
+    # Prefer df; fall back to Python's standard library if df is absent or
+    # returns no data. Always emit a useful value instead of an empty field.
+    disk_info=""
+    if command -v df >/dev/null 2>&1; then
+      disk_info="$(df -hP / 2>/dev/null | awk 'NR==2 {print $3 " used / " $2 " total (" $5 " used)"}')" || true
+    fi
+    if [[ -z "$disk_info" ]] && command -v python3 >/dev/null 2>&1; then
+      disk_info="$(python3 -c 'import shutil; u=shutil.disk_usage("/"); f=lambda n: f"{n/2**30:.2f} GiB"; print(f"{u.used} used / {f(u.total)} total ({u.used*100/u.total:.1f}% used)")' 2>/dev/null)" || true
+    fi
+    if [[ -z "$disk_info" ]]; then
+      disk_info="unavailable (df and Python disk query failed)"
+    fi
+    printf 'disk_root=%s\n' "$disk_info"
 
     for unit in ada-executor.service ada-admin-install-tools.service; do
       state="$(systemctl is-active "$unit" 2>/dev/null || true)"
