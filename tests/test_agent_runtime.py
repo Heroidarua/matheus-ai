@@ -431,3 +431,23 @@ def test_agent_prompt_no_longer_imposes_six_or_twenty_four_call_caps():
     assert "Não imponha teto acumulado de chamadas de terminal por tarefa" in AGENT_TOOLS_SPEC
     assert "até 6 chamadas" not in AGENT_TOOLS_SPEC
     assert "24 chamadas acumuladas" not in AGENT_TOOLS_SPEC
+
+
+@pytest.mark.parametrize("command", [
+    "ada-admin diagnostics",
+    "ada-admin install-tools-status",
+    "ada-admin install-tools",
+])
+def test_fixed_vps_admin_commands_are_recognized_as_terminal_tasks(command):
+    assert is_terminal_task(command)
+    assert extract_terminal_command(command) == command
+
+
+def test_vps_diagnostics_request_requires_terminal_in_agent_mode():
+    from app.agent_runtime import requires_terminal_execution
+
+    assert requires_terminal_execution(
+        "Verifique o estado da minha VPS e os serviços ADA-M",
+        agent_mode_active=True,
+        terminal_configured=True,
+    )

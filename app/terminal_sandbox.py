@@ -227,6 +227,55 @@ async def _request_vps_admin_install_tools() -> dict[str, Any]:
     except (httpx.HTTPError, ValueError, TypeError) as exc:
         return {"ok": False, "error": f"Falha ao solicitar a instalação administrativa ({type(exc).__name__})."}
 
+
+async def _request_vps_admin_readonly(path: str, operation: str) -> dict[str, Any]:
+    """Read-only administrative diagnostics; operations and paths are fixed by the caller."""
+    settings = _vps_settings()
+    if settings is None:
+        return {
+            "ok": False,
+            "error": "A operação administrativa exige ADA_EXECUTOR_URL e as três credenciais de autenticação no Render.",
+        }
+    base_url, headers = settings
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0)) as client:
+            response = await client.get(f"{base_url}{path}", headers=headers)
+        if response.status_code in (401, 403):
+            return {
+                "ok": False,
+                "error": f"Cloudflare Access ou executor recusou a autenticação (HTTP {response.status_code}).",
+            }
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("ok") is not True:
+            return {"ok": False, "error": "O executor não confirmou a operação administrativa."}
+        output = str(payload.get("output") or "")[:10000]
+        return {
+            "ok": True,
+            "exit_code": 0,
+            "stdout": output,
+            "stderr": "",
+            "workspace": "/opt/ada-executor",
+            "executor": "VPS administrativo somente leitura",
+            "operation": operation,
+        }
+    except httpx.TimeoutException:
+        return {"ok": False, "error": f"Tempo esgotado ao consultar {operation} na VPS."}
+    except httpx.HTTPStatusError as exc:
+        return {"ok": False, "error": f"A rota administrativa respondeu com HTTP {exc.response.status_code}."}
+    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        return {"ok": False, "error": f"Falha ao consultar {operation} ({type(exc).__name__})."}
+
+
+async def _request_vps_admin_diagnostics() -> dict[str, Any]:
+    return await _request_vps_admin_readonly("/admin/diagnostics", "diagnostics")
+
+
+async def _request_vps_admin_install_tools_status() -> dict[str, Any]:
+    return await _request_vps_admin_readonly(
+        "/admin/install-tools/status", "install-tools-status"
+    )
+
 def _network_policy():
     """Allow unrestricted outbound network access for the Render terminal sandbox."""
     return "allow-all"
@@ -273,8 +322,19 @@ async def run_terminal_command(session: dict[str, Any], command: Any, on_event=N
     # No package names, shell fragments, or arbitrary arguments reach the admin API.
     if clean_command == "ada-admin install-tools":
         return await _request_vps_admin_install_tools()
+    if clean_command == "ada-admin diagnostics":
+        return await _request_vps_admin_diagnostics()
+    if clean_command == "ada-admin install-tools-status":
+        return await _request_vps_admin_install_tools_status()
     if clean_command.startswith("ada-admin"):
-        return {"ok": False, "error": "Operação administrativa não autorizada. Use somente 'ada-admin install-tools'."}
+        return {
+            "ok": False,
+            "error": (
+                "Operação administrativa não autorizada. Comandos virtuais disponíveis: "
+                "'ada-admin diagnostics', 'ada-admin install-tools-status' e "
+                "'ada-admin install-tools'."
+            ),
+        }
     if os.getenv("ADA_EXECUTOR_URL", "").strip():
         return await _run_on_vps(clean_command, on_event=on_event)
     if not is_terminal_configured():

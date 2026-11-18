@@ -177,3 +177,98 @@ async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(mon
 
 def test_render_sandbox_allows_unrestricted_outbound_network():
     assert terminal_sandbox._network_policy() == "allow-all"
+
+
+
+@pytest.mark.asyncio
+async def test_vps_admin_diagnostics_uses_authenticated_read_only_route(monkeypatch):
+    monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test/")
+    monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
+    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
+    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "operation": "diagnostics", "output": "hostname=test-vps\nservice.ada-executor.service=active"}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, *, headers):
+            captured.update({"url": url, "headers": headers})
+            return FakeResponse()
+
+    monkeypatch.setattr(terminal_sandbox.httpx, "AsyncClient", FakeAsyncClient)
+
+    result = await terminal_sandbox.run_terminal_command({}, "ada-admin diagnostics")
+
+    assert captured["url"] == "https://executor.example.test/admin/diagnostics"
+    assert captured["headers"]["Authorization"] == "Bearer internal-test-token"
+    assert result["ok"] is True
+    assert "hostname=test-vps" in result["stdout"]
+    assert result["executor"] == "VPS administrativo somente leitura"
+
+
+@pytest.mark.asyncio
+async def test_vps_admin_install_status_uses_fixed_read_only_route(monkeypatch):
+    monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test")
+    monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
+    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
+    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "operation": "install-tools-status", "output": "Result=success"}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, *, headers):
+            captured["url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr(terminal_sandbox.httpx, "AsyncClient", FakeAsyncClient)
+
+    result = await terminal_sandbox.run_terminal_command({}, "ada-admin install-tools-status")
+
+    assert captured["url"] == "https://executor.example.test/admin/install-tools/status"
+    assert result["ok"] is True
+    assert "Result=success" in result["stdout"]
+
+
+@pytest.mark.asyncio
+async def test_vps_admin_rejects_unlisted_operation_without_network_call(monkeypatch):
+    async def unexpected_client(*args, **kwargs):
+        raise AssertionError("unknown admin operation must not reach the VPS")
+
+    monkeypatch.setattr(terminal_sandbox.httpx, "AsyncClient", unexpected_client)
+    result = await terminal_sandbox.run_terminal_command({}, "ada-admin restart ssh")
+
+    assert result["ok"] is False
+    assert "não autorizada" in result["error"].lower()
