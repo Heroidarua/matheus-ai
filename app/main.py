@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.response_artifacts import get_response_artifact, save_response_artifact
 from app.long_term_memory import (
@@ -2012,8 +2012,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         system_prompt += (
             "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
         )
-    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message)
-    terminal_task = is_terminal_task(last_user_message)
+    admin_install_tools_requested = is_admin_install_tools_request(last_user_message)
+    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message) or admin_install_tools_requested
+    terminal_task = is_terminal_task(last_user_message) or admin_install_tools_requested
     terminal_required = requires_terminal_execution(
         last_user_message,
         agent_mode_active=agent_mode_active,
@@ -2489,6 +2490,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         nonlocal sources, fetched_urls
 
         def terminal_reply(result: dict[str, Any]) -> str:
+            if result.get("status") == "started" and result.get("completion_confirmed") is False:
+                return (
+                    "🟡 **Instalação administrativa iniciada na VPS.**\\n\\n"
+                    + str(result.get("message") or "A solicitação foi aceita.")
+                    + "\\n\\nA tarefa está rodando em segundo plano. O início foi confirmado, mas a conclusão ainda NÃO foi verificada."
+                )
             if result.get("error"):
                 return "❌ **O terminal não conseguiu executar o comando.**\\n\\n" + str(result["error"])
             stdout = str(result.get("stdout") or "")
