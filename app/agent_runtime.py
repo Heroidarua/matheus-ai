@@ -221,7 +221,7 @@ def requires_terminal_execution(
     file_or_code_work = re.search(
         r"\b(?:arquivo(?:s)?|pasta(?:s)?|workspace|projeto|script|c[oó]digo|"
         r"programa|programar|implementar|implementa[cç][aã]o|corrigir|debug|"
-        r"teste(?:s)?|unittest|pytest|python|javascript|typescript|backend|frontend|"
+        r"teste(?:s)?|unittest|pytest|python|javascript|typescript|backend|frontend|vps|servidor|serviços|servicos|processos|diagnóstico|diagnostico|"
         r"\.py|\.js|\.ts|\.html|\.css|\.json|\.md)\b",
         text,
     )
