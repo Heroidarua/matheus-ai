@@ -192,7 +192,7 @@ def is_admin_install_tools_status_request(message: str) -> bool:
     )
     command = re.search(r"\bada-admin\s+install-tools-status\b", text)
     natural = (
-        re.search(r"\b(status|situa[cç][aã]o|resultado)\b", text)
+        re.search(r"\b(status|situa[cç][aã]o|resultado|estado)\b", text)
         and re.search(r"\b(instala[cç][aã]o|ferramentas|pacotes)\b", text)
         and re.search(r"\b(vps|servidor)\b", text)
     )
