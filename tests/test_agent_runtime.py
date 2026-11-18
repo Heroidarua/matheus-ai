@@ -225,7 +225,7 @@ def test_browser_intent_requires_action_and_browser_reference(message):
 
 
 @pytest.mark.parametrize("message,expected", [
-    ("Acesse https://sos01.com.br pelo navegador", ("open",)),
+    ("Acesse https://sos01.com.br pelo navegador", ("open", "inspect")),
     ("Explore https://sos01.com.br pelo navegador e descreva a página", ("open", "inspect")),
     ("Acesse https://sos01.com.br pelo navegador e role a página 700 pixels", ("open", "scroll")),
     ("Abra https://example.com no Chromium, inspecione e clique no botão", ("open", "inspect", "click")),
