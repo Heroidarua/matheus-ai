@@ -391,3 +391,38 @@ def test_agent_prompt_checks_binaries_on_remote_executor():
 
     assert "command -v nmap sqlmap nikto gobuster jq nc" in AGENT_TOOLS_SPEC
     assert "não presuma que instalar pacotes no Dockerfile da API os instalou na VPS" in AGENT_TOOLS_SPEC
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_can_execute_more_than_ten_steps():
+    executed = []
+
+    async def model(messages, tools_enabled):
+        if len(executed) < 12:
+            return '{"tool":"terminal","args":{"command":"printf step"}}'
+        return "Tarefa concluída após 12 execuções."
+
+    async def terminal(command):
+        executed.append(command)
+        return {"stdout": f"step {len(executed)}", "exit_code": 0}
+
+    tools = {
+        "terminal": ToolDefinition(
+            "terminal", "restricted Linux terminal", ("command",), terminal
+        )
+    }
+    result = await run_tool_loop(
+        [{"role": "user", "content": "Execute doze etapas"}],
+        model,
+        tools,
+    )
+    assert result == "Tarefa concluída após 12 execuções."
+    assert len(executed) == 12
+
+
+def test_agent_prompt_no_longer_imposes_six_or_twenty_four_call_caps():
+    from app.agent_runtime import AGENT_TOOLS_SPEC
+
+    assert "Não imponha teto acumulado de chamadas de terminal por tarefa" in AGENT_TOOLS_SPEC
+    assert "até 6 chamadas" not in AGENT_TOOLS_SPEC
+    assert "24 chamadas acumuladas" not in AGENT_TOOLS_SPEC
