@@ -11,16 +11,15 @@ client = TestClient(main.app)
 @pytest.mark.parametrize(
     ("raw_url", "expected"),
     [
-        ("https://sos01.com.br\\u2060", "https://sos01.com.br"),
-        ("https://exa\\u200bmple.com/path", "https://example.com/path"),
-        ("https://example.com/\\ufeffpage", "https://example.com/page"),
+        ("https://sos01.com.br" + chr(0x2060), "https://sos01.com.br"),
+        ("https://exa" + chr(0x200B) + "mple.com/path", "https://example.com/path"),
+        ("https://example.com/" + chr(0xFEFF) + "page", "https://example.com/page"),
         ("https://example.com/path", "https://example.com/path"),
-        ("[abrir](https://sos01.com.br\\u2060)", "https://sos01.com.br"),
+        ("[abrir](https://sos01.com.br" + chr(0x2060) + ")", "https://sos01.com.br"),
     ],
 )
 def test_normalize_tool_url_removes_invisible_unicode_characters(raw_url, expected):
     assert main.normalize_tool_url(raw_url) == expected
-
 
 def test_health_endpoint():
     response = client.get("/health")
@@ -469,7 +468,7 @@ async def test_browser_open_retries_transient_502(monkeypatch):
     monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
     monkeypatch.setattr(main.asyncio, "sleep", no_sleep)
 
-    result = await main.tool_browser_action("a" * 24, "open", url="https://example.com")
+    result = await main.tool_browser_action("a" * 24, "open", url="https://example.com" + chr(0x2060))
 
     assert result["ok"] is True
     assert result["title"] == "Example Domain"
