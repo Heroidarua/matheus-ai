@@ -110,7 +110,7 @@ def is_browser_task(message: str) -> bool:
 
 _SHELL_COMMAND_PREFIX = re.compile(
     r"^(?:\$\s*)?(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
-    r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|which|whereis|env|printenv|nmap|nc|netcat|sqlmap|nikto|gobuster|jq|"
+    r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|which|whereis|env|printenv|ada-admin|nmap|nc|netcat|sqlmap|nikto|gobuster|jq|"
     r"mkdir|touch|cp|mv|chmod|curl|wget|apt(?:-get)?|sudo|bash|sh|make|cmake|"
     r"gcc|g\+\+|date|df|free|ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\b",
     re.IGNORECASE,
@@ -296,7 +296,7 @@ def extract_terminal_command(message: str) -> str | None:
     first = command.splitlines()[0].strip()
     if not re.match(
         r"^(?:pwd|ls|cd|cat|head|tail|find|grep|rg|echo|printf|whoami|id|uname|"
-        r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|pytest-asyncio|"
+        r"python(?:3)?|pip(?:3)?|node|npm|npx|git|pytest|pytest-asyncio|ada-admin|"
         r"which|whereis|env|printenv|mkdir|touch|cp|mv|chmod|curl|wget|nmap|nc|netcat|sqlmap|nikto|gobuster|jq|"
         r"apt(?:-get)?|sudo|bash|sh|make|cmake|gcc|g\+\+|date|df|free|"
         r"ps|top|du|tar|zip|unzip|timeout|export|source|test|true|false)\b",
