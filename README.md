@@ -163,9 +163,10 @@ Se o modelo acima não estiver disponível na sua conta, confira os IDs atuais n
 
 ## Segurança e limitações
 
-- Não executa comandos de shell enviados pelo chat.
-- Não acessa arquivos pessoais nem automatiza o sistema operacional.
-- A ferramenta de cálculo aceita somente expressões aritméticas limitadas.
+- O terminal do modo agente executa em um executor separado (VPS ou Render Sandbox), não dentro do processo principal da API.
+- No executor VPS, os comandos comuns rodam como `ada-runner`, em workspace isolado, com limites de CPU, memória e duração. Não existe shell root irrestrito exposto pela API.
+- As operações administrativas disponíveis são fixas e autenticadas; consultas de diagnóstico são somente leitura e a instalação usa um conjunto previamente aprovado.
+- O navegador Chromium é um serviço separado, autenticado e com bloqueio de destinos locais/privados para reduzir riscos de SSRF.
 - Não envie senhas, tokens ou dados sensíveis ao chat.
 - A análise de imagens depende de suporte multimodal no provedor/modelo.
 - Este é um ponto de partida, não uma aplicação auditada para uso público. Antes de abrir o acesso publicamente, configure autenticação, limites de uso, monitoramento e política de privacidade.
