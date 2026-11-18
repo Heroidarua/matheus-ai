@@ -441,3 +441,13 @@ def test_agent_prompt_no_longer_imposes_six_or_twenty_four_call_caps():
 def test_fixed_vps_admin_commands_are_recognized_as_terminal_tasks(command):
     assert is_terminal_task(command)
     assert extract_terminal_command(command) == command
+
+
+def test_vps_diagnostics_request_requires_terminal_in_agent_mode():
+    from app.agent_runtime import requires_terminal_execution
+
+    assert requires_terminal_execution(
+        "Verifique o estado da minha VPS e os serviços ADA-M",
+        agent_mode_active=True,
+        terminal_configured=True,
+    )
