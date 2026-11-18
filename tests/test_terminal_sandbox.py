@@ -173,3 +173,7 @@ async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(mon
     assert result["ok"] is False
     assert result["exit_code"] == 127
     assert result["stderr"] == "nmap: not found"
+
+
+def test_render_sandbox_allows_unrestricted_outbound_network():
+    assert terminal_sandbox._network_policy() == "allow-all"
