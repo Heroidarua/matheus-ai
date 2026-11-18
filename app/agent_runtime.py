@@ -190,6 +190,9 @@ def is_admin_install_tools_status_request(message: str) -> bool:
         r"consulte|consultar|mostre|mostrar|obtenha|obter)\b",
         text,
     )
+    # O comando explícito de diagnóstico pertence a outro fluxo somente leitura.
+    if re.search(r"\bada-admin\s+diagnostics\b", text):
+        return False
     command = re.search(r"\bada-admin\s+install-tools-status\b", text)
     natural = (
         re.search(r"\b(status|situa[cç][aã]o|resultado|estado)\b", text)
