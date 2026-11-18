@@ -60,6 +60,19 @@ class BrowserAction(BaseModel):
     delta_y: int = Field(default=700, ge=-3000, le=3000)
 
 
+def build_scroll_evidence(requested_delta_y: int, before: float, after: float, visible_text: str) -> dict[str, Any]:
+    """Build explicit evidence distinguishing a requested wheel action from actual page movement."""
+    actual_delta_y = after - before
+    return {
+        "requested_delta_y": requested_delta_y,
+        "scroll_y_before": before,
+        "scroll_y_after": after,
+        "actual_delta_y": actual_delta_y,
+        "scrolled": actual_delta_y != 0,
+        "visible_text": visible_text[:5000],
+    }
+
+
 async def is_public_url(value: str) -> bool:
     """Reject non-HTTP URLs, credentials, local names, and non-public DNS targets."""
     try:
@@ -361,18 +374,12 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                     }
                     return lines.join("\\n").slice(0, 5000);
                 }""")
-                actual_delta_y = scroll_y_after - scroll_y_before
                 return {
                     "ok": True,
                     "action": "scroll",
                     "url": page.url,
                     "title": (await page.title())[:300],
-                    "requested_delta_y": payload.delta_y,
-                    "scroll_y_before": scroll_y_before,
-                    "scroll_y_after": scroll_y_after,
-                    "actual_delta_y": actual_delta_y,
-                    "scrolled": actual_delta_y != 0,
-                    "visible_text": visible_text,
+                    **build_scroll_evidence(payload.delta_y, scroll_y_before, scroll_y_after, visible_text),
                 }
             if payload.action == "click":
                 if not payload.selector and payload.index is None:
