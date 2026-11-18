@@ -136,6 +136,9 @@ def is_admin_install_tools_request(message: str) -> bool:
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
+    # Perguntas de caráter informativo não devem disparar uma ação administrativa.
+    if re.match(r"^(como|quais|qual|o que|por que|porque|quando|onde|quanto)\\b", text):
+        return False
 
     # Aceita linguagem natural comum ("baixe suas ferramentas de hacking"),
     # mas sempre encaminha para o mesmo pacote fixo aprovado pelo administrador.
