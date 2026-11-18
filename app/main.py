@@ -1667,6 +1667,14 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
     allowed_actions = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close", "hover", "scroll"}
     if action not in allowed_actions:
         return {"ok": False, "error": "Ação de navegador não permitida."}
+    if action == "open":
+        # Normalize at the final HTTP boundary as well as in the tool parser:
+        # this protects direct/internal callers that bypass parse_tool_call.
+        clean_url = normalize_tool_url(arguments.get("url"))
+        parsed_url = urlparse(clean_url)
+        if parsed_url.scheme.lower() not in {"http", "https"} or not parsed_url.hostname:
+            return {"ok": False, "error": "URL inválida. Informe um endereço HTTP ou HTTPS válido."}
+        arguments["url"] = clean_url
     payload = {"session_id": session_id, "action": action, **arguments}
     retryable_action = action in {"open", "inspect", "text", "tabs"}
     max_attempts = 3 if retryable_action else 1
