@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping
 
@@ -363,7 +364,13 @@ def normalize_tool_url(value: Any) -> str:
     """Accept a raw URL or extract the destination from a Markdown link."""
     if not isinstance(value, str):
         return ""
-    candidate = value.strip()
+    # Model outputs and copied prompts can contain invisible Unicode format
+    # characters (for example U+2060 WORD JOINER) inside a hostname. They are
+    # not valid URL data, so remove control/format characters before parsing.
+    candidate = "".join(
+        char for char in value
+        if unicodedata.category(char) not in {"Cc", "Cf"}
+    ).strip()
     markdown_link = re.fullmatch(r"\[[^\]]+\]\((https?://[^)\s]+)\)", candidate, re.IGNORECASE)
     if markdown_link:
         candidate = markdown_link.group(1)
