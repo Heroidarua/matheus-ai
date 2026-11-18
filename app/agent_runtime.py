@@ -131,6 +131,17 @@ def _raw_shell_command(message: str) -> str:
     return ""
 
 
+def is_admin_install_tools_request(message: str) -> bool:
+    """Detect an explicit request to install ADA-M's fixed, preapproved VPS tool bundle."""
+    text = re.sub(r"\\s+", " ", (message or "").strip().casefold())
+    if not text:
+        return False
+    intent = re.search(r"\\b(instale|instalar|instala|instalação|instalacao|prepare|preparar)\\b", text)
+    bundle = re.search(r"\\b(ferramentas|pacotes|utilitários|utilitarios|conjunto padrão|kit padrão|kit de ferramentas)\\b", text)
+    target = re.search(r"\\b(vps|servidor|linux|ubuntu|debian)\\b", text)
+    return bool(intent and bundle and target)
+
+
 def is_terminal_task(message: str) -> bool:
     """Detecta pedidos de terminal, inclusive comandos enviados sem explicação."""
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
@@ -192,6 +203,10 @@ def should_run_agent_loop(
 
 def extract_terminal_command(message: str) -> str | None:
     """Extract an explicitly supplied shell command from a terminal request."""
+    # Route the known administrative intent deterministically; do not ask the
+    # language model to invent or choose a privileged shell command.
+    if is_admin_install_tools_request(message):
+        return "ada-admin install-tools"
     if not isinstance(message, str) or not message.strip():
         return None
     raw_command = _raw_shell_command(message)
