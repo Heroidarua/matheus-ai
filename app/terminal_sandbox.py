@@ -7,6 +7,7 @@ available as a backward-compatible fallback.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shlex
 from typing import Any
@@ -64,7 +65,8 @@ def validate_command(command: Any) -> str:
     return value
 
 
-async def _run_on_vps(command: str) -> dict[str, Any]:
+async def _run_on_vps(command: str, on_event=None) -> dict[str, Any]:
+    """Stream command output from the VPS executor while preserving bounded output."""
     settings = _vps_settings()
     if settings is None:
         return {
@@ -76,43 +78,110 @@ async def _run_on_vps(command: str) -> dict[str, Any]:
         }
     base_url, headers = settings
     timeout_seconds = min(max(int(os.getenv("ADA_EXECUTOR_TIMEOUT", "50")), 1), 55)
+    stdout_parts: list[str] = []
+    stderr_parts: list[str] = []
+    collected = 0
+    exit_code: int | None = None
+    stream_error: str | None = None
+
+    async def emit(event: dict[str, Any]) -> None:
+        if on_event is not None:
+            result = on_event(event)
+            if asyncio.iscoroutine(result):
+                await result
+
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds + 12, connect=12)) as client:
-            response = await client.post(
-                f"{base_url}/execute",
+        timeout = httpx.Timeout(
+            timeout_seconds + 15,
+            connect=12,
+            read=timeout_seconds + 15,
+            write=12,
+            pool=12,
+        )
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{base_url}/execute/stream",
                 headers=headers,
                 json={"command": command, "timeout": timeout_seconds},
-            )
-        if response.status_code in (401, 403):
+            ) as response:
+                if response.status_code in (401, 403):
+                    return {
+                        "ok": False,
+                        "error": (
+                            f"O Cloudflare/VPS recusou a autenticação (HTTP {response.status_code}). "
+                            "Confira o Service Token do Cloudflare Access e ADA_EXECUTOR_TOKEN no Render."
+                        ),
+                    }
+                response.raise_for_status()
+                event_name = "message"
+                async for line in response.aiter_lines():
+                    if line.startswith("event:"):
+                        event_name = line[6:].strip()
+                        continue
+                    if not line.startswith("data:"):
+                        continue
+                    raw = line[5:].strip()
+                    if not raw:
+                        continue
+                    try:
+                        payload = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if event_name == "start":
+                        await emit({"event": "start", **payload})
+                    elif event_name == "output":
+                        stream_name = "stderr" if payload.get("stream") == "stderr" else "stdout"
+                        chunk = str(payload.get("text") or "")
+                        remaining = max(0, MAX_OUTPUT_CHARS - collected)
+                        if remaining:
+                            chunk = chunk[:remaining]
+                            (stderr_parts if stream_name == "stderr" else stdout_parts).append(chunk)
+                            collected += len(chunk)
+                            if chunk:
+                                await emit({"event": "output", "stream": stream_name, "text": chunk})
+                    elif event_name == "complete":
+                        exit_code = int(payload.get("returncode", 1))
+                        await emit({"event": "complete", "returncode": exit_code})
+                    elif event_name == "error":
+                        stream_error = str(payload.get("message") or "Falha durante a execução na VPS.")
+                        await emit({"event": "error", "message": stream_error})
+
+        stdout = "".join(stdout_parts)
+        stderr = "".join(stderr_parts)
+        if collected >= MAX_OUTPUT_CHARS:
+            stderr += "\n[saída truncada pelo limite de segurança]"
+        if stream_error:
+            return {
+                "ok": False, "error": stream_error, "stdout": stdout, "stderr": stderr,
+                "exit_code": exit_code, "workspace": "/home/ada-runner/workspace",
+                "timeout_seconds": timeout_seconds, "executor": "VPS",
+            }
+        if exit_code is None:
             return {
                 "ok": False,
-                "error": (
-                    f"O Cloudflare/VPS recusou a autenticação (HTTP {response.status_code}). "
-                    "Confira o Service Token do Cloudflare Access e ADA_EXECUTOR_TOKEN no Render."
-                ),
+                "error": "A conexão de streaming terminou sem confirmação do código de saída. Verifique o estado antes de repetir ações.",
+                "stdout": stdout, "stderr": stderr,
+                "workspace": "/home/ada-runner/workspace",
+                "timeout_seconds": timeout_seconds, "executor": "VPS",
             }
-        response.raise_for_status()
-        payload = response.json()
-        if not isinstance(payload, dict):
-            raise ValueError("Resposta inválida do executor VPS.")
-        returncode = int(payload.get("returncode", 1))
         return {
-            "ok": returncode == 0,
-            "exit_code": returncode,
-            "stdout": str(payload.get("stdout") or "")[:MAX_OUTPUT_CHARS],
-            "stderr": str(payload.get("stderr") or "")[:MAX_OUTPUT_CHARS],
+            "ok": exit_code == 0,
+            "exit_code": exit_code,
+            "stdout": stdout,
+            "stderr": stderr,
             "workspace": "/home/ada-runner/workspace",
             "timeout_seconds": timeout_seconds,
             "executor": "VPS",
             "session_note": "Terminal conectado ao VPS; arquivos ficam no workspace persistente do servidor.",
         }
     except httpx.TimeoutException:
-        return {"ok": False, "error": "O VPS demorou além do limite para responder. Confira se ada-executor está ativo."}
+        return {"ok": False, "error": "O streaming da VPS excedeu o limite de espera. Confira se ada-executor está ativo."}
     except httpx.HTTPStatusError as exc:
         return {"ok": False, "error": f"O executor VPS respondeu com HTTP {exc.response.status_code}."}
     except (httpx.HTTPError, ValueError, TypeError) as exc:
         return {"ok": False, "error": f"Não foi possível comunicar com o executor VPS ({type(exc).__name__})."}
-
 
 
 async def _request_vps_admin_install_tools() -> dict[str, Any]:
@@ -195,7 +264,7 @@ async def _run_in_sandbox(client, sandbox_id: str, command: str) -> dict[str, An
     return {"ok": exit_code == 0, "exit_code": exit_code, "stdout": out, "stderr": err, "workspace": WORKSPACE, "timeout_seconds": COMMAND_TIMEOUT_SECONDS}
 
 
-async def run_terminal_command(session: dict[str, Any], command: Any) -> dict[str, Any]:
+async def run_terminal_command(session: dict[str, Any], command: Any, on_event=None) -> dict[str, Any]:
     """Execute on the VPS when configured; otherwise preserve Render sandbox."""
     try:
         clean_command = validate_command(command)
@@ -208,7 +277,7 @@ async def run_terminal_command(session: dict[str, Any], command: Any) -> dict[st
     if clean_command.startswith("ada-admin"):
         return {"ok": False, "error": "Operação administrativa não autorizada. Use somente 'ada-admin install-tools'."}
     if os.getenv("ADA_EXECUTOR_URL", "").strip():
-        return await _run_on_vps(clean_command)
+        return await _run_on_vps(clean_command, on_event=on_event)
     if not is_terminal_configured():
         return {
             "ok": False,
