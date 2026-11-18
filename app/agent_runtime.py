@@ -133,7 +133,7 @@ def _raw_shell_command(message: str) -> str:
 
 def is_admin_install_tools_request(message: str) -> bool:
     """Detect an explicit request to install ADA-M's fixed, preapproved VPS tool bundle."""
-    text = re.sub(r"\\s+", " ", (message or "").strip().casefold())
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
     intent = re.search(r"\\b(instale|instalar|instala|instalação|instalacao|prepare|preparar)\\b", text)
