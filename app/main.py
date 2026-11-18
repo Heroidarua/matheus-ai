@@ -2768,6 +2768,18 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                             "actual_delta_y", "scrolled", "visible_text",
                         )
                     }
+                event["browser_evidence"] = {
+                    "url": browser_result.get("url"),
+                    "title": browser_result.get("title"),
+                    "requested_delta_y": browser_result.get("requested_delta_y"),
+                    "scroll_y_before": browser_result.get("scroll_y_before"),
+                    "scroll_y_after": browser_result.get("scroll_y_after"),
+                    "actual_delta_y": browser_result.get("actual_delta_y"),
+                    "scrolled": browser_result.get("scrolled"),
+                    "visible_text": str(browser_result.get("visible_text") or "")[:1200],
+                    "elements": browser_result.get("elements", [])[:12]
+                    if isinstance(browser_result.get("elements"), list) else [],
+                }
                 events.append(event)
                 step_count += 1
                 if not confirmed:
