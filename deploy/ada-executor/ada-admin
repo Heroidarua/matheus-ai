@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -ne 1 ]]; then
+  echo "Uso inválido"
+  exit 64
+fi
+
 case "${1:-}" in
   install-tools)
     export DEBIAN_FRONTEND=noninteractive
