@@ -12,6 +12,7 @@ from app.agent_runtime import (
     is_terminal_task,
     normalize_tool_url,
     required_browser_actions,
+    browser_task_plan,
     parse_tool_call,
     run_tool_loop,
     should_run_agent_loop,
@@ -501,3 +502,17 @@ def test_natural_language_vps_readonly_admin_requests_route_deterministically(me
 def test_admin_readonly_natural_language_detection_does_not_match_questions(message):
     assert not is_admin_diagnostics_request(message)
     assert not is_admin_install_tools_status_request(message)
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("Abra https://sos01.com.br usando o Chromium", ("https://sos01.com.br", None)),
+    ("Abra https://sos01.com.br e role exatamente 700 pixels", ("https://sos01.com.br", 700)),
+    ("Navegue em https://example.com e role para cima 450 px", ("https://example.com", -450)),
+    ("Explore https://example.com", ("https://example.com", None)),
+])
+def test_browser_task_plan_extracts_url_and_scroll(message, expected):
+    assert browser_task_plan(message) == expected
+
+
+def test_browser_task_plan_requires_explicit_url():
+    assert browser_task_plan("Explore o site pelo Chromium") == ("", None)
