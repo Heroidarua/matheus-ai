@@ -228,9 +228,8 @@ async def _request_vps_admin_install_tools() -> dict[str, Any]:
         return {"ok": False, "error": f"Falha ao solicitar a instalação administrativa ({type(exc).__name__})."}
 
 def _network_policy():
-    """Build the typed policy objects required by Render SDK 1.9+."""
-    from render.sandbox import EgressRule, NetworkPolicy
-    return NetworkPolicy(type="allow-list", rules=[EgressRule(domain=domain) for domain in NETWORK_ALLOWED_DOMAINS])
+    """Allow unrestricted outbound network access for the Render terminal sandbox."""
+    return "allow-all"
 
 
 def _client():
