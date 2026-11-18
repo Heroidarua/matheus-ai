@@ -11,6 +11,7 @@ from app.agent_runtime import (
     is_browser_task,
     is_terminal_task,
     normalize_tool_url,
+    required_browser_actions,
     parse_tool_call,
     run_tool_loop,
     should_run_agent_loop,
@@ -221,6 +222,20 @@ def test_detects_browser_intent_when_url_or_context_comes_first(message):
 ])
 def test_browser_intent_requires_action_and_browser_reference(message):
     assert not is_browser_task(message)
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("Acesse https://sos01.com.br pelo navegador", ("open", "inspect")),
+    ("Explore https://sos01.com.br pelo navegador e descreva a página", ("open", "inspect")),
+    ("Acesse https://sos01.com.br pelo navegador e role a página 700 pixels", ("open", "inspect", "scroll")),
+    ("Abra https://example.com no Chromium, inspecione e clique no botão", ("open", "inspect", "click")),
+])
+def test_required_browser_actions_follow_explicit_user_request(message, expected):
+    assert required_browser_actions(message) == expected
+
+
+def test_required_browser_actions_does_not_force_browser_for_general_questions():
+    assert required_browser_actions("O que é um navegador?") == ()
 
 
 @pytest.mark.parametrize("value,expected", [

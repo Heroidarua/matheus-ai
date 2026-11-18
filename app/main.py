@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
@@ -2581,6 +2581,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         step_count = int(saved_state.get("step_count", 0))
         events = list(saved_state.get("events") or [])
         pending_tool = saved_state.get("pending_tool")
+        required_browser_steps = required_browser_actions(job_task)
+        completed_browser_steps = {
+            event.get("action") for event in events
+            if event.get("tool") == "browser" and event.get("ok") and event.get("action")
+        }
+        browser_recovery_attempts = 0
         terminal_calls_this_run = 0
         pause_reason = ""
         budget_exhausted = False
@@ -2713,7 +2719,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         malformed_tool_retries = 0
         max_turns = AGENT_MAX_TURNS if terminal_required else WEB_MAX_TURNS
         for turn in range(1, max_turns + 1):
-            use_tools = turn < max_turns  # reserva a última rodada para a resposta final
+            # Se ainda há ações de navegador exigidas pelo pedido, não reserve
+            # a última rodada para texto: ela também precisa poder executar a ferramenta.
+            browser_steps_pending = set(required_browser_steps) - completed_browser_steps
+            use_tools = turn < max_turns or bool(browser_steps_pending)
             loop_status["status"] = "Pesquisando…" if turn == 1 else "Processando…"
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 resp = await _model_post(client, loop_messages, use_tools)
@@ -2728,6 +2737,34 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
             call = parse_tool_call(content_out) if use_tools else None
             if not call:
+                browser_steps_pending = [
+                    action for action in required_browser_steps
+                    if action not in completed_browser_steps
+                ]
+                if browser_steps_pending:
+                    next_action = browser_steps_pending[0]
+                    if browser_recovery_attempts < 2 and turn < max_turns:
+                        browser_recovery_attempts += 1
+                        if content_out:
+                            loop_messages.append({"role": "assistant", "content": content_out[:6000]})
+                        loop_messages.append({
+                            "role": "system",
+                            "content": (
+                                "A tarefa solicitou uma ação real no navegador que ainda NÃO foi confirmada. "
+                                f"A próxima ação obrigatória é browser action={next_action!r}. "
+                                "Não responda com o texto extraído anteriormente e não declare a tarefa concluída. "
+                                "Emita APENAS uma chamada JSON válida para a ferramenta browser, execute essa ação "
+                                "e aguarde o resultado. Não invente resultados."
+                            ),
+                        })
+                        await persist_job("running")
+                        continue
+                    return (
+                        "⚠️ **Não consegui concluir a navegação solicitada.** "
+                        f"Ação ainda não confirmada: '{next_action}'. "
+                        "A resposta textual do modelo não foi tratada como execução do navegador. "
+                        "Verifique a conexão do Chromium e tente novamente."
+                    ), data
                 attempted_tool_call = looks_like_tool_call(content_out)
                 must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls_this_run == 0)
                 if must_recover_tool_call:
@@ -2799,6 +2836,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             elif name == "browser":
                 loop_status["status"] = "Navegando…"
                 result = await tool_browser_action(session_id, **args)
+                if (
+                    result.get("ok")
+                    and not result.get("fallback_used")
+                    and args.get("action") in required_browser_steps
+                ):
+                    completed_browser_steps.add(args["action"])
                 if not result.get("ok") and args.get("action") == "open" and args.get("url"):
                     browser_error = result.get("error", "Falha desconhecida no Chromium")
                     fallback = await tool_web_fetch(args["url"])
@@ -2849,6 +2892,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             events.append({
                 "step": step_count,
                 "tool": name,
+                "action": args.get("action") if name == "browser" else None,
                 "command": args.get("command") if name == "terminal" else None,
                 "ok": bool(result.get("ok", True)) if isinstance(result, dict) else True,
                 "exit_code": result.get("exit_code") if isinstance(result, dict) else None,

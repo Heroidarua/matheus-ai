@@ -103,10 +103,27 @@ def is_browser_task(message: str) -> bool:
     if not text:
         return False
     browser_terms = r"(?:navegador|chromium|browser)"
-    action_terms = r"(?:acesse|acessar|abra|abrir|entre|entrar|visite|visitar|navegue|navegar|inspecione|inspecionar|analise|analisar|verifique|verificar)"
+    action_terms = r"(?:acesse|acessar|abra|abrir|entre|entrar|visite|visitar|navegue|navegar|explore|explorar|descubra|descobrir|inspecione|inspecionar|analise|analisar|verifique|verificar|role|rolar|scroll)"
     # Require both an explicit navigation action and an explicit browser reference.
     return bool(re.search(action_terms + r".{0,100}" + browser_terms, text) or
                 re.search(browser_terms + r".{0,100}" + action_terms, text))
+
+
+def required_browser_actions(message: str) -> tuple[str, ...]:
+    """Return browser actions explicitly required by a navigation/exploration request."""
+    if not is_browser_task(message):
+        return ()
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
+    # Toda navegação visual precisa inspecionar o estado real após abrir a página.
+    # Isso impede que o texto inicial de carregamento seja tratado como exploração concluída.
+    actions = ["open", "inspect"]
+    if re.search(r"\b(role|rolar|scroll|des[cç]a|descer|deslize|deslizar)\b", text):
+        actions.append("scroll")
+    if re.search(r"\b(clique|clicar|click)\b", text):
+        actions.append("click")
+    if re.search(r"\b(preencha|preencher|fill)\b", text):
+        actions.append("fill")
+    return tuple(dict.fromkeys(actions))
 
 
 _SHELL_COMMAND_PREFIX = re.compile(
@@ -414,6 +431,7 @@ Você pode executar ferramentas respondendo APENAS com um objeto JSON válido, s
 Regras:
 - Use web_search para pesquisar resultados e fontes.
 - PRIORIDADE DE NAVEGAÇÃO: se o usuário mencionar que quer acessar/abrir/visitar/analisar um site pelo navegador, use SEMPRE browser (Chromium), mesmo que a mensagem também contenha uma URL ou peça pesquisa. Não substitua essa ação por web_fetch. Comece com action=open e examine o resultado antes de agir.
+- CONCLUSÃO DE TAREFAS DE NAVEGADOR: uma resposta textual ou a extração de texto da página NÃO substitui ações solicitadas. Execute e confirme cada ação explícita (por exemplo, inspect, scroll, click ou fill) antes de responder. Depois de open, use inspect quando o usuário pedir para explorar/analisar a página; use scroll quando pedir rolagem. Não repita o texto integral da página: relate somente o que foi solicitado e use os resultados reais das ações. Se uma ação falhar ou não puder ser executada, informe isso claramente; nunca simule posição de rolagem, elementos visíveis ou cliques.
 - Use web_fetch apenas para extração simples de texto de páginas públicas; nunca use essa ferramenta para interpretar arquivos binários.
 - Se a página responder com conteúdo binário, formato não suportado, bloqueio ou erro, informe a limitação; nunca reproduza bytes ou conteúdo ilegível como se fosse texto.
 - Use calculate somente para expressões matemáticas simples.
