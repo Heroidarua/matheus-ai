@@ -114,9 +114,9 @@ def required_browser_actions(message: str) -> tuple[str, ...]:
     if not is_browser_task(message):
         return ()
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
-    actions = ["open"]
-    if re.search(r"\b(explore|explorar|descubra|descobrir|inspecione|inspecionar|analise|analisar|verifique|verificar)\b", text):
-        actions.append("inspect")
+    # Toda navegação visual precisa inspecionar o estado real após abrir a página.
+    # Isso impede que o texto inicial de carregamento seja tratado como exploração concluída.
+    actions = ["open", "inspect"]
     if re.search(r"\b(role|rolar|scroll|des[cç]a|descer|deslize|deslizar)\b", text):
         actions.append("scroll")
     if re.search(r"\b(clique|clicar|click)\b", text):
