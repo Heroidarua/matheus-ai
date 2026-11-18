@@ -394,6 +394,23 @@ def normalize_tool_url(value: Any) -> str:
     return candidate
 
 
+def browser_task_plan(message: str) -> tuple[str, int | None]:
+    """Extract a user-supplied URL and optional requested vertical scroll."""
+    text = re.sub(r"\s+", " ", (message or "").strip())
+    match = re.search(r"""https?://[^\s<>"']+""", text, re.IGNORECASE)
+    if not match:
+        return "", None
+    url = normalize_tool_url(match.group(0).rstrip(".,;:!?)]}"))
+    scroll_delta: int | None = None
+    if re.search(r"\b(role|rolar|scroll|desça|descer|deslize|deslizar)\b", text, re.IGNORECASE):
+        amount = re.search(r"\b(\d{1,4})\s*(?:pixels?|px)\b", text, re.IGNORECASE)
+        scroll_delta = int(amount.group(1)) if amount else 700
+        if re.search(r"\b(?:para cima|suba|subir)\b", text, re.IGNORECASE):
+            scroll_delta = -scroll_delta
+        scroll_delta = max(-3000, min(3000, scroll_delta))
+    return url, scroll_delta
+
+
 AGENT_TOOLS_SPEC = """
 MODO AGENTE — FERRAMENTAS DISPONÍVEIS
 FERRAMENTAS LINUX PREVISTAS PARA O EXECUTOR:
