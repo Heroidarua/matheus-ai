@@ -93,7 +93,7 @@ async def guard_request(route) -> None:
     embedded_font = (
         route.request.resource_type == "font"
         and bool(re.match(
-            r"^data:(?:font/(?:woff2?|ttf|otf)|application/(?:font-woff|vnd\\.ms-fontobject))(?:;|,)",
+            r"^data:(?:font/(?:woff2?|ttf|otf)|application/(?:font-woff|vnd\.ms-fontobject))(?:;|,)",
             request_url,
             re.IGNORECASE,
         ))
