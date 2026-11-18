@@ -515,7 +515,57 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
 .ada-terminal-preview-command{color:#8fd6a8;margin-bottom:8px}
 .ada-terminal-preview-output{color:#d8dee9}
 .ada-terminal-preview-exit{border-top:1px solid #30343b;padding:7px 12px;color:#9aa4b2;font:11px system-ui,sans-serif}
-</style>\n</head>
+</style>\n
+  <style id="ada-header-alignment-fix">
+    /* Cabeçalho e conteúdo com margens consistentes em telas estreitas. */
+    @media (max-width: 899px) {
+      html, body {
+        width: 100%;
+        min-width: 0;
+        overflow-x: clip;
+      }
+      .app {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding:
+          max(10px, env(safe-area-inset-top))
+          max(16px, env(safe-area-inset-right))
+          max(12px, env(safe-area-inset-bottom))
+          max(16px, env(safe-area-inset-left));
+      }
+      .app-header-v2 {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 10px 0 14px;
+        gap: 11px;
+      }
+      .sidebar-toggle {
+        flex: 0 0 40px;
+        margin: 0;
+      }
+      .brand-logo {
+        display: block;
+        flex: 0 0 43px;
+        width: 43px;
+        height: 43px;
+        object-fit: contain;
+      }
+      .brand-copy-v2 {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .brand-copy-v2 h1 {
+        max-width: 100%;
+        overflow-wrap: normal;
+      }
+    }
+  </style>
+
+</head>
 <body class="supreme-mode">
   <aside class="chat-sidebar" id="chat-sidebar" aria-label="Menu e histórico de conversas">
     <div class="sidebar-top">
