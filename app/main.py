@@ -2492,9 +2492,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         def terminal_reply(result: dict[str, Any]) -> str:
             if result.get("status") == "started" and result.get("completion_confirmed") is False:
                 return (
-                    "🟡 **Instalação administrativa iniciada na VPS.**\\n\\n"
+                    "🟡 **Instalação administrativa iniciada na VPS.**\n\n"
                     + str(result.get("message") or "A solicitação foi aceita.")
-                    + "\\n\\nA tarefa está rodando em segundo plano. O início foi confirmado, mas a conclusão ainda NÃO foi verificada."
+                    + "\n\nA tarefa está rodando em segundo plano. O início foi confirmado, mas a conclusão ainda NÃO foi verificada."
                 )
             if result.get("error"):
                 return "❌ **O terminal não conseguiu executar o comando.**\\n\\n" + str(result["error"])
