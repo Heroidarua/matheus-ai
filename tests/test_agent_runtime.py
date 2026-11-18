@@ -72,6 +72,9 @@ def test_detects_terminal_intent(message):
     "Instale o conjunto padrão de ferramentas Linux na VPS",
     "ADA-M, instalar as ferramentas padrão no servidor",
     "Prepare o kit de ferramentas do Ubuntu na VPS",
+    "ADA-M, baixe suas próprias ferramentas de hacking",
+    "Baixe as ferramentas de pentest da ADA-M",
+    "Instale ferramentas de auditoria de segurança na minha VPS",
 ])
 def test_admin_install_intent_routes_to_fixed_virtual_command(message):
     assert is_admin_install_tools_request(message)
@@ -82,6 +85,8 @@ def test_admin_install_intent_routes_to_fixed_virtual_command(message):
     "Quais ferramentas Linux você recomenda?",
     "Como instalar ferramentas no meu computador?",
     "Instale o pacote solicitado no projeto",
+    "Quais ferramentas de hacking existem?",
+    "Como baixar ferramentas de pentest?",
 ])
 def test_admin_install_intent_does_not_match_unrelated_requests(message):
     assert not is_admin_install_tools_request(message)

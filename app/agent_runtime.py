@@ -132,15 +132,34 @@ def _raw_shell_command(message: str) -> str:
 
 
 def is_admin_install_tools_request(message: str) -> bool:
-    """Detect an explicit request to install ADA-M's fixed, preapproved VPS tool bundle."""
+    """Detect explicit requests for ADA-M's fixed, preapproved VPS security-tool bundle."""
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
-    intent = re.search(r"\b(instale|instalar|instala|instalação|instalacao|prepare|preparar)\b", text)
-    bundle = re.search(r"\b(ferramentas|pacotes|utilitários|utilitarios|conjunto padrão|kit padrão|kit de ferramentas)\b", text)
-    target = re.search(r"\b(vps|servidor|linux|ubuntu|debian)\b", text)
-    return bool(intent and bundle and target)
+    # Perguntas de caráter informativo não devem disparar uma ação administrativa.
+    if re.match(r"^(como|quais|qual|o que|por que|porque|quando|onde|quanto)\b", text):
+        return False
 
+    # Aceita linguagem natural comum ("baixe suas ferramentas de hacking"),
+    # mas sempre encaminha para o mesmo pacote fixo aprovado pelo administrador.
+    intent = re.search(
+        r"\b(instale|instalar|instala|instalação|instalacao|prepare|preparar|"
+        r"baixe|baixar|download|adicionar|adicione)\b",
+        text,
+    )
+    bundle = re.search(
+        r"\b(ferramentas|pacotes|utilitários|utilitarios|conjunto padrão|"
+        r"kit padrão|kit de ferramentas)\b",
+        text,
+    )
+    security_bundle = re.search(
+        r"\b(ferramentas? de (?:hacking|hack|pentest|segurança|seguranca|"
+        r"auditoria|cibersegurança|ciberseguranca)|kit de (?:hacking|pentest|"
+        r"segurança|seguranca)|ferramentas? para (?:hacking|pentest|auditoria))\b",
+        text,
+    )
+    target = re.search(r"\b(vps|servidor|linux|ubuntu|debian)\b", text)
+    return bool(intent and ((bundle and target) or security_bundle))
 
 def is_security_audit_request(message: str) -> bool:
     """Recognize requests to assess a website/server's security."""
@@ -308,7 +327,7 @@ FERRAMENTAS LINUX PREVISTAS PARA O EXECUTOR:
 IMPORTANTE: o terminal pode executar em uma VPS remota separada do container da API. Antes de usar qualquer ferramenta, verifique no próprio terminal remoto com "command -v nmap sqlmap nikto gobuster jq nc". Só use os binários confirmados nesse executor. Se algum estiver ausente, informe exatamente qual falta; não presuma que instalar pacotes no Dockerfile da API os instalou na VPS.
 
 INSTALAÇÃO ADMINISTRATIVA CONTROLADA:
-- Quando o usuário pedir explicitamente para instalar o conjunto padrão de ferramentas Linux da ADA-M, use a ferramenta terminal com o comando EXATO "ada-admin install-tools".
+- Quando o usuário pedir explicitamente para instalar, baixar ou preparar o conjunto padrão de ferramentas Linux/de segurança da ADA-M (inclusive expressões como "baixe suas ferramentas de hacking/pentest"), use a ferramenta terminal com o comando EXATO "ada-admin install-tools". Essa linguagem natural NUNCA autoriza escolher pacotes adicionais: o comando continua limitado ao conjunto fixo aprovado abaixo.
 - Esse comando virtual aciona somente a tarefa fixa e previamente autorizada pelo administrador da VPS. O conjunto atual inclui Python 3/venv/pip, Git, curl, wget, jq, Nmap, Netcat, SQLMap e Gobuster. Ele não aceita nomes de pacotes, argumentos extras ou comandos arbitrários; não presume que ferramentas fora dessa lista (por exemplo, Nikto) serão instaladas.
 - A resposta "status": "started" confirma apenas que a solicitação foi aceita e iniciada em segundo plano; NÃO significa que a instalação terminou. Explique essa diferença e não declare conclusão sem evidência posterior.
 - Não use esse comando para instalar softwares diferentes do conjunto padrão. Para outros pacotes, explique a limitação e peça uma solução administrativa específica.
