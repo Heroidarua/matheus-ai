@@ -190,16 +190,20 @@ def is_admin_install_tools_status_request(message: str) -> bool:
         r"consulte|consultar|mostre|mostrar|obtenha|obter)\b",
         text,
     )
-    # O comando explícito de diagnóstico pertence a outro fluxo somente leitura.
+    command = re.search(r"\bada-admin\s+install-tools-status\b", text)
+    # Um comando de status explicitamente solicitado prevalece mesmo se o usuário
+    # também mencionar diagnostics como etapa adicional.
+    if action and command:
+        return True
+    # Um pedido que contém apenas o comando de diagnóstico pertence a outro fluxo.
     if re.search(r"\bada-admin\s+diagnostics\b", text):
         return False
-    command = re.search(r"\bada-admin\s+install-tools-status\b", text)
     natural = (
         re.search(r"\b(status|situa[cç][aã]o|resultado|estado)\b", text)
         and re.search(r"\b(instala[cç][aã]o|ferramentas|pacotes)\b", text)
         and re.search(r"\b(vps|servidor)\b", text)
     )
-    return bool(action and (command or natural))
+    return bool(action and natural)
 
 
 def is_security_audit_request(message: str) -> bool:
