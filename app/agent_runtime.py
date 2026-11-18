@@ -113,15 +113,15 @@ def required_browser_actions(message: str) -> tuple[str, ...]:
     """Return browser actions explicitly required by a navigation/exploration request."""
     if not is_browser_task(message):
         return ()
-    text = re.sub(r"\\s+", " ", (message or "").strip().casefold())
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     actions = ["open"]
-    if re.search(r"\\b(explore|explorar|descubra|descobrir|inspecione|inspecionar|analise|analisar|verifique|verificar)\\b", text):
+    if re.search(r"\b(explore|explorar|descubra|descobrir|inspecione|inspecionar|analise|analisar|verifique|verificar)\b", text):
         actions.append("inspect")
-    if re.search(r"\\b( role|role|rolar|scroll|des[cç]a|descer|deslize|deslizar)\\b", text):
+    if re.search(r"\b(role|rolar|scroll|des[cç]a|descer|deslize|deslizar)\b", text):
         actions.append("scroll")
-    if re.search(r"\\b(clique|clicar|click)\\b", text):
+    if re.search(r"\b(clique|clicar|click)\b", text):
         actions.append("click")
-    if re.search(r"\\b(preencha|preencher|fill)\\b", text):
+    if re.search(r"\b(preencha|preencher|fill)\b", text):
         actions.append("fill")
     return tuple(dict.fromkeys(actions))
 
