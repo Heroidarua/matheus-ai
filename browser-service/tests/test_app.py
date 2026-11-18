@@ -51,3 +51,16 @@ def test_accepts_readable_content_types(content_type):
 ])
 def test_rejects_binary_or_unknown_content_types(content_type):
     assert not service.is_readable_content_type(content_type)
+
+
+
+def test_scroll_action_accepts_bounded_delta():
+    action = service.BrowserAction(session_id="a" * 24, action="scroll", delta_y=1200)
+    assert action.delta_y == 1200
+
+
+def test_scroll_action_rejects_unbounded_delta():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        service.BrowserAction(session_id="a" * 24, action="scroll", delta_y=5000)
