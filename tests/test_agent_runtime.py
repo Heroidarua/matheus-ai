@@ -446,7 +446,7 @@ async def test_run_tool_loop_can_execute_more_than_ten_steps():
 def test_agent_prompt_no_longer_imposes_six_or_twenty_four_call_caps():
     from app.agent_runtime import AGENT_TOOLS_SPEC
 
-    assert "Não imponha teto acumulado de chamadas de terminal por tarefa" in AGENT_TOOLS_SPEC
+    assert "Não imponha teto numérico fixo de chamadas de terminal por tarefa" in AGENT_TOOLS_SPEC
     assert "até 6 chamadas" not in AGENT_TOOLS_SPEC
     assert "24 chamadas acumuladas" not in AGENT_TOOLS_SPEC
 
