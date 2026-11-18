@@ -353,7 +353,7 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                         const style = window.getComputedStyle(parent);
                         if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") continue;
                         const range = document.createRange();
-                        range.selectNodeContents(parent);
+                        range.selectNode(node);
                         const rects = [...range.getClientRects()];
                         if (!rects.some(rect => rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < height && rect.right > 0 && rect.left < width)) continue;
                         seen.add(value);
