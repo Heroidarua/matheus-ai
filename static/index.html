@@ -466,7 +466,19 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
       .brand-logo{display:block;width:43px;height:43px;flex:0 0 43px;object-fit:contain;border-radius:0;background:#000;box-shadow:none;}
     @media(max-width:520px){.brand-logo{width:39px;height:39px;flex-basis:39px;}}
   </style>
-</head>
+<style id="ada-terminal-preview-style">
+.ada-terminal-preview{margin:12px 0 14px;border:1px solid #30343b;border-radius:12px;overflow:hidden;background:#0b0d10;color:#d8dee9;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;max-width:100%}
+.ada-terminal-preview-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#15191f;border-bottom:1px solid #30343b;color:#cbd5e1}
+.ada-terminal-preview-dot{width:8px;height:8px;border-radius:50%;background:#e0a83e;flex:none}
+.ada-terminal-preview[data-state="done"] .ada-terminal-preview-dot{background:#35c982}
+.ada-terminal-preview[data-state="error"] .ada-terminal-preview-dot{background:#ef6464}
+.ada-terminal-preview-label{font:600 11px/1.2 system-ui,sans-serif;letter-spacing:.04em}
+.ada-terminal-preview-state{margin-left:auto;color:#9aa4b2;font:11px system-ui,sans-serif}
+.ada-terminal-preview-body{padding:12px;max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.ada-terminal-preview-command{color:#8fd6a8;margin-bottom:8px}
+.ada-terminal-preview-output{color:#d8dee9}
+.ada-terminal-preview-exit{border-top:1px solid #30343b;padding:7px 12px;color:#9aa4b2;font:11px system-ui,sans-serif}
+</style>\n</head>
 <body class="supreme-mode">
   <aside class="chat-sidebar" id="chat-sidebar" aria-label="Histórico de conversas">
     <div class="sidebar-top"><div class="sidebar-brand">ADA-M</div><button type="button" class="sidebar-close" id="sidebar-close" aria-label="Fechar menu">×</button></div>
@@ -2015,6 +2027,42 @@ const history = [];
           let payload;
           try { payload = JSON.parse(dataText); } catch { return; }
           if (eventName === 'error') throw new Error(payload.detail || 'A geração falhou.');
+          if (eventName === 'terminal') {
+            if (!pending.__adaTerminalPreview) {
+              const panel = document.createElement('section');
+              panel.className = 'ada-terminal-preview'; panel.dataset.state = 'running';
+              const head = document.createElement('div'); head.className = 'ada-terminal-preview-head';
+              const dot = document.createElement('span'); dot.className = 'ada-terminal-preview-dot';
+              const label = document.createElement('span'); label.className = 'ada-terminal-preview-label'; label.textContent = 'TERMINAL ADA-M';
+              const state = document.createElement('span'); state.className = 'ada-terminal-preview-state'; state.textContent = 'Preparando…';
+              head.append(dot,label,state);
+              const body = document.createElement('div'); body.className = 'ada-terminal-preview-body';
+              const command = document.createElement('div'); command.className = 'ada-terminal-preview-command';
+              const output = document.createElement('div'); output.className = 'ada-terminal-preview-output';
+              body.append(command,output);
+              const footer = document.createElement('div'); footer.className = 'ada-terminal-preview-exit'; footer.hidden = true;
+              panel.append(head,body,footer); pending.appendChild(panel);
+              pending.__adaTerminalPreview = {panel,state,command,output,footer};
+            }
+            const view = pending.__adaTerminalPreview;
+            if (payload.phase === 'start') {
+              view.panel.dataset.state='running'; view.state.textContent=payload.status || 'Executando…';
+              view.command.textContent='$ '+String(payload.command || 'comando não informado');
+              view.output.textContent='Aguardando a saída confirmada do executor…'; view.footer.hidden=true;
+            } else if (payload.phase === 'result') {
+              const chunks=[];
+              if(payload.stdout) chunks.push(String(payload.stdout));
+              if(payload.stderr) chunks.push('[stderr]\n'+String(payload.stderr));
+              if(payload.error) chunks.push('[erro]\n'+String(payload.error));
+              view.output.textContent=chunks.join('\n') || '(comando executado sem saída)';
+              const success=payload.ok===true || payload.status==='started';
+              view.panel.dataset.state=success?'done':'error';
+              view.state.textContent=payload.status==='started'?'Iniciado — conclusão pendente':(success?'Concluído':'Falhou');
+              if(payload.exit_code!==null && payload.exit_code!==undefined){view.footer.hidden=false;view.footer.textContent='Código de saída: '+payload.exit_code;}
+              else if(payload.status==='started'){view.footer.hidden=false;view.footer.textContent='O executor confirmou o início; a conclusão ainda não foi verificada.';}
+            }
+            pending.scrollIntoView({behavior:'smooth',block:'end'}); return;
+          }
           if (eventName === 'done') {
             streamDone = true;
             streamSources = Array.isArray(payload.sources) ? payload.sources : [];
@@ -2064,16 +2112,19 @@ const history = [];
         }
         speakLiveChunks(true);
         displayAssistantReply(pending, stripThinking(answer), streamSources, streamArtifact, streamArtifactWarning);
+        if (pending.__adaTerminalPreview) pending.appendChild(pending.__adaTerminalPreview.panel);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
         chatTranscript.push({role:'assistant',text:answer}); persistCurrentConversation();
       } catch (error) {
         if (error.name === 'AbortError') {
-          pending.textContent = 'Geração interrompida.';
+          pending.replaceChildren(document.createTextNode('Geração interrompida.'));
+          if (pending.__adaTerminalPreview) pending.appendChild(pending.__adaTerminalPreview.panel);
           pending.classList.add('error');
           history.pop();
         } else {
-          pending.textContent = 'Erro: ' + (error.message || 'Falha de conexão.');
+          pending.replaceChildren(document.createTextNode('Erro: ' + (error.message || 'Falha de conexão.')));
+          if (pending.__adaTerminalPreview) pending.appendChild(pending.__adaTerminalPreview.panel);
           pending.classList.add('error');
           history.pop();
         }
