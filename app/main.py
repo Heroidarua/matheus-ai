@@ -2967,7 +2967,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         f"deslocamento real {evidence.get('actual_delta_y')} px."
                     )
                     if evidence.get("visible_text"):
-                        evidence_lines.append("  Trecho visível após a rolagem: " + evidence["visible_text"][:800].replace("\\n", " | "))
+                        evidence_lines.append("  Trecho visível após a rolagem: " + evidence["visible_text"][:800].replace("\n", " | "))
                 elif action == "inspect":
                     elements = evidence.get("elements") or []
                     evidence_lines.append(f"- inspect: {len(elements)} elementos visíveis registrados (amostra de até 12).")
@@ -2978,7 +2978,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     evidence_lines.append(
                         f"- open: página aberta; título: {evidence.get('title') or '(sem título)'}; URL: {evidence.get('url') or '(não retornada)'}."
                     )
-            final_text = (final_text + "\\n\\n" if final_text else "") + "\\n".join(evidence_lines)
+            final_text = (final_text + "\n\n" if final_text else "") + "\n".join(evidence_lines)
         if pause_reason:
             final_text = (final_text + "\n\n" if final_text else "") + (
                 "🟡 **Tarefa pausada com checkpoint salvo.** "
