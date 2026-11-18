@@ -64,3 +64,28 @@ def test_scroll_action_rejects_unbounded_delta():
 
     with pytest.raises(ValidationError):
         service.BrowserAction(session_id="a" * 24, action="scroll", delta_y=5000)
+
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "expected_delta", "expected_scrolled"),
+    [
+        (0, 700, 700, True),
+        (700, 1400, 700, True),
+        (1200, 1200, 0, False),
+        (900, 200, -700, True),
+    ],
+)
+def test_scroll_evidence_reports_actual_window_movement(before, after, expected_delta, expected_scrolled):
+    evidence = service.build_scroll_evidence(700, before, after, "Conteúdo visível")
+    assert evidence["requested_delta_y"] == 700
+    assert evidence["scroll_y_before"] == before
+    assert evidence["scroll_y_after"] == after
+    assert evidence["actual_delta_y"] == expected_delta
+    assert evidence["scrolled"] is expected_scrolled
+    assert evidence["visible_text"] == "Conteúdo visível"
+
+
+def test_scroll_evidence_limits_visible_text_size():
+    evidence = service.build_scroll_evidence(700, 0, 700, "x" * 6000)
+    assert len(evidence["visible_text"]) == 5000
