@@ -1664,7 +1664,7 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
     """Executa uma ação limitada no serviço Chromium isolado."""
     if not BROWSER_SERVICE_ENABLED:
         return {"ok": False, "error": "Navegador não configurado. Configure BROWSER_SERVICE_URL e BROWSER_SERVICE_API_KEY na API ADA-M."}
-    allowed_actions = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
+    allowed_actions = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close", "hover", "scroll"}
     if action not in allowed_actions:
         return {"ok": False, "error": "Ação de navegador não permitida."}
     payload = {"session_id": session_id, "action": action, **arguments}
@@ -1754,7 +1754,7 @@ def parse_tool_call(reply: str):
         return "terminal", {"command": command.strip()}
     if call.name == "browser" and args.get("action"):
         action = str(args["action"]).strip().lower()
-        permitted = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close"}
+        permitted = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close", "hover", "scroll"}
         if action not in permitted:
             return None
         clean: dict[str, Any] = {"action": action}
@@ -1773,9 +1773,17 @@ def parse_tool_call(reply: str):
                 return None
         if args.get("full_page") is not None:
             clean["full_page"] = bool(args["full_page"])
+        if action == "scroll":
+            try:
+                delta_y = int(args.get("delta_y", 700))
+            except (ValueError, TypeError):
+                return None
+            if delta_y < -3000 or delta_y > 3000:
+                return None
+            clean["delta_y"] = delta_y
         if action == "open" and not clean.get("url"):
             return None
-        if action in {"click", "fill"} and not clean.get("selector") and clean.get("index") is None:
+        if action in {"click", "fill", "hover"} and not clean.get("selector") and clean.get("index") is None:
             return None
         if action in {"select", "press"} and not clean.get("selector") and clean.get("index") is None:
             return None
@@ -2093,7 +2101,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         if BROWSER_SERVICE_ENABLED:
             system_prompt += (
                 "\n\nNAVEGADOR CHROMIUM DISPONÍVEL: use a ferramenta browser para abrir páginas, "
-                "inspecionar links/botões/campos e clicar pelo índice retornado, preencher campos, selecionar opções, pressionar teclas, ler texto, "
+                "inspecionar links/botões/campos e clicar ou passar o mouse pelo índice retornado, preencher campos, selecionar opções, pressionar teclas, rolar a página para cima/baixo, ler texto, "
                 "tirar screenshots, gerenciar abas e navegar para trás/à frente. "
                 "Exemplos: {\"tool\":\"browser\",\"args\":{\"action\":\"open\",\"url\":\"https://example.com\"}}; "
                 "{\"tool\":\"browser\",\"args\":{\"action\":\"inspect\"}}; "
