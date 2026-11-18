@@ -289,10 +289,12 @@ def extract_terminal_command(message: str) -> str | None:
     # language model to invent or choose a privileged shell command.
     if is_admin_install_tools_request(message):
         return "ada-admin install-tools"
-    if is_admin_diagnostics_request(message):
-        return "ada-admin diagnostics"
+    # The specific install-status request must win over the broader
+    # diagnostics detector, which also recognizes the words "status" and "VPS".
     if is_admin_install_tools_status_request(message):
         return "ada-admin install-tools-status"
+    if is_admin_diagnostics_request(message):
+        return "ada-admin diagnostics"
     if not isinstance(message, str) or not message.strip():
         return None
     raw_command = _raw_shell_command(message)
