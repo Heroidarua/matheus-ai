@@ -5,6 +5,7 @@ from app.agent_runtime import (
     extract_terminal_command,
     is_agent_task,
     is_admin_install_tools_request,
+    is_security_audit_request,
     is_browser_task,
     is_terminal_task,
     normalize_tool_url,
@@ -84,6 +85,34 @@ def test_admin_install_intent_routes_to_fixed_virtual_command(message):
 ])
 def test_admin_install_intent_does_not_match_unrelated_requests(message):
     assert not is_admin_install_tools_request(message)
+
+
+
+@pytest.mark.parametrize("message", [
+    "Estou tentando hackear meu site",
+    "Quero fazer um pentest no meu domínio",
+    "Faça um teste de segurança no meu servidor",
+])
+def test_detects_security_audit_requests(message):
+    assert is_security_audit_request(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Estou tentando hackear meu site",
+    "Quero fazer um pentest no meu domínio",
+    "Faça uma auditoria de segurança, tenho autorização para o servidor",
+])
+def test_authorized_security_audit_requests_require_explicit_ownership(message):
+    assert is_terminal_task(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Quero hackear o site example.com",
+    "Faça um pentest no servidor do cliente",
+])
+def test_security_audit_without_explicit_authorization_does_not_auto_run(message):
+    assert is_security_audit_request(message)
+    assert not is_terminal_task(message)
 
 
 @pytest.mark.parametrize("message,expected", [

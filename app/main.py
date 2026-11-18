@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
@@ -2047,7 +2047,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
         )
     admin_install_tools_requested = is_admin_install_tools_request(last_user_message)
-    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message) or admin_install_tools_requested or resume_agent_job
+    security_audit_requested = is_security_audit_request(last_user_message)
+    authorized_security_audit = is_terminal_task(last_user_message) and security_audit_requested
+    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message) or admin_install_tools_requested or security_audit_requested or resume_agent_job
     terminal_task = is_terminal_task(last_user_message) or admin_install_tools_requested or resume_agent_job
     terminal_required = requires_terminal_execution(
         last_user_message,
@@ -2056,6 +2058,24 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         explicit_terminal_task=terminal_task,
         browser_task=is_browser_task(last_user_message),
     )
+    if security_audit_requested:
+        if authorized_security_audit:
+            system_prompt += (
+                "\\n\\nAUDITORIA AUTORIZADA SOLICITADA: o usuário declarou que o alvo é próprio ou que tem autorização. "
+                "Você TEM uma ferramenta de terminal real quando o executor estiver configurado. Não diga que está simulando, "
+                "que não possui terminal ou que não consegue acessar VPS sem antes verificar a configuração e tentar a ferramenta. "
+                "Execute as verificações somente pelo tool terminal e baseie cada afirmação no stdout/stderr/código de saída recebido. "
+                "Nunca invente resultados, portas abertas, tecnologias, WAFs ou vulnerabilidades. Se a configuração estiver ausente ou a chamada falhar, "
+                "informe o erro exato retornado e pare. Antes de qualquer varredura, obtenha hostname/URL exato e escopo de portas/caminhos; "
+                "não amplie o escopo por conta própria. Faça reconhecimento leve e não destrutivo; não tente credenciais padrão, força bruta, "
+                "dump de banco, exfiltração, exploração, bypass de WAF ou obtenção de shell."
+            )
+        else:
+            system_prompt += (
+                "\\n\\nPEDIDO DE TESTE DE SEGURANÇA: não afirme que executou ou que está conectado. "
+                "Antes de usar o terminal, peça confirmação explícita de que o usuário é proprietário ou tem autorização, "
+                "além do hostname/URL exato e do escopo permitido. Não faça nenhuma varredura até receber esses dados."
+            )
     if should_search and not search_unavailable:
         system_prompt += (
             "\n\n" + WEB_TOOLS_SPEC +
