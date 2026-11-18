@@ -114,6 +114,50 @@ async def _run_on_vps(command: str) -> dict[str, Any]:
         return {"ok": False, "error": f"Não foi possível comunicar com o executor VPS ({type(exc).__name__})."}
 
 
+
+async def _request_vps_admin_install_tools() -> dict[str, Any]:
+    """Request the fixed, root-owned installation job; never accepts package names."""
+    settings = _vps_settings()
+    if settings is None:
+        return {
+            "ok": False,
+            "error": "A instalação administrativa exige o executor VPS e as três credenciais de autenticação configuradas.",
+        }
+    base_url, headers = settings
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0)) as client:
+            response = await client.post(
+                f"{base_url}/admin/install-tools",
+                headers=headers,
+                json={},
+            )
+        if response.status_code in (401, 403):
+            return {
+                "ok": False,
+                "error": f"Cloudflare Access ou executor recusou a autenticação (HTTP {response.status_code}).",
+            }
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("status") != "started":
+            return {
+                "ok": False,
+                "error": "O executor não confirmou o início da tarefa administrativa.",
+            }
+        return {
+            "ok": True,
+            "status": "started",
+            "executor": "VPS administrativo controlado",
+            "message": str(payload.get("message") or "Solicitação de instalação aceita."),
+            "completion_confirmed": False,
+            "note": "A tarefa foi iniciada em segundo plano. Isso ainda não confirma que a instalação terminou.",
+        }
+    except httpx.TimeoutException:
+        return {"ok": False, "error": "Tempo esgotado ao solicitar a instalação administrativa na VPS."}
+    except httpx.HTTPStatusError as exc:
+        return {"ok": False, "error": f"A rota administrativa respondeu com HTTP {exc.response.status_code}."}
+    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        return {"ok": False, "error": f"Falha ao solicitar a instalação administrativa ({type(exc).__name__})."}
+
 def _network_policy():
     """Build the typed policy objects required by Render SDK 1.9+."""
     from render.sandbox import EgressRule, NetworkPolicy
@@ -157,6 +201,12 @@ async def run_terminal_command(session: dict[str, Any], command: Any) -> dict[st
         clean_command = validate_command(command)
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
+    # This exact virtual command maps to one fixed root-owned systemd job.
+    # No package names, shell fragments, or arbitrary arguments reach the admin API.
+    if clean_command == "ada-admin install-tools":
+        return await _request_vps_admin_install_tools()
+    if clean_command.startswith("ada-admin"):
+        return {"ok": False, "error": "Operação administrativa não autorizada. Use somente 'ada-admin install-tools'."}
     if os.getenv("ADA_EXECUTOR_URL", "").strip():
         return await _run_on_vps(clean_command)
     if not is_terminal_configured():
