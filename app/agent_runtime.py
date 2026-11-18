@@ -142,12 +142,39 @@ def is_admin_install_tools_request(message: str) -> bool:
     return bool(intent and bundle and target)
 
 
+def is_security_audit_request(message: str) -> bool:
+    """Recognize requests to assess a website/server's security."""
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
+    intent = re.search(
+        r"\b(pentest|teste(?:s)? de (?:seguran[cç]a|invas[aã]o)|"
+        r"auditoria de seguran[cç]a|hackear|invadir|varrer|escanear|"
+        r"scan(?:ear)?|procurar vulnerabilidades|testar vulnerabilidades)\b",
+        text,
+    )
+    target = re.search(r"\b(site|website|dom[ií]nio|servidor|vps|aplica[cç][aã]o|web)\b", text)
+    return bool(intent and target)
+
+
+def is_authorized_security_audit_request(message: str) -> bool:
+    """Only auto-route an audit when ownership/authorization is explicit."""
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
+    ownership = re.search(
+        r"\b(meu site|minha aplica[cç][aã]o|minha vps|meu servidor|"
+        r"meu dom[ií]nio|site [eé] meu|o site [eé] meu|"
+        r"tenho autoriza[cç][aã]o|sou o propriet[aá]rio|sou dono)\b",
+        text,
+    )
+    return bool(ownership and is_security_audit_request(message))
+
+
 def is_terminal_task(message: str) -> bool:
-    """Detecta pedidos de terminal, inclusive comandos enviados sem explicação."""
+    """Detecta pedidos de terminal e testes de segurança explicitamente autorizados."""
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
     if _raw_shell_command(message):
+        return True
+    if is_authorized_security_audit_request(message):
         return True
     if not re.search(r"\b(terminal|shell|linha de comando|prompt de comando)\b", text):
         return False
