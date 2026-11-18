@@ -8,6 +8,19 @@ from app import main
 client = TestClient(main.app)
 
 
+@pytest.mark.parametrize(
+    ("raw_url", "expected"),
+    [
+        ("https://sos01.com.br" + chr(0x2060), "https://sos01.com.br"),
+        ("https://exa" + chr(0x200B) + "mple.com/path", "https://example.com/path"),
+        ("https://example.com/" + chr(0xFEFF) + "page", "https://example.com/page"),
+        ("https://example.com/path", "https://example.com/path"),
+        ("[abrir](https://sos01.com.br" + chr(0x2060) + ")", "https://sos01.com.br"),
+    ],
+)
+def test_normalize_tool_url_removes_invisible_unicode_characters(raw_url, expected):
+    assert main.normalize_tool_url(raw_url) == expected
+
 def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
@@ -441,6 +454,7 @@ async def test_browser_open_retries_transient_502(monkeypatch):
 
         async def post(self, *args, **kwargs):
             calls.append(kwargs["json"]["action"])
+            assert kwargs["json"]["url"] == "https://example.com"
             if len(calls) == 1:
                 return FakeResponse(502, text="<html>Bad Gateway</html>")
             return FakeResponse(200, payload={"ok": True, "title": "Example Domain", "text": "Example text"})
@@ -454,7 +468,7 @@ async def test_browser_open_retries_transient_502(monkeypatch):
     monkeypatch.setattr(main.httpx, "AsyncClient", FakeClient)
     monkeypatch.setattr(main.asyncio, "sleep", no_sleep)
 
-    result = await main.tool_browser_action("a" * 24, "open", url="https://example.com")
+    result = await main.tool_browser_action("a" * 24, "open", url="https://example.com" + chr(0x2060))
 
     assert result["ok"] is True
     assert result["title"] == "Example Domain"
