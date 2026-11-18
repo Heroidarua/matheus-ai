@@ -2522,8 +2522,79 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         return response
 
     async def _run_web_loop() -> tuple[str, dict]:
-        """Loop de ferramentas com execução determinística para pedidos explícitos de terminal."""
-        nonlocal sources, fetched_urls
+        """Loop de ferramentas com checkpoints, orçamento por etapa e retomada segura."""
+        nonlocal sources, fetched_urls, loop_messages
+
+        job_id = pending_agent_job.get("id") if resume_agent_job and pending_agent_job else None
+        job_task = pending_agent_job.get("task") if resume_agent_job and pending_agent_job else last_user_message
+        saved_state = (pending_agent_job or {}).get("state") or {}
+        terminal_calls_total = int(saved_state.get("terminal_calls_total", 0))
+        step_count = int(saved_state.get("step_count", 0))
+        events = list(saved_state.get("events") or [])
+        pending_tool = saved_state.get("pending_tool")
+        terminal_calls_this_run = 0
+        pause_reason = ""
+        budget_exhausted = False
+
+        if resume_agent_job:
+            restored_messages = saved_state.get("messages")
+            if isinstance(restored_messages, list) and restored_messages:
+                loop_messages = restored_messages
+            sources = list(saved_state.get("sources") or [])
+            fetched_urls = set(saved_state.get("fetched_urls") or [])
+            if pending_tool:
+                uncertain = (
+                    "A execução anterior foi interrompida depois de registrar uma ferramenta como iniciada, "
+                    "mas antes de salvar seu resultado. O resultado é incerto. NÃO repita essa ação automaticamente. "
+                    "Primeiro verifique o estado atual de forma somente leitura e só então decida o próximo passo."
+                )
+                loop_messages.append({"role": "user", "content": uncertain})
+                events.append({
+                    "step": step_count,
+                    "tool": pending_tool.get("name", "unknown"),
+                    "command": (pending_tool.get("args") or {}).get("command", ""),
+                    "ok": False,
+                    "uncertain": True,
+                    "note": "Processo interrompido; ação não repetida automaticamente.",
+                })
+                pending_tool = None
+            loop_messages.append({
+                "role": "user",
+                "content": "Retome a tarefa pausada usando o histórico e os resultados confirmados. Continue da próxima etapa ainda não concluída; não repita comandos já confirmados.",
+            })
+        elif terminal_required and is_terminal_configured():
+            initial_state = {
+                "messages": loop_messages,
+                "sources": sources,
+                "fetched_urls": [],
+                "terminal_calls_total": 0,
+                "step_count": 0,
+                "events": [],
+                "pending_tool": None,
+            }
+            job_id = await asyncio.to_thread(
+                create_agent_job, session_id, job_task, initial_state
+            )
+
+        async def persist_job(status: str) -> None:
+            if not job_id:
+                return
+            state = {
+                "messages": loop_messages,
+                "sources": sources,
+                "fetched_urls": sorted(fetched_urls),
+                "terminal_calls_total": terminal_calls_total,
+                "step_count": step_count,
+                "events": events[-80:],
+                "pending_tool": pending_tool,
+                "pause_reason": pause_reason,
+            }
+            await asyncio.to_thread(
+                save_agent_job, session_id, job_id, job_task, status, state
+            )
+
+        if job_id:
+            await persist_job("running")
 
         def terminal_reply(result: dict[str, Any]) -> str:
             if result.get("status") == "started" and result.get("completion_confirmed") is False:
@@ -2560,10 +2631,22 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     "ADA_EXECUTOR_TOKEN, CF_ACCESS_CLIENT_ID e CF_ACCESS_CLIENT_SECRET no Render; "
                     "ou as credenciais do Render Sandbox, caso esteja usando esse modo."
                 ), {"model": active_model_name}
-            explicit_command = extract_terminal_command(last_user_message)
+            explicit_command = extract_terminal_command(last_user_message) if not resume_agent_job else None
             if explicit_command:
+                pending_tool = {"name": "terminal", "args": {"command": explicit_command}}
+                await persist_job("running")
                 loop_status["status"] = "Executando no terminal isolado…"
                 result = await run_terminal_command(http_request.session, explicit_command)
+                terminal_calls_total += 1
+                step_count += 1
+                events.append({
+                    "step": step_count, "tool": "terminal", "command": explicit_command,
+                    "ok": bool(result.get("ok")), "exit_code": result.get("exit_code"),
+                    "status": result.get("status"), "error": result.get("error"),
+                })
+                pending_tool = None
+                loop_messages.append({"role": "assistant", "content": terminal_reply(result)})
+                await persist_job("completed")
                 print(f"[webloop] forced terminal execution -> {str(result)[:300]}")
                 return terminal_reply(result), {"model": active_model_name}
 
@@ -2586,12 +2669,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             call = parse_tool_call(content_out) if use_tools else None
             if not call:
                 attempted_tool_call = looks_like_tool_call(content_out)
-                must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls == 0)
+                must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls_this_run == 0 and not resume_agent_job)
                 if must_recover_tool_call:
                     if malformed_tool_retries < 2 and turn < WEB_MAX_TURNS - 1:
                         malformed_tool_retries += 1
                         if content_out:
-                            # Preserve the malformed attempt for diagnosis, but never execute it.
                             loop_messages.append({"role": "assistant", "content": content_out[:6000]})
                         loop_messages.append({
                             "role": "system",
@@ -2607,15 +2689,54 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 "Se a tarefa for grande, crie ou altere apenas um arquivo por chamada."
                             ),
                         })
+                        await persist_job("running")
                         continue
+                    if job_id:
+                        loop_messages.append({"role": "assistant", "content": (
+                            "Não consegui obter uma chamada de ferramenta completa e válida. Nenhuma chamada incompleta foi executada."
+                        )})
+                        pause_reason = "Chamada de ferramenta inválida; checkpoint preservado."
+                        await persist_job("paused")
                     return (
                         "❌ Não consegui obter uma chamada de ferramenta completa e válida após 2 tentativas de recuperação. "
-                        "Nenhuma chamada incompleta foi executada. A resposta bruta da ferramenta foi ocultada; "
-                        "tente dividir a tarefa em etapas menores."
+                        "Nenhuma chamada incompleta foi executada. O checkpoint foi preservado quando disponível; "
+                        "envie 'continuar' para tentar retomar."
                     ), data
+                loop_messages.append({"role": "assistant", "content": (content_out or "").strip()})
+                if job_id:
+                    await persist_job("completed")
                 return (content_out or "").strip(), data
+
             name, args = call
+            if name == "terminal" and terminal_calls_this_run >= WEB_MAX_TERMINAL_CALLS:
+                loop_messages.append({"role": "assistant", "content": content_out})
+                loop_messages.append({
+                    "role": "user",
+                    "content": (
+                        f"Orçamento de {WEB_MAX_TERMINAL_CALLS} comandos desta etapa atingido. "
+                        "A chamada sugerida NÃO foi executada. Registre-a como próxima etapa pendente e produza um resumo do progresso. "
+                        "Não afirme que ela foi executada."
+                    ),
+                })
+                pause_reason = f"Limite de {WEB_MAX_TERMINAL_CALLS} execuções por etapa atingido."
+                break
+            if name == "terminal" and terminal_calls_total >= AGENT_MAX_TERMINAL_CALLS_PER_TASK:
+                loop_messages.append({"role": "assistant", "content": content_out})
+                loop_messages.append({
+                    "role": "user",
+                    "content": (
+                        f"O teto acumulado de {AGENT_MAX_TERMINAL_CALLS_PER_TASK} comandos desta tarefa foi atingido. "
+                        "A chamada sugerida NÃO foi executada. Pare as ações e produza o relatório final."
+                    ),
+                })
+                pause_reason = f"Teto acumulado de {AGENT_MAX_TERMINAL_CALLS_PER_TASK} execuções por tarefa atingido."
+                budget_exhausted = True
+                break
+
             loop_messages.append({"role": "assistant", "content": content_out})
+            pending_tool = {"name": name, "args": args}
+            await persist_job("running")
+            step_count += 1
             if name == "web_search":
                 loop_status["status"] = "Pesquisando…"
                 result = await tool_web_search(args["query"], args["limit"])
@@ -2642,16 +2763,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                             "note": "O Chromium falhou ao abrir a página. O texto foi obtido por web_fetch em modo somente leitura; cliques, formulários e navegação interativa não foram executados.",
                         }
             elif name == "terminal":
-                if terminal_calls >= WEB_MAX_TERMINAL_CALLS:
-                    result = {
-                        "ok": False,
-                        "error": f"Limite de {WEB_MAX_TERMINAL_CALLS} execuções de terminal por solicitação atingido. Pare e resuma o que foi concluído e o que falta.",
-                    }
-                else:
-                    terminal_calls += 1
-                    loop_status["status"] = f"Executando etapa {terminal_calls}/{WEB_MAX_TERMINAL_CALLS} no terminal…"
-                    result = await run_terminal_command(http_request.session, args["command"])
-                print(f"[webloop] terminal step={terminal_calls} -> {str(result)[:300]}")
+                terminal_calls += 1
+                terminal_calls_this_run += 1
+                terminal_calls_total += 1
+                loop_status["status"] = f"Executando etapa {terminal_calls_this_run}/{WEB_MAX_TERMINAL_CALLS} no terminal…"
+                result = await run_terminal_command(http_request.session, args["command"])
+                print(f"[webloop] terminal step={terminal_calls_total} total -> {str(result)[:300]}")
             else:
                 if len(fetched_urls) >= WEB_MAX_FETCHES:
                     result = {"ok": False, "error": "Limite de 5 páginas lidas nesta pergunta atingido"}
@@ -2679,15 +2796,38 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 "role": "user",
                 "content": "Resultado da ferramenta:\n" + json.dumps(result, ensure_ascii=False),
             })
-        # Esgotou as voltas: força resposta final sem ferramentas
-        loop_messages.append({
-            "role": "system",
-            "content": (
-                "Limite de rodadas/ferramentas atingido. Pare de executar ações e responda agora. "
-                "Resuma somente o que foi confirmado pelos resultados das ferramentas, informe testes e erros reais "
-                "e liste claramente qualquer etapa que ficou pendente. Nunca declare sucesso sem evidência."
-            ),
-        })
+            events.append({
+                "step": step_count,
+                "tool": name,
+                "command": args.get("command") if name == "terminal" else None,
+                "ok": bool(result.get("ok", True)) if isinstance(result, dict) else True,
+                "exit_code": result.get("exit_code") if isinstance(result, dict) else None,
+                "error": result.get("error") if isinstance(result, dict) else None,
+            })
+            pending_tool = None
+            await persist_job("running")
+
+        if not pause_reason and terminal_required and job_id and terminal_calls_total < AGENT_MAX_TERMINAL_CALLS_PER_TASK:
+            pause_reason = f"Limite de {WEB_MAX_TURNS} rodadas desta etapa atingido."
+        if pause_reason:
+            loop_messages.append({
+                "role": "system",
+                "content": (
+                    "A tarefa foi pausada por limite de execução. Não faça novas chamadas de ferramenta agora. "
+                    "Resuma apenas o que foi confirmado, informe a próxima etapa pendente e diga ao usuário que pode enviar 'continuar'. "
+                    "Não declare conclusão."
+                ),
+            })
+            await persist_job("budget_exhausted" if budget_exhausted else "paused")
+        else:
+            loop_messages.append({
+                "role": "system",
+                "content": (
+                    "Limite de rodadas/ferramentas atingido. Pare de executar ações e responda agora. "
+                    "Resuma somente o que foi confirmado pelos resultados das ferramentas, informe testes e erros reais "
+                    "e liste claramente qualquer etapa que ficou pendente. Nunca declare sucesso sem evidência."
+                ),
+            })
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=8.0)) as client:
             resp = await _model_post(client, loop_messages, use_tools=False)
         resp.raise_for_status()
@@ -2696,7 +2836,20 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         content_out = (choices[0].get("message") or {}).get("content", "") if choices else ""
         if isinstance(content_out, list):
             content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
-        return (content_out or "").strip(), data
+        final_text = (content_out or "").strip()
+        if pause_reason:
+            final_text = (final_text + "\n\n" if final_text else "") + (
+                "🟡 **Tarefa pausada com checkpoint salvo.** "
+                + pause_reason
+                + " Envie **continuar** para retomar do ponto salvo. Consulte /tarefas ou /historico terminal para ver o progresso."
+            )
+            if job_id:
+                loop_messages.append({"role": "assistant", "content": final_text})
+                await persist_job("budget_exhausted" if budget_exhausted else "paused")
+        elif job_id:
+            loop_messages.append({"role": "assistant", "content": final_text})
+            await persist_job("completed")
+        return final_text, data
 
     try:
         if web_loop_active:
