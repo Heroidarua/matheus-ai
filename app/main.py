@@ -2628,6 +2628,14 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         if job_id:
             await persist_job("running")
 
+        async def forward_terminal_event(event: dict[str, Any]) -> None:
+            if event.get("event") == "output":
+                publish_terminal_preview({
+                    "phase": "output",
+                    "stream": event.get("stream", "stdout"),
+                    "text": redact_terminal_preview(event.get("text", "")),
+                })
+
         def terminal_reply(result: dict[str, Any]) -> str:
             if result.get("status") == "started" and result.get("completion_confirmed") is False:
                 return (
@@ -2671,7 +2679,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 await persist_job("running")
                 loop_status["status"] = "Executando no terminal isolado…"
                 publish_terminal_preview({"phase":"start","step":step_count,"command":redact_terminal_preview(explicit_command),"status":"Comando enviado ao executor real. Aguardando a saída."})
-                result = await run_terminal_command(http_request.session, explicit_command)
+                result = await run_terminal_command(http_request.session, explicit_command, on_event=forward_terminal_event)
                 publish_terminal_preview({"phase":"result","step":step_count,"stdout":redact_terminal_preview(result.get("stdout")),"stderr":redact_terminal_preview(result.get("stderr")),"exit_code":result.get("exit_code"),"ok":result.get("ok"),"error":redact_terminal_preview(result.get("error")),"status":result.get("message") or result.get("error") or ""})
                 events.append({
                     "step": step_count, "tool": "terminal", "command": explicit_command,
@@ -2803,7 +2811,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 terminal_calls += 1
                 loop_status["status"] = f"Executando etapa {terminal_calls_this_run}/{WEB_MAX_TERMINAL_CALLS} no terminal…"
                 publish_terminal_preview({"phase":"start","step":step_count,"command":redact_terminal_preview(args["command"]),"status":"Comando enviado ao executor real. Aguardando a saída."})
-                result = await run_terminal_command(http_request.session, args["command"])
+                result = await run_terminal_command(http_request.session, args["command"], on_event=forward_terminal_event)
                 publish_terminal_preview({"phase":"result","step":step_count,"stdout":redact_terminal_preview(result.get("stdout")),"stderr":redact_terminal_preview(result.get("stderr")),"exit_code":result.get("exit_code"),"ok":result.get("ok"),"error":redact_terminal_preview(result.get("error")),"status":result.get("message") or result.get("error") or ""})
                 print(f"[webloop] terminal step={terminal_calls_total} total -> {str(result)[:300]}")
             else:
