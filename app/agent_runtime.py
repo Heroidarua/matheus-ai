@@ -136,9 +136,9 @@ def is_admin_install_tools_request(message: str) -> bool:
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
-    intent = re.search(r"\b(instale|instalar|instala|instalação|instalacao|prepare|preparar)\\b", text)
-    bundle = re.search(r"\b(ferramentas|pacotes|utilitários|utilitarios|conjunto padrão|kit padrão|kit de ferramentas)\\b", text)
-    target = re.search(r"\b(vps|servidor|linux|ubuntu|debian)\\b", text)
+    intent = re.search(r"\b(instale|instalar|instala|instalação|instalacao|prepare|preparar)\b", text)
+    bundle = re.search(r"\b(ferramentas|pacotes|utilitários|utilitarios|conjunto padrão|kit padrão|kit de ferramentas)\b", text)
+    target = re.search(r"\b(vps|servidor|linux|ubuntu|debian)\b", text)
     return bool(intent and bundle and target)
 
 
