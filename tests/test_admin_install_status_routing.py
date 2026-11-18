@@ -17,6 +17,7 @@ from app.agent_runtime import (
     "Não reinstale nada e não altere configurações.",
     "Execute ada-admin install-tools-status e depois ada-admin diagnostics. "
     "Não execute ada-admin install-tools.",
+    "ADA-M, execute ada-admin diagnostics na VPS conectada. Mostre o diagnóstico completo do servidor, incluindo hostname, uptime, memória, espaço em disco, estado dos serviços e disponibilidade das ferramentas. Não altere nenhuma configuração.",
 ])
 def test_install_status_request_never_routes_to_install(message):
     assert is_admin_install_tools_status_request(message)
