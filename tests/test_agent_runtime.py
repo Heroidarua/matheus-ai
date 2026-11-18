@@ -516,3 +516,22 @@ def test_browser_task_plan_extracts_url_and_scroll(message, expected):
 
 def test_browser_task_plan_requires_explicit_url():
     assert browser_task_plan("Explore o site pelo Chromium") == ("", None)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_has_no_default_call_cap_over_one_hundred():
+    executed = []
+
+    async def model(messages, use_tools):
+        if len(executed) < 125:
+            return '{"tool":"terminal","args":{"command":"echo step"}}'
+        return "Tarefa concluída após 125 chamadas."
+
+    async def terminal(command):
+        executed.append(command)
+        return {"stdout": str(len(executed)), "exit_code": 0}
+
+    tools = {"terminal": ToolDefinition("terminal", "restricted terminal", ("command",), terminal)}
+    result = await run_tool_loop([{"role": "user", "content": "Conclua todas as etapas"}], model, tools)
+    assert len(executed) == 125
+    assert result == "Tarefa concluída após 125 chamadas."
