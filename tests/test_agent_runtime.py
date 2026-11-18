@@ -4,6 +4,7 @@ from app.agent_runtime import (
     ToolDefinition,
     extract_terminal_command,
     is_agent_task,
+    is_admin_install_tools_request,
     is_browser_task,
     is_terminal_task,
     normalize_tool_url,
@@ -64,6 +65,25 @@ def test_does_not_treat_questions_as_execution_jobs(message):
 ])
 def test_detects_terminal_intent(message):
     assert is_terminal_task(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Instale o conjunto padrão de ferramentas Linux na VPS",
+    "ADA-M, instalar as ferramentas padrão no servidor",
+    "Prepare o kit de ferramentas do Ubuntu na VPS",
+])
+def test_admin_install_intent_routes_to_fixed_virtual_command(message):
+    assert is_admin_install_tools_request(message)
+    assert extract_terminal_command(message) == "ada-admin install-tools"
+
+
+@pytest.mark.parametrize("message", [
+    "Quais ferramentas Linux você recomenda?",
+    "Como instalar ferramentas no meu computador?",
+    "Instale o pacote solicitado no projeto",
+])
+def test_admin_install_intent_does_not_match_unrelated_requests(message):
+    assert not is_admin_install_tools_request(message)
 
 
 @pytest.mark.parametrize("message,expected", [
