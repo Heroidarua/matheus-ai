@@ -1465,8 +1465,6 @@ WEB_FETCH_RETRIES = 1           # uma nova tentativa somente em falhas transitó
 WEB_SEARCH_TIMEOUT = 30.0       # segundos por busca
 WEB_MAX_TURNS = 10              # voltas máximas para pesquisa comum
 WEB_MAX_FETCHES = 5             # URLs lidas por pergunta
-AGENT_MAX_TURNS = 101            # 100 rodadas de ferramentas + uma rodada reservada à resposta final
-WEB_MAX_TERMINAL_CALLS = 100      # chamadas de terminal por rodada de agente
 TOOL_CALL_MAX_TOKENS = 4096      # orçamento por chamada estruturada; 512 truncava comandos
 WEB_FIELD_LIMIT = 8000          # corte por campo
 
@@ -2841,12 +2839,15 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
         terminal_calls = 0
         malformed_tool_retries = 0
-        max_turns = AGENT_MAX_TURNS if terminal_required else WEB_MAX_TURNS
-        for turn in range(1, max_turns + 1):
+        # Tarefas do agente não têm teto fixo de chamadas. O loop termina quando
+        # o modelo conclui a tarefa ou quando uma falha real exige intervenção.
+        turn = 0
+        while True:
+            turn += 1
             # Se ainda há ações de navegador exigidas pelo pedido, não reserve
             # a última rodada para texto: ela também precisa poder executar a ferramenta.
             browser_steps_pending = set(required_browser_steps) - completed_browser_steps
-            use_tools = turn < max_turns or bool(browser_steps_pending)
+            use_tools = True
             loop_status["status"] = "Pesquisando…" if turn == 1 else "Processando…"
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 resp = await _model_post(client, loop_messages, use_tools)
@@ -2867,7 +2868,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 ]
                 if browser_steps_pending:
                     next_action = browser_steps_pending[0]
-                    if browser_recovery_attempts < 2 and turn < max_turns:
+                    if browser_recovery_attempts < 5:
                         browser_recovery_attempts += 1
                         if content_out:
                             loop_messages.append({"role": "assistant", "content": content_out[:6000]})
@@ -2892,7 +2893,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 attempted_tool_call = looks_like_tool_call(content_out)
                 must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls_this_run == 0)
                 if must_recover_tool_call:
-                    if malformed_tool_retries < 2 and turn < max_turns - 1:
+                    if malformed_tool_retries < 5:
                         malformed_tool_retries += 1
                         if content_out:
                             loop_messages.append({"role": "assistant", "content": content_out[:6000]})
@@ -2929,18 +2930,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 return (content_out or "").strip(), data
 
             name, args = call
-            if name == "terminal" and terminal_calls_this_run >= WEB_MAX_TERMINAL_CALLS:
-                loop_messages.append({"role": "assistant", "content": content_out})
-                loop_messages.append({
-                    "role": "user",
-                    "content": (
-                        f"Orçamento de {WEB_MAX_TERMINAL_CALLS} comandos desta etapa atingido. "
-                        "A chamada sugerida NÃO foi executada. Registre-a como próxima etapa pendente e produza um resumo do progresso. "
-                        "Não afirme que ela foi executada."
-                    ),
-                })
-                pause_reason = f"Limite de {WEB_MAX_TERMINAL_CALLS} execuções por etapa atingido."
-                break
             loop_messages.append({"role": "assistant", "content": content_out})
             pending_tool = {"name": name, "args": args}
             step_count += 1
@@ -2988,7 +2977,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         }
             elif name == "terminal":
                 terminal_calls += 1
-                loop_status["status"] = f"Executando etapa {terminal_calls_this_run}/{WEB_MAX_TERMINAL_CALLS} no terminal…"
+                loop_status["status"] = f"Executando comando de terminal {terminal_calls_this_run}…"
                 publish_terminal_preview({"phase":"start","step":step_count,"command":redact_terminal_preview(args["command"]),"status":"Comando enviado ao executor real. Aguardando a saída."})
                 result = await run_terminal_command(http_request.session, args["command"], on_event=forward_terminal_event)
                 publish_terminal_preview({"phase":"result","step":step_count,"stdout":redact_terminal_preview(result.get("stdout")),"stderr":redact_terminal_preview(result.get("stderr")),"exit_code":result.get("exit_code"),"ok":result.get("ok"),"error":redact_terminal_preview(result.get("error")),"status":result.get("message") or result.get("error") or ""})
@@ -3043,8 +3032,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             pending_tool = None
             await persist_job("running")
 
-        if not pause_reason and terminal_required and job_id:
-            pause_reason = f"Limite de {max_turns} rodadas desta execução atingido."
         if pause_reason:
             loop_messages.append({
                 "role": "system",
