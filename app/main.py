@@ -45,6 +45,7 @@ from app.companion import (
 )
 from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, requires_terminal_execution, normalize_tool_url, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
+from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
@@ -1464,7 +1465,8 @@ WEB_FETCH_RETRIES = 1           # uma nova tentativa somente em falhas transitó
 WEB_SEARCH_TIMEOUT = 30.0       # segundos por busca
 WEB_MAX_TURNS = 10              # voltas máximas do modelo
 WEB_MAX_FETCHES = 5             # URLs lidas por pergunta
-WEB_MAX_TERMINAL_CALLS = 6       # comandos VPS por solicitação do agente
+WEB_MAX_TERMINAL_CALLS = 6       # comandos VPS por etapa de execução
+AGENT_MAX_TERMINAL_CALLS_PER_TASK = 24  # teto acumulado por tarefa, entre retomadas
 TOOL_CALL_MAX_TOKENS = 4096      # orçamento por chamada estruturada; 512 truncava comandos
 WEB_FIELD_LIMIT = 8000          # corte por campo
 
@@ -1917,9 +1919,41 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         session_id = secrets.token_urlsafe(32)
         http_request.session["companion_id"] = session_id
     normalized_command = re.sub(r"\s+", " ", last_user_message.casefold()).strip()
+    continuation_requested = is_agent_continuation_request(last_user_message)
+    pending_agent_job = await asyncio.to_thread(get_pending_agent_job, session_id) if continuation_requested else None
+    resume_agent_job = bool(pending_agent_job)
     if normalized_command in {"/memoria", "minhas memorias", "minhas memórias"}:
         saved = await asyncio.to_thread(list_long_term_memories, session_id)
         tool_result = ("Memórias salvas:\n" + "\n".join(f"• {item}" for item in saved)) if saved else "Ainda não há memórias de longo prazo salvas."
+    elif normalized_command in {"/tarefas", "minhas tarefas", "tarefas do agente"}:
+        jobs = await asyncio.to_thread(list_agent_jobs, session_id, 10)
+        if not jobs:
+            tool_result = "Ainda não há tarefas registradas nesta sessão."
+        else:
+            lines = ["**Histórico de tarefas da ADA-M:**"]
+            for item in jobs:
+                state = item.get("state") or {}
+                lines.append(
+                    f"• {item.get('status', 'desconhecido').upper()} — {item.get('task', 'Tarefa sem título')} "
+                    f"({state.get('terminal_calls_total', 0)}/24 execuções de terminal)"
+                )
+            tool_result = "\\n".join(lines)
+    elif normalized_command in {"/historico terminal", "historico terminal", "histórico terminal"}:
+        jobs = await asyncio.to_thread(list_agent_jobs, session_id, 10)
+        lines = ["**Histórico de execuções do terminal:**"]
+        for item in jobs:
+            state = item.get("state") or {}
+            lines.append(f"\\n**{item.get('task', 'Tarefa')} — {item.get('status', 'desconhecido')}**")
+            for event in (state.get("events") or [])[-12:]:
+                command = event.get("command") or event.get("tool") or "ferramenta"
+                outcome = "OK" if event.get("ok") else "falha/sem confirmação"
+                lines.append(f"  • {command} — {outcome}")
+        tool_result = "\\n".join(lines) if jobs else "Ainda não há execuções registradas nesta sessão."
+    elif continuation_requested:
+        if resume_agent_job:
+            tool_result = None
+        else:
+            tool_result = "Não encontrei nenhuma tarefa pausada ou em andamento para retomar. Use /tarefas para consultar o histórico."
     elif normalized_command in {"/esquecer memoria", "/esquecer memória", "apagar minhas memorias", "apagar minhas memórias"}:
         deleted = await asyncio.to_thread(forget_long_term_memory, session_id)
         tool_result = f"Apaguei {deleted} memória(s) de longo prazo desta sessão."
@@ -2013,8 +2047,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "\n\nO usuário pediu uma busca externa, mas não há resultados verificáveis. Não use memória ou base privada como substituto. Informe que não foi possível confirmar e peça um detalhe para refinar, se útil."
         )
     admin_install_tools_requested = is_admin_install_tools_request(last_user_message)
-    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message) or admin_install_tools_requested
-    terminal_task = is_terminal_task(last_user_message) or admin_install_tools_requested
+    agent_mode_active = request.mode == "agente" or is_agent_task(last_user_message) or is_browser_task(last_user_message) or is_terminal_task(last_user_message) or admin_install_tools_requested or resume_agent_job
+    terminal_task = is_terminal_task(last_user_message) or admin_install_tools_requested or resume_agent_job
     terminal_required = requires_terminal_execution(
         last_user_message,
         agent_mode_active=agent_mode_active,
@@ -2063,7 +2097,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 "um usuário Linux restrito, sem privilégios de administrador. Cada chamada começa em um novo shell; "
                 "use 'cd /home/ada-runner/workspace && comando' para escolher o diretório. "
                 "Para tarefas com várias etapas, inspecione, execute, leia o resultado e continue até verificar a conclusão; "
-                "são permitidas até 6 chamadas de terminal por solicitação. "
+                "são permitidas até 6 chamadas de terminal por etapa, com teto acumulado de 24 chamadas por tarefa. "
+                "A ADA-M salva checkpoints e histórico após cada ferramenta; ao pausar, o usuário pode enviar \\"continuar\\" para retomar sem repetir etapas confirmadas. "
+                "O usuário pode consultar /tarefas e /historico terminal. "
                 "Prefira ambientes virtuais Python e dependências locais Node.js; não use sudo nem tente contornar permissões. "
                 "Não tente acessar segredos ou arquivos privados fora do workspace. Peça autorização antes de exclusões, "
                 "comandos destrutivos, push/publicação ou ações externas irreversíveis."
