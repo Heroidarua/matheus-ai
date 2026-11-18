@@ -431,6 +431,7 @@ Você pode executar ferramentas respondendo APENAS com um objeto JSON válido, s
 Regras:
 - Use web_search para pesquisar resultados e fontes.
 - PRIORIDADE DE NAVEGAÇÃO: se o usuário mencionar que quer acessar/abrir/visitar/analisar um site pelo navegador, use SEMPRE browser (Chromium), mesmo que a mensagem também contenha uma URL ou peça pesquisa. Não substitua essa ação por web_fetch. Comece com action=open e examine o resultado antes de agir.
+- CONCLUSÃO DE TAREFAS DE NAVEGADOR: uma resposta textual ou a extração de texto da página NÃO substitui ações solicitadas. Execute e confirme cada ação explícita (por exemplo, inspect, scroll, click ou fill) antes de responder. Depois de open, use inspect quando o usuário pedir para explorar/analisar a página; use scroll quando pedir rolagem. Não repita o texto integral da página: relate somente o que foi solicitado e use os resultados reais das ações. Se uma ação falhar ou não puder ser executada, informe isso claramente; nunca simule posição de rolagem, elementos visíveis ou cliques.
 - Use web_fetch apenas para extração simples de texto de páginas públicas; nunca use essa ferramenta para interpretar arquivos binários.
 - Se a página responder com conteúdo binário, formato não suportado, bloqueio ou erro, informe a limitação; nunca reproduza bytes ou conteúdo ilegível como se fosse texto.
 - Use calculate somente para expressões matemáticas simples.
