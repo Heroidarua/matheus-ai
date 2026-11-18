@@ -11,9 +11,9 @@ import psycopg
 
 _VOLATILE: dict[str, list[dict[str, Any]]] = {}
 _SECRET_PATTERNS = (
-    (re.compile(r"(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s\"']+"), r"\\1[REDACTED]"),
-    (re.compile(r"(?i)((?:api[_-]?key|access[_-]?token|password|passwd|secret)\\s*[:=]\\s*)[^\\s\"']+"), r"\\1[REDACTED]"),
-    (re.compile(r"\\b(?:gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,})\\b"), "[REDACTED]"),
+    (re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s\"']+"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)((?:api[_-]?key|access[_-]?token|password|passwd|secret)\s*[:=]\s*)[^\s\"']+"), r"\1[REDACTED]"),
+    (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,})\b"), "[REDACTED]"),
 )
 _MAX_STATE_BYTES = 450_000
 
@@ -209,7 +209,7 @@ def list_jobs(owner_id: str, limit: int = 10) -> list[dict[str, Any]]:
 
 
 def is_agent_continuation_request(message: str) -> bool:
-    text = re.sub(r"\\s+", " ", str(message or "").casefold()).strip()
+    text = re.sub(r"\s+", " ", str(message or "").casefold()).strip()
     return bool(re.fullmatch(
         r"(?:/continuar|continuar|continue|retomar|retome|retomar tarefa|"
         r"continue de onde parou|continuar de onde parou|retome a tarefa|"
