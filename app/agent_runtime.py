@@ -137,7 +137,7 @@ def is_admin_install_tools_request(message: str) -> bool:
     if not text:
         return False
     # Perguntas de caráter informativo não devem disparar uma ação administrativa.
-    if re.match(r"^(como|quais|qual|o que|por que|porque|quando|onde|quanto)\\b", text):
+    if re.match(r"^(como|quais|qual|o que|por que|porque|quando|onde|quanto)\b", text):
         return False
 
     # Aceita linguagem natural comum ("baixe suas ferramentas de hacking"),
