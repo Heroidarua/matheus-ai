@@ -2924,6 +2924,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             DIAGNOSTICS["last_error"] = None
             print(f"Web/agent loop completed in {time.perf_counter() - started_at:.2f}s")
 
+        else:
             async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=8.0)) as client:
                 response = None
                 # Erros 429/5xx podem ser temporários. Fazer no máximo 2 novas
