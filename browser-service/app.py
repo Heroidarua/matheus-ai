@@ -88,6 +88,19 @@ async def is_public_url(value: str) -> bool:
 
 async def guard_request(route) -> None:
     request_url = route.request.url
+    # Permite apenas fontes incorporadas em data URI; outros esquemas continuam
+    # bloqueados para preservar a proteção contra acesso a recursos locais.
+    embedded_font = (
+        route.request.resource_type == "font"
+        and bool(re.match(
+            r"^data:(?:font/(?:woff2?|ttf|otf)|application/(?:font-woff|vnd\\.ms-fontobject))(?:;|,)",
+            request_url,
+            re.IGNORECASE,
+        ))
+    )
+    if embedded_font:
+        await route.continue_()
+        return
     if not await is_public_url(request_url):
         await route.abort("blockedbyclient")
         return
@@ -142,8 +155,9 @@ async def create_session(session_id: str) -> BrowserSession:
 def is_readable_content_type(value: str | None) -> bool:
     """Only expose human-readable page bodies to the agent; never leak binary bytes."""
     content_type = (value or "").split(";", 1)[0].strip().lower()
-    return content_type.startswith("text/") or content_type in {
-        "application/xhtml+xml", "application/json", "application/ld+json"
+    return content_type in {
+        "text/html", "text/plain", "application/xhtml+xml",
+        "application/json", "application/ld+json"
     }
 
 
