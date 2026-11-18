@@ -136,6 +136,10 @@ def is_admin_install_tools_request(message: str) -> bool:
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
+    # Uma consulta de status é sempre somente leitura, mesmo que mencione
+    # "instalação", "ferramentas" e "VPS" na mesma frase.
+    if is_admin_install_tools_status_request(message):
+        return False
     # Perguntas de caráter informativo não devem disparar uma ação administrativa.
     if re.match(r"^(como|quais|qual|o que|por que|porque|quando|onde|quanto)\b", text):
         return False
@@ -187,12 +191,19 @@ def is_admin_install_tools_status_request(message: str) -> bool:
         text,
     )
     command = re.search(r"\bada-admin\s+install-tools-status\b", text)
+    # Um comando de status explicitamente solicitado prevalece mesmo se o usuário
+    # também mencionar diagnostics como etapa adicional.
+    if action and command:
+        return True
+    # Um pedido que contém apenas o comando de diagnóstico pertence a outro fluxo.
+    if re.search(r"\bada-admin\s+diagnostics\b", text):
+        return False
     natural = (
-        re.search(r"\b(status|situa[cç][aã]o|resultado)\b", text)
+        re.search(r"\b(status|situa[cç][aã]o|resultado|estado)\b", text)
         and re.search(r"\b(instala[cç][aã]o|ferramentas|pacotes)\b", text)
         and re.search(r"\b(vps|servidor)\b", text)
     )
-    return bool(action and (command or natural))
+    return bool(action and natural)
 
 
 def is_security_audit_request(message: str) -> bool:
@@ -287,12 +298,12 @@ def extract_terminal_command(message: str) -> str | None:
     """Extract an explicitly supplied shell command from a terminal request."""
     # Route the known administrative intent deterministically; do not ask the
     # language model to invent or choose a privileged shell command.
-    if is_admin_install_tools_request(message):
-        return "ada-admin install-tools"
-    # The specific install-status request must win over the broader
-    # diagnostics detector, which also recognizes the words "status" and "VPS".
+    # Consultas somente leitura têm prioridade absoluta sobre qualquer
+    # detecção genérica de intenção de instalar ferramentas.
     if is_admin_install_tools_status_request(message):
         return "ada-admin install-tools-status"
+    if is_admin_install_tools_request(message):
+        return "ada-admin install-tools"
     if is_admin_diagnostics_request(message):
         return "ada-admin diagnostics"
     if not isinstance(message, str) or not message.strip():
