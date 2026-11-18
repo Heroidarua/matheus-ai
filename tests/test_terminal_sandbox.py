@@ -55,7 +55,7 @@ def test_vps_terminal_is_not_configured_when_any_auth_value_is_missing(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_vps_executor_posts_real_command_and_returns_real_output(monkeypatch):
+async def test_vps_executor_streams_real_command_output(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test/")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
     monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
@@ -63,6 +63,7 @@ async def test_vps_executor_posts_real_command_and_returns_real_output(monkeypat
     monkeypatch.setenv("ADA_EXECUTOR_TIMEOUT", "37")
 
     captured = {}
+    events = []
 
     class FakeResponse:
         status_code = 200
@@ -70,12 +71,25 @@ async def test_vps_executor_posts_real_command_and_returns_real_output(monkeypat
         def raise_for_status(self):
             return None
 
-        def json(self):
-            return {
-                "returncode": 0,
-                "stdout": "/home/ada-runner/workspace\\n",
-                "stderr": "",
-            }
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def aiter_lines(self):
+            yield "event: start"
+            yield 'data: {"status":"running"}'
+            yield ""
+            yield "event: output"
+            yield 'data: {"stream":"stdout","text":"/home/ada-runner/"}'
+            yield ""
+            yield "event: output"
+            yield 'data: {"stream":"stdout","text":"workspace\\n"}'
+            yield ""
+            yield "event: complete"
+            yield 'data: {"status":"completed","returncode":0}'
+            yield ""
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):
@@ -87,24 +101,29 @@ async def test_vps_executor_posts_real_command_and_returns_real_output(monkeypat
         async def __aexit__(self, *args):
             return False
 
-        async def post(self, url, *, headers, json):
-            captured.update({"url": url, "headers": headers, "json": json})
+        def stream(self, method, url, *, headers, json):
+            captured.update({"method": method, "url": url, "headers": headers, "json": json})
             return FakeResponse()
 
     monkeypatch.setattr(terminal_sandbox.httpx, "AsyncClient", FakeAsyncClient)
 
-    result = await terminal_sandbox.run_terminal_command({}, "pwd")
+    async def on_event(event):
+        events.append(event)
 
-    assert captured["url"] == "https://executor.example.test/execute"
+    result = await terminal_sandbox.run_terminal_command({}, "pwd", on_event=on_event)
+
+    assert captured["method"] == "POST"
+    assert captured["url"] == "https://executor.example.test/execute/stream"
     assert captured["headers"]["Authorization"] == "Bearer internal-test-token"
     assert captured["headers"]["CF-Access-Client-Id"] == "client-id"
     assert captured["headers"]["CF-Access-Client-Secret"] == "client-secret"
     assert captured["json"] == {"command": "pwd", "timeout": 37}
     assert result["ok"] is True
     assert result["exit_code"] == 0
-    assert result["stdout"] == "/home/ada-runner/workspace\\n"
+    assert result["stdout"] == "/home/ada-runner/workspace\n"
     assert result["workspace"] == "/home/ada-runner/workspace"
     assert result["executor"] == "VPS"
+    assert [event["event"] for event in events] == ["start", "output", "output", "complete"]
 
 
 @pytest.mark.asyncio
@@ -120,8 +139,19 @@ async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(mon
         def raise_for_status(self):
             return None
 
-        def json(self):
-            return {"returncode": 127, "stdout": "", "stderr": "nmap: not found"}
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def aiter_lines(self):
+            yield "event: output"
+            yield 'data: {"stream":"stderr","text":"nmap: not found"}'
+            yield ""
+            yield "event: complete"
+            yield 'data: {"status":"completed","returncode":127}'
+            yield ""
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):
@@ -133,7 +163,7 @@ async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(mon
         async def __aexit__(self, *args):
             return False
 
-        async def post(self, *args, **kwargs):
+        def stream(self, *args, **kwargs):
             return FakeResponse()
 
     monkeypatch.setattr(terminal_sandbox.httpx, "AsyncClient", FakeAsyncClient)
