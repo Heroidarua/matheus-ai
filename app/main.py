@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
@@ -2714,6 +2714,118 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 await persist_job("completed")
                 print(f"[webloop] forced terminal execution -> {str(result)[:300]}")
                 return terminal_reply(result), {"model": active_model_name}
+
+        # Execute mandatory navigation in the backend, not through model-generated JSON.
+        # This guarantees Chromium opens, inspects, scrolls (when requested), and reinspects.
+        browser_url, browser_scroll_delta = browser_task_plan(job_task)
+        if required_browser_steps and browser_url and not resume_agent_job:
+            browser_sequence: list[tuple[str, dict[str, Any]]] = [
+                ("open", {"url": browser_url}),
+                ("inspect", {}),
+            ]
+            if browser_scroll_delta is not None:
+                browser_sequence.extend([
+                    ("scroll", {"delta_y": browser_scroll_delta}),
+                    ("inspect", {}),
+                ])
+            browser_evidence: list[dict[str, Any]] = []
+            for browser_action, browser_args in browser_sequence:
+                loop_status["status"] = {
+                    "open": "Abrindo no Chromium…",
+                    "inspect": "Inspecionando elementos visíveis…",
+                    "scroll": "Rolando a página no Chromium…",
+                }[browser_action]
+                browser_result = await tool_browser_action(
+                    session_id, action=browser_action, **browser_args
+                )
+                confirmed = bool(browser_result.get("ok") and not browser_result.get("fallback_used"))
+                if browser_action == "open":
+                    confirmed = confirmed and bool(browser_result.get("url"))
+                elif browser_action == "inspect":
+                    confirmed = confirmed and isinstance(browser_result.get("elements"), list)
+                elif browser_action == "scroll":
+                    confirmed = confirmed and all(
+                        isinstance(browser_result.get(key), (int, float))
+                        and not isinstance(browser_result.get(key), bool)
+                        for key in ("requested_delta_y", "scroll_y_before", "scroll_y_after", "actual_delta_y")
+                    )
+                event = {
+                    "step": step_count + 1,
+                    "tool": "browser",
+                    "action": browser_action,
+                    "ok": confirmed,
+                    "url": browser_result.get("url"),
+                    "title": browser_result.get("title"),
+                    "error": browser_result.get("error"),
+                }
+                if browser_action == "inspect" and confirmed:
+                    event["elements"] = browser_result.get("elements", [])[:80]
+                if browser_action == "scroll" and confirmed:
+                    event["scroll"] = {
+                        key: browser_result.get(key)
+                        for key in (
+                            "requested_delta_y", "scroll_y_before", "scroll_y_after",
+                            "actual_delta_y", "scrolled", "visible_text",
+                        )
+                    }
+                events.append(event)
+                step_count += 1
+                if not confirmed:
+                    error_text = browser_result.get("error") or (
+                        "O serviço não retornou as evidências obrigatórias para esta ação."
+                    )
+                    return (
+                        "❌ **A navegação real no Chromium foi interrompida.** "
+                        f"Ação: '{browser_action}'. Erro: {error_text} "
+                        "Nenhuma extração HTTP foi usada como substituta."
+                    ), {"model": active_model_name, "browser_error": error_text}
+                if browser_action in required_browser_steps:
+                    completed_browser_steps.add(browser_action)
+                if browser_action == "open":
+                    browser_evidence.append({
+                        "action": "open",
+                        "url": browser_result.get("url"),
+                        "title": browser_result.get("title"),
+                        "http_status": browser_result.get("status"),
+                    })
+                elif browser_action == "inspect":
+                    browser_evidence.append({
+                        "action": "inspect",
+                        "url": browser_result.get("url"),
+                        "title": browser_result.get("title"),
+                        "visible_elements_count": len(browser_result.get("elements", [])),
+                        "elements": browser_result.get("elements", [])[:80],
+                    })
+                elif browser_action == "scroll":
+                    browser_evidence.append({
+                        "action": "scroll",
+                        "url": browser_result.get("url"),
+                        "title": browser_result.get("title"),
+                        "requested_delta_y": browser_result.get("requested_delta_y"),
+                        "scroll_y_before": browser_result.get("scroll_y_before"),
+                        "scroll_y_after": browser_result.get("scroll_y_after"),
+                        "actual_delta_y": browser_result.get("actual_delta_y"),
+                        "scrolled": browser_result.get("scrolled"),
+                        "visible_text": browser_result.get("visible_text", ""),
+                    })
+            loop_messages.append({
+                "role": "system",
+                "content": (
+                    "A sequência obrigatória do Chromium já foi executada pelo backend. "
+                    "Não repita open, inspect ou scroll. Interprete exclusivamente as evidências "
+                    "registradas na próxima mensagem; não substitua navegação por web_fetch nem "
+                    "afirme ações que não constem nas evidências."
+                ),
+            })
+            loop_messages.append({
+                "role": "user",
+                "content": (
+                    "Evidências verificadas da execução real no Chromium:\n"
+                    + json.dumps(browser_evidence, ensure_ascii=False)
+                    + "\nProduza uma análise objetiva baseada nessas evidências. "
+                    "Informe explicitamente o scrollY inicial/final e o deslocamento real quando houver rolagem."
+                ),
+            })
 
         terminal_calls = 0
         malformed_tool_retries = 0
