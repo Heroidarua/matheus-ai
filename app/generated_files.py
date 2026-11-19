@@ -8,7 +8,6 @@ import uuid
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 import psycopg
 
@@ -195,7 +194,7 @@ def create_generated_file(owner_id: str, name: str, content: str) -> dict[str, A
     if len(content) > MAX_FILE_CONTENT_CHARS:
         raise ValueError(f"O conteúdo ultrapassa o limite de {MAX_FILE_CONTENT_CHARS} caracteres.")
     file_name = Path(name.replace("\\", "/")).name.strip()
-    file_name = re.sub(r"[\\x00-\\x1f\\x7f]", "", file_name)[:180]
+    file_name = re.sub(r"[\x00-\x1f\x7f]", "", file_name)[:180]
     if not file_name or file_name in {".", ".."}:
         raise ValueError("Nome de arquivo inválido.")
     raw, mime_type = _build_file(file_name, content)
