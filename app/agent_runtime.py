@@ -137,6 +137,34 @@ def extract_explicit_file_request(message: str) -> tuple[str, str] | None:
         return None
     return name, content
 
+
+def is_document_download_request(message: str) -> bool:
+    """Detect requests to write a document and provide it as a downloadable file."""
+    if not isinstance(message, str):
+        return False
+    text = message.casefold()
+    wants_document = bool(re.search(
+        r"\b(reda[cç][aã]o|ensaio|disserta[cç][aã]o|trabalho|relat[oó]rio|"
+        r"resumo|documento|apostila|curr[ií]culo|carta|contrato|"
+        r"proposta|plano de aula)\b",
+        text,
+    ))
+    wants_download = bool(re.search(
+        r"\b(baixar|download|link|arquivo|pdf|docx|documento para baixar|"
+        r"me enviar|me mandar|disponibilize|disponibilizar)\b",
+        text,
+    ))
+    return wants_document and wants_download
+
+
+def is_substantive_document_content(content: str) -> bool:
+    """Reject short success claims; require an actual body before creating a file."""
+    if not isinstance(content, str):
+        return False
+    clean = re.sub(r"<think(?:ing)?>[\s\S]*?</think(?:ing)?>", "", content, flags=re.IGNORECASE)
+    words = re.findall(r"\b[\wÀ-ÿ'-]+\b", clean)
+    return len(clean.strip()) >= 500 and len(words) >= 100
+
 def looks_like_tool_call(response: str) -> bool:
     """Detect a tool-call attempt even when its JSON was truncated or malformed.
 

@@ -572,3 +572,34 @@ def test_extract_explicit_file_request_requires_filename_and_quoted_content(prom
     from app.agent_runtime import extract_explicit_file_request
 
     assert extract_explicit_file_request(prompt) is None
+
+
+@pytest.mark.parametrize("message", [
+    "Faça uma redação sobre o impacto da IA na educação e me mande o link para download",
+    "Escreva um relatório e disponibilize o PDF",
+    "Prepare um ensaio e envie o arquivo para baixar",
+])
+def test_detects_document_download_requests(message):
+    from app.agent_runtime import is_document_download_request
+
+    assert is_document_download_request(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Escreva uma redação sobre IA",
+    "Como faço download de um PDF?",
+    "O que é um relatório?",
+])
+def test_document_download_detection_requires_both_document_and_download_intent(message):
+    from app.agent_runtime import is_document_download_request
+
+    assert not is_document_download_request(message)
+
+
+def test_document_content_requires_real_body_not_success_claim():
+    from app.agent_runtime import is_substantive_document_content
+
+    assert not is_substantive_document_content(
+        "Prontinho! A redação foi finalizada e o PDF foi gerado com sucesso."
+    )
+    assert is_substantive_document_content(("A inteligência artificial transforma a educação. " * 35))

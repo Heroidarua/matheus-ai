@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, extract_explicit_file_request, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, extract_explicit_file_request, is_document_download_request, is_substantive_document_content, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
@@ -2920,6 +2920,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
         terminal_calls = 0
         malformed_tool_retries = 0
+        document_content_attempts = 0
+        document_download_requested = is_document_download_request(job_task)
         # Tarefas do agente não têm teto fixo de chamadas. O loop termina quando
         # o modelo conclui a tarefa ou quando uma falha real exige intervenção.
         turn = 0
@@ -2975,6 +2977,62 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         "A resposta textual do modelo não foi tratada como execução do navegador. "
                         "Verifique a conexão do Chromium e tente novamente."
                     ), data
+                if document_download_requested and not generated_files:
+                    if is_substantive_document_content(str(content_out or "")):
+                        document_name = "redacao-ada-m.pdf" if re.search(r"\b(reda[cç][aã]o|ensaio|disserta[cç][aã]o)\b", str(job_task), re.IGNORECASE) else "documento-ada-m.pdf"
+                        try:
+                            file_metadata = await asyncio.to_thread(
+                                create_generated_file, session_id, document_name, str(content_out).strip()
+                            )
+                            generated_files.append(file_metadata)
+                            events.append({
+                                "step": step_count + 1, "tool": "create_file", "ok": True,
+                                "file_name": file_metadata.get("file_name", document_name),
+                                "file_id": file_metadata.get("id"),
+                                "execution": "document_content_autosave",
+                            })
+                            step_count += 1
+                            data["generated_files"] = generated_files
+                            final_document_reply = (
+                                str(content_out).strip()
+                                + "\n\n---\n\n✅ **PDF criado com sucesso:** "
+                                + str(file_metadata.get("file_name", document_name))
+                                + ". O link para baixar está logo abaixo desta resposta."
+                            )
+                            if job_id:
+                                loop_messages.append({"role": "assistant", "content": final_document_reply})
+                                await persist_job("completed")
+                            return final_document_reply, data
+                        except Exception as file_error:
+                            print(f"[document_download] create failed ({type(file_error).__name__}): {str(file_error)[:240]}")
+                            return (
+                                "❌ Consegui produzir o conteúdo, mas não consegui salvar o PDF. "
+                                "Não vou afirmar que o arquivo foi criado. Verifique o armazenamento de arquivos e tente novamente.",
+                                data,
+                            )
+                    if document_content_attempts < 2:
+                        document_content_attempts += 1
+                        if content_out:
+                            loop_messages.append({"role": "assistant", "content": str(content_out)[:8000]})
+                        loop_messages.append({
+                            "role": "system",
+                            "content": (
+                                "O usuário pediu um documento para download, mas você ainda NÃO forneceu o conteúdo do documento. "
+                                "Não diga que terminou, não afirme que criou PDF e não mencione link. "
+                                "Agora escreva o documento completo, com título e pelo menos quatro parágrafos substanciais "
+                                "(mínimo de 100 palavras e 500 caracteres), diretamente como conteúdo final em português. "
+                                "Não inclua introduções sobre o que você vai fazer nem confirmações de sucesso. "
+                                "O backend converterá esse conteúdo em PDF e anexará o link somente após salvar o arquivo."
+                            ),
+                        })
+                        await persist_job("running")
+                        continue
+                    return (
+                        "❌ Não consegui produzir conteúdo suficiente para montar o documento. "
+                        "Nenhum PDF foi criado e nenhum link de download foi gerado.",
+                        data,
+                    )
+
                 attempted_tool_call = looks_like_tool_call(content_out)
                 must_recover_tool_call = attempted_tool_call or (terminal_required and terminal_calls_this_run == 0)
                 if must_recover_tool_call:
