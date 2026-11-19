@@ -623,3 +623,11 @@ def test_ignores_unknown_or_invalid_document_action_envelopes():
 
     assert extract_generated_document_content('{"action":"delete_file","content":"texto"}') is None
     assert extract_generated_document_content('{"action":"generate_pdf","content":42}') is None
+
+def test_document_download_request_is_detected_for_redacao_pdf():
+    from app.agent_runtime import is_document_download_request
+
+    assert is_document_download_request(
+        "Faça uma redação sobre o impacto da inteligência artificial na educação brasileira e gere um PDF para download."
+    )
+
