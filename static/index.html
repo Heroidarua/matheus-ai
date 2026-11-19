@@ -2245,12 +2245,20 @@ const history = [];
             }
             pending.scrollIntoView({behavior:'smooth',block:'end'}); return;
           }
+          if (eventName === 'files') {
+            const incomingFiles = Array.isArray(payload.files) ? payload.files.filter(file => file && typeof file.id === 'string') : [];
+            const knownIds = new Set(streamFiles.map(file => file.id));
+            incomingFiles.forEach(file => { if (!knownIds.has(file.id)) { streamFiles.push(file); knownIds.add(file.id); } });
+            return;
+          }
           if (eventName === 'done') {
             streamDone = true;
             streamSources = Array.isArray(payload.sources) ? payload.sources : [];
             streamArtifact = payload.artifact && typeof payload.artifact === 'object' ? payload.artifact : null;
             streamArtifactWarning = typeof payload.artifact_warning === 'string' ? payload.artifact_warning : '';
-            streamFiles = Array.isArray(payload.files) ? payload.files.filter(file => file && typeof file.id === 'string') : [];
+            const finalFiles = Array.isArray(payload.files) ? payload.files.filter(file => file && typeof file.id === 'string') : [];
+            const knownIds = new Set(streamFiles.map(file => file.id));
+            finalFiles.forEach(file => { if (!knownIds.has(file.id)) { streamFiles.push(file); knownIds.add(file.id); } });
             return;
           }
           if (typeof payload.status === 'string' && !answer) {
