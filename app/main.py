@@ -2315,6 +2315,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     def publish_terminal_preview(event: dict[str, Any]) -> None:
         terminal_preview_queue.put_nowait(event)
 
+    def publish_generated_file(file_metadata: dict[str, Any]) -> None:
+        # Envia o arquivo assim que ele é salvo; o botão não depende do retorno final do modelo.
+        terminal_preview_queue.put_nowait({"event": "files", "files": [file_metadata]})
+
     def redact_terminal_preview(value: Any) -> str:
         text_value = str(value or "")
         text_value = re.sub(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+", r"\1[REDACTED]", text_value)
@@ -2712,6 +2716,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     create_generated_file, session_id, file_name, file_content
                 )
                 generated_files.append(file_metadata)
+                publish_generated_file(file_metadata)
                 events.append({
                     "step": step_count + 1, "tool": "create_file", "ok": True,
                     "file_name": file_metadata.get("file_name", file_name),
@@ -2990,6 +2995,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 create_generated_file, session_id, document_name, document_body.strip()
                             )
                             generated_files.append(file_metadata)
+                            publish_generated_file(file_metadata)
                             events.append({
                                 "step": step_count + 1, "tool": "create_file", "ok": True,
                                 "file_name": file_metadata.get("file_name", document_name),
@@ -3141,6 +3147,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         create_generated_file, session_id, args["name"], args["content"]
                     )
                     generated_files.append(file_metadata)
+                    publish_generated_file(file_metadata)
                     result = {"ok": True, "file": file_metadata}
                     events.append({
                         "step": step_count, "tool": "create_file", "ok": True,
@@ -3292,7 +3299,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         while not task.done() or not terminal_preview_queue.empty():
                             try:
                                 terminal_event = await asyncio.wait_for(terminal_preview_queue.get(), timeout=0.25)
-                                yield "event: terminal\ndata: " + json.dumps(terminal_event, ensure_ascii=False) + "\n\n"
+                                event_name = str(terminal_event.pop("event", "terminal"))
+                                yield f"event: {event_name}\ndata: " + json.dumps(terminal_event, ensure_ascii=False) + "\n\n"
                             except asyncio.TimeoutError:
                                 continue
                         streamed_reply, streamed_data = await task
