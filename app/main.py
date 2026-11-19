@@ -3300,7 +3300,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                             try:
                                 terminal_event = await asyncio.wait_for(terminal_preview_queue.get(), timeout=0.25)
                                 event_name = str(terminal_event.pop("event", "terminal"))
-                                yield f"event: {event_name}\\ndata: " + json.dumps(terminal_event, ensure_ascii=False) + "\\n\\n"
+                                yield f"event: {event_name}\ndata: " + json.dumps(terminal_event, ensure_ascii=False) + "\n\n"
                             except asyncio.TimeoutError:
                                 continue
                         streamed_reply, streamed_data = await task
