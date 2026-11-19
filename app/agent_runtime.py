@@ -413,6 +413,7 @@ def browser_task_plan(message: str) -> tuple[str, int | None]:
 
 AGENT_TOOLS_SPEC = """
 MODO AGENTE — FERRAMENTAS DISPONÍVEIS
+- Criação de arquivos: use create_file com name e content quando o usuário pedir um documento/arquivo baixável. Não simule a criação nem invente links.
 FERRAMENTAS LINUX PREVISTAS PARA O EXECUTOR:
 - Diagnóstico/rede: nmap, nc (netcat), curl, wget, jq.
 - Auditoria web: nikto e gobuster.

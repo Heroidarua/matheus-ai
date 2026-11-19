@@ -51,6 +51,14 @@ O backend extrai texto sem executar arquivos, calcula SHA-256 para evitar duplic
 
 **Configuração obrigatória:** configure `DATABASE_URL` no Render apontando para um PostgreSQL persistente. O blueprint declara a variável, mas não cria o banco. Sem ela, a biblioteca fica indisponível e o restante do chat/pesquisa continua operando. Consulte [docs/biblioteca-de-arquivos.md](docs/biblioteca-de-arquivos.md) para formatos, limites, endpoints e requisitos de acesso seguro. PDFs digitalizados ainda precisam de OCR.
 
+## Arquivos gerados pela ADA-M
+
+Quando você pedir à ADA-M para criar um arquivo, ela poderá gerar o conteúdo e disponibilizar um link **Baixar arquivo** diretamente na mensagem. Formatos incluídos nesta etapa: TXT, MD, CSV, JSON, HTML, XML, PY, JS, CSS, YAML, SQL, LOG, PDF, DOCX, XLSX e PPTX.
+
+Os arquivos binários são armazenados no PostgreSQL (DATABASE_URL), associados à sessão que os criou. O download exige a mesma sessão do navegador; outro usuário não consegue baixar um arquivo apenas por conhecer seu identificador. O limite é de 20 MB por arquivo e os 30 arquivos mais recentes por sessão são mantidos. Se o banco não estiver configurado ou acessível, a ADA-M informa que não conseguiu arquivar o arquivo e não apresenta um link falso.
+
+Para planilhas XLSX e apresentações PPTX, o conteúdo estruturado é montado pela ADA-M antes da geração. PDF e DOCX recebem texto e títulos Markdown simples.
+
 ## Isso é um modelo treinado?
 
 Ainda não. RAG fornece documentos relevantes ao modelo durante a conversa, mas não altera os pesos nem cria conhecimento permanente dentro do próprio modelo. Para um ajuste fino (fine-tuning) real, será necessário preparar exemplos de treinamento de qualidade, escolher uma licença/modelo compatível e executar o treinamento em hardware ou serviço adequado. A pasta `data/training/` descreve o formato inicial esperado; nenhum treinamento é executado automaticamente pelo Render.

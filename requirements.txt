@@ -16,3 +16,5 @@ Pillow>=10.0,<13.0
 numpy>=2.0,<3.0
 livekit-api>=1.0,<2.0
 render>=1.9.0,<2.0.0
+reportlab>=4.2,<5.0
+python-pptx>=1.0,<2.0

@@ -946,7 +946,7 @@ const history = [];
       chatTranscript.slice(-12).forEach(item=>history.push({role:item.role,content:item.role==='user'?[{type:'text',text:item.text}]:item.text}));
       messagesEl.replaceChildren();
       if(!chatTranscript.length) showWelcome();
-      chatTranscript.forEach(item=>{const bubble=addBubble(item.text,item.role);if(item.role==='assistant')displayAssistantReply(bubble,item.text,[]);});
+      chatTranscript.forEach(item=>{const bubble=addBubble(item.text,item.role);if(item.role==='assistant')displayAssistantReply(bubble,item.text,[],null,'',item.files||[]);});
       closeSidebar(); renderConversationList(); promptEl.value=''; promptEl.focus();
     }
     try {
@@ -1680,7 +1680,7 @@ const history = [];
       });
     }
 
-    function displayAssistantReply(bubble, text, sources = [], artifact = null, artifactWarning = '') {
+    function displayAssistantReply(bubble, text, sources = [], artifact = null, artifactWarning = '', generatedFiles = []) {
       const rendered = renderMarkdown(text);
       addCodeCopyButtons(rendered);
       linkCitationReferences(rendered, sources);
@@ -1757,6 +1757,18 @@ const history = [];
         report.download = typeof artifact.file_name === 'string' ? artifact.file_name : 'relatorio-ada-m.md';
         report.setAttribute('aria-label', 'Baixar relatório completo em Markdown');
         actions.appendChild(report);
+      }
+      if (Array.isArray(generatedFiles)) {
+        generatedFiles.forEach(file => {
+          if (!file || typeof file.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(file.id)) return;
+          const download = document.createElement('a');
+          download.className = 'tool-btn';
+          download.textContent = '↓ Baixar ' + String(file.file_name || 'arquivo');
+          download.href = '/api/generated-files/' + encodeURIComponent(file.id);
+          download.download = String(file.file_name || 'arquivo-ada-m');
+          download.setAttribute('aria-label', 'Baixar arquivo ' + String(file.file_name || 'gerado pela ADA-M'));
+          actions.appendChild(download);
+        });
       }
       bubble.appendChild(actions);
       if (artifactWarning) {
@@ -2164,7 +2176,7 @@ const history = [];
         if (!response.body) throw new Error('Este navegador não oferece suporte à resposta em tempo real.');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let buffer = '', answer = '', streamSources = [], streamArtifact = null, streamArtifactWarning = '', streamDone = false;
+        let buffer = '', answer = '', streamSources = [], streamArtifact = null, streamArtifactWarning = '', streamFiles = [], streamDone = false;
         // No modo Live, comece a falar assim que chegar a primeira frase completa.
         // Usa a voz nativa do navegador para evitar esperar uma chamada TTS remota.
         let liveSpeechBuffer = '';
@@ -2238,6 +2250,7 @@ const history = [];
             streamSources = Array.isArray(payload.sources) ? payload.sources : [];
             streamArtifact = payload.artifact && typeof payload.artifact === 'object' ? payload.artifact : null;
             streamArtifactWarning = typeof payload.artifact_warning === 'string' ? payload.artifact_warning : '';
+            streamFiles = Array.isArray(payload.files) ? payload.files.filter(file => file && typeof file.id === 'string') : [];
             return;
           }
           if (typeof payload.status === 'string' && !answer) {
@@ -2281,11 +2294,11 @@ const history = [];
           return;
         }
         speakLiveChunks(true);
-        displayAssistantReply(pending, stripThinking(answer), streamSources, streamArtifact, streamArtifactWarning);
+        displayAssistantReply(pending, stripThinking(answer), streamSources, streamArtifact, streamArtifactWarning, streamFiles);
         if (pending.__adaTerminalPreview) pending.appendChild(pending.__adaTerminalPreview.panel);
         history.push({ role: 'assistant', content: answer });
         while (history.length > 12) history.shift();
-        chatTranscript.push({role:'assistant',text:answer}); persistCurrentConversation();
+        chatTranscript.push({role:'assistant',text:answer,files:streamFiles}); persistCurrentConversation();
       } catch (error) {
         if (error.name === 'AbortError') {
           pending.replaceChildren(document.createTextNode('Geração interrompida.'));
