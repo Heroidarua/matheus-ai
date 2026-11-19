@@ -114,6 +114,29 @@ def parse_tool_call(
 
 
 
+
+def extract_explicit_file_request(message: str) -> tuple[str, str] | None:
+    """Extract a filename and explicitly quoted content for deterministic file creation."""
+    if not isinstance(message, str) or not message.strip():
+        return None
+    name_match = re.search(
+        r"\b(?:chamado|chamada|nomeado|nomeada|com nome)\s+[\"'“]?([A-Za-z0-9][A-Za-z0-9._-]{0,170}\.(?:pdf|txt|md|csv|json|docx|xlsx|pptx))\b",
+        message,
+        re.IGNORECASE,
+    )
+    content_match = re.search(
+        r"\b(?:com\s+(?:o\s+)?(?:seguinte\s+)?texto|contendo\s+(?:o\s+)?texto)\s*[:：]\s*[\"“](.*?)[\"”]",
+        message,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not name_match or not content_match:
+        return None
+    name = name_match.group(1).strip()
+    content = content_match.group(1).strip()
+    if not content or len(content) > 200000:
+        return None
+    return name, content
+
 def looks_like_tool_call(response: str) -> bool:
     """Detect a tool-call attempt even when its JSON was truncated or malformed.
 

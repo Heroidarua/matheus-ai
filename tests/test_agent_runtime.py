@@ -551,3 +551,24 @@ def test_parse_create_file_accepts_native_and_common_argument_envelopes():
         assert call.name == "create_file"
         assert call.arguments["name"] == "teste.pdf"
         assert call.arguments["content"] == "Olá"
+
+
+def test_extract_explicit_file_request_supports_quoted_pdf_content():
+    from app.agent_runtime import extract_explicit_file_request
+
+    prompt = "Crie um PDF chamado teste-ada.pdf com o seguinte texto: “Download funcionando na ADA-M!”"
+    assert extract_explicit_file_request(prompt) == (
+        "teste-ada.pdf",
+        "Download funcionando na ADA-M!",
+    )
+
+
+@pytest.mark.parametrize("prompt", [
+    "Crie um PDF chamado teste-ada.pdf com o seguinte texto sem aspas",
+    "Crie um arquivo chamado teste-ada sem conteúdo explícito",
+    "Crie um PDF com o texto: “Olá”",
+])
+def test_extract_explicit_file_request_requires_filename_and_quoted_content(prompt):
+    from app.agent_runtime import extract_explicit_file_request
+
+    assert extract_explicit_file_request(prompt) is None
