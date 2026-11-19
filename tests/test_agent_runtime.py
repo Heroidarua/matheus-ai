@@ -603,3 +603,23 @@ def test_document_content_requires_real_body_not_success_claim():
         "Prontinho! A redação foi finalizada e o PDF foi gerado com sucesso."
     )
     assert is_substantive_document_content(("A inteligência artificial transforma a educação. " * 35))
+
+
+def test_extracts_legacy_generate_pdf_action_content_without_wrapper():
+    from app.agent_runtime import extract_generated_document_content
+    import json
+
+    essay = "A inteligência artificial transforma a educação brasileira. " * 30
+    response = (
+        "Vou gerar o arquivo agora.\\n"
+        + '{"action":"generate_pdf","content":' + json.dumps(essay, ensure_ascii=False) + '}\\n'
+        + "[Clique aqui para baixar](sandbox:/mnt/data/arquivo.pdf)"
+    )
+    assert extract_generated_document_content(response) == essay.strip()
+
+
+def test_ignores_unknown_or_invalid_document_action_envelopes():
+    from app.agent_runtime import extract_generated_document_content
+
+    assert extract_generated_document_content('{"action":"delete_file","content":"texto"}') is None
+    assert extract_generated_document_content('{"action":"generate_pdf","content":42}') is None

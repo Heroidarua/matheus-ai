@@ -138,6 +138,28 @@ def extract_explicit_file_request(message: str) -> tuple[str, str] | None:
     return name, content
 
 
+
+def extract_generated_document_content(response: str) -> str | None:
+    """Extract document text from legacy model JSON actions without trusting fake links."""
+    if not isinstance(response, str) or not response.strip():
+        return None
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(response):
+        if char != "{":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(response, index)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        action = str(payload.get("action", "")).casefold()
+        content = payload.get("content")
+        if action in {"generate_pdf", "create_pdf", "generate_document"} and isinstance(content, str):
+            content = content.strip()
+            return content or None
+    return None
+
 def is_document_download_request(message: str) -> bool:
     """Detect requests to write a document and provide it as a downloadable file."""
     if not isinstance(message, str):
