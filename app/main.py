@@ -2952,7 +2952,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         if content_out:
                             loop_messages.append({"role": "assistant", "content": content_out[:6000]})
                         file_task = bool(re.search(
-                            r"\\b(arquivo|documento|pdf|docx|xlsx|pptx|planilha|apresenta[cç][aã]o|download|baixar)\\b",
+                            r"\b(arquivo|documento|pdf|docx|xlsx|pptx|planilha|apresenta[cç][aã]o|download|baixar)\b",
                             str(job_task).casefold(),
                         )) or "create_file" in str(content_out)
                         if file_task:
