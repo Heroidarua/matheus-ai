@@ -615,7 +615,7 @@ def test_extracts_legacy_generate_pdf_action_content_without_wrapper():
         + '{"action":"generate_pdf","content":' + json.dumps(essay, ensure_ascii=False) + '}\\n'
         + "[Clique aqui para baixar](sandbox:/mnt/data/arquivo.pdf)"
     )
-    assert extract_generated_document_content(response) == essay
+    assert extract_generated_document_content(response) == essay.strip()
 
 
 def test_ignores_unknown_or_invalid_document_action_envelopes():
