@@ -50,8 +50,39 @@ def parse_tool_call(
             payload, _ = decoder.raw_decode(response, index)
         except (TypeError, ValueError):
             continue
-        if isinstance(payload, dict) and "tool" in payload:
+        if not isinstance(payload, dict):
+            continue
+        if "tool" in payload:
             payloads.append(payload)
+        # Alguns provedores retornam chamadas no formato OpenAI tool_calls,
+        # mesmo quando o conteúdo textual contém apenas esse envelope.
+        native_calls = payload.get("tool_calls")
+        if isinstance(native_calls, list):
+            for item in native_calls:
+                if not isinstance(item, dict):
+                    continue
+                function = item.get("function")
+                if not isinstance(function, dict):
+                    continue
+                name = function.get("name")
+                arguments = function.get("arguments", {})
+                if isinstance(arguments, str):
+                    try:
+                        arguments = json.loads(arguments)
+                    except (TypeError, ValueError):
+                        continue
+                if isinstance(name, str) and isinstance(arguments, dict):
+                    payloads.append({"tool": name, "args": arguments})
+        # Também aceita o envelope de função simples usado por alguns modelos.
+        if isinstance(payload.get("name"), str) and "arguments" in payload:
+            arguments = payload.get("arguments")
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments)
+                except (TypeError, ValueError):
+                    arguments = None
+            if isinstance(arguments, dict):
+                payloads.append({"tool": payload["name"], "args": arguments})
     allowed = set(allowed_tools.keys()) if isinstance(allowed_tools, Mapping) else set(allowed_tools)
     for payload in payloads:
         name = payload.get("tool")
@@ -60,6 +91,20 @@ def parse_tool_call(
             continue
         if not isinstance(arguments, dict):
             continue
+        if name == "create_file":
+            # Compatibilidade com variações comuns de nome/campo sem relaxar
+            # a validação: o executor ainda exige nome e conteúdo textuais.
+            arguments = dict(arguments)
+            if "name" not in arguments:
+                for alias in ("file_name", "filename"):
+                    if isinstance(arguments.get(alias), str):
+                        arguments["name"] = arguments[alias]
+                        break
+            if "content" not in arguments:
+                for alias in ("text", "data"):
+                    if isinstance(arguments.get(alias), str):
+                        arguments["content"] = arguments[alias]
+                        break
         if isinstance(allowed_tools, Mapping):
             definition = allowed_tools[name]
             if any(key not in arguments for key in definition.required):
