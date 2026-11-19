@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, extract_explicit_file_request, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
@@ -2698,6 +2698,37 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
         if job_id:
             await persist_job("running")
+
+        # Pedidos simples com nome e conteúdo explicitamente citados não dependem
+        # de o modelo reconstruir uma chamada JSON de ferramenta.
+        explicit_file = extract_explicit_file_request(job_task) if not resume_agent_job else None
+        if explicit_file:
+            file_name, file_content = explicit_file
+            try:
+                file_metadata = await asyncio.to_thread(
+                    create_generated_file, session_id, file_name, file_content
+                )
+                generated_files.append(file_metadata)
+                events.append({
+                    "step": step_count + 1, "tool": "create_file", "ok": True,
+                    "file_name": file_metadata.get("file_name", file_name),
+                    "file_id": file_metadata.get("id"),
+                    "execution": "deterministic_explicit_content",
+                })
+                step_count += 1
+                await persist_job("completed")
+                return (
+                    f"✅ Arquivo **{file_metadata.get('file_name', file_name)}** criado. "
+                    "O link de download será exibido nesta conversa.",
+                    {"model": active_model_name, "generated_files": generated_files},
+                )
+            except Exception as file_error:
+                print(f"[create_file] explicit request failed ({type(file_error).__name__}): {str(file_error)[:240]}")
+                return (
+                    "❌ Identifiquei o nome e o conteúdo do arquivo, mas o armazenamento não conseguiu gerá-lo. "
+                    "Verifique a configuração do banco de dados e os logs do serviço.",
+                    {"model": active_model_name, "generated_files": generated_files},
+                )
 
         async def forward_terminal_event(event: dict[str, Any]) -> None:
             if event.get("event") == "output":
