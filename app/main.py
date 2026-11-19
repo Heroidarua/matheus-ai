@@ -2294,7 +2294,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if MODEL_BASE_URL.startswith("https://api.groq.com"):
         payload["reasoning_effort"] = "low"
 
-    web_loop_active = should_run_agent_loop(
+    # Pedidos de documento com download sempre precisam passar pelo backend
+    # de arquivos; não podem cair no caminho de resposta textual do modelo.
+    document_download_requested = is_document_download_request(last_user_message)
+    web_loop_active = document_download_requested or should_run_agent_loop(
         agent_mode_active=agent_mode_active,
         summary_requested=summary_requested,
         code_generation_needed=code_generation_needed,
