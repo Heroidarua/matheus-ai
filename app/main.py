@@ -2910,6 +2910,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             content_out = msg.get("content", "")
             if isinstance(content_out, list):
                 content_out = "".join(str(x.get("text", "")) for x in content_out if isinstance(x, dict))
+            # Alguns endpoints OpenAI-compatible entregam a chamada em
+            # message.tool_calls, e não em message.content.
+            if not content_out and isinstance(msg.get("tool_calls"), list):
+                content_out = json.dumps({"tool_calls": msg["tool_calls"]}, ensure_ascii=False)
             call = parse_tool_call(content_out) if use_tools else None
             if not call:
                 browser_steps_pending = [
@@ -2947,20 +2951,31 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         malformed_tool_retries += 1
                         if content_out:
                             loop_messages.append({"role": "assistant", "content": content_out[:6000]})
-                        loop_messages.append({
-                            "role": "system",
-                            "content": (
+                        file_task = bool(re.search(
+                            r"\b(arquivo|documento|pdf|docx|xlsx|pptx|planilha|apresenta[cç][aã]o|download|baixar)\b",
+                            str(job_task).casefold(),
+                        )) or "create_file" in str(content_out)
+                        if file_task:
+                            recovery_instruction = (
+                                "A tentativa anterior de criação de arquivo veio incompleta ou inválida. "
+                                "NENHUMA ferramenta foi executada. Gere uma chamada NOVA e completa, "
+                                "respondendo APENAS com JSON válido em uma linha, exatamente neste formato: "
+                                '{"tool":"create_file","args":{"name":"teste.pdf","content":"# Título\\nConteúdo do documento"}}. '
+                                "O objeto args deve conter obrigatoriamente name (nome com extensão) e content "
+                                "(todo o conteúdo textual). Não use filename, text, markdown ao redor, comentários "
+                                "ou texto antes/depois do JSON. Para PDF, use texto simples com títulos Markdown. "
+                                "Não tente usar terminal para criar esse arquivo."
+                            )
+                        else:
+                            recovery_instruction = (
                                 "A tentativa anterior de chamada de ferramenta veio incompleta ou inválida; "
                                 "NENHUMA ferramenta foi executada. Descarte o JSON anterior e gere uma chamada NOVA, "
                                 "completa e válida. Responda APENAS com um objeto JSON em uma linha. "
                                 "Para terminal, use exatamente o formato "
                                 '{"tool":"terminal","args":{"command":"um único comando Linux curto"}}. '
-                                "Faça somente uma etapa por chamada: não coloque vários arquivos em um heredoc, "
-                                "não inclua explicações nem Markdown, mantenha o comando preferencialmente abaixo "
-                                "de 1200 caracteres e feche todas as aspas e chaves. "
-                                "Se a tarefa for grande, crie ou altere apenas um arquivo por chamada."
-                            ),
-                        })
+                                "Faça somente uma etapa por chamada e feche todas as aspas e chaves."
+                            )
+                        loop_messages.append({"role": "system", "content": recovery_instruction})
                         await persist_job("running")
                         continue
                     if job_id:
@@ -2970,7 +2985,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         pause_reason = "Chamada de ferramenta inválida; checkpoint preservado."
                         await persist_job("paused")
                     return (
-                        "❌ Não consegui obter uma chamada de ferramenta completa e válida após 2 tentativas de recuperação. "
+                        "❌ Não consegui obter uma chamada de ferramenta completa e válida após 5 tentativas de recuperação. "
                         "Nenhuma chamada incompleta foi executada. O checkpoint foi preservado quando disponível; "
                         "envie 'continuar' para tentar retomar."
                     ), data
