@@ -2995,7 +2995,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 create_generated_file, session_id, document_name, document_body.strip()
                             )
                             generated_files.append(file_metadata)
-                publish_generated_file(file_metadata)
+                            publish_generated_file(file_metadata)
                             events.append({
                                 "step": step_count + 1, "tool": "create_file", "ok": True,
                                 "file_name": file_metadata.get("file_name", document_name),
@@ -3147,7 +3147,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         create_generated_file, session_id, args["name"], args["content"]
                     )
                     generated_files.append(file_metadata)
-                publish_generated_file(file_metadata)
+                    publish_generated_file(file_metadata)
                     result = {"ok": True, "file": file_metadata}
                     events.append({
                         "step": step_count, "tool": "create_file", "ok": True,
