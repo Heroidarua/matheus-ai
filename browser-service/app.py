@@ -10,7 +10,9 @@ import asyncio
 import base64
 import hmac
 import ipaddress
+import logging
 import os
+import uuid
 import re
 import socket
 import time
@@ -23,6 +25,7 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
+logger = logging.getLogger("ada_browser.audit")
 API_KEY = os.getenv("ADA_BROWSER_API_KEY", "").strip()
 MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "1")), 10))
 MAX_TABS = max(1, min(int(os.getenv("BROWSER_MAX_TABS", "1")), 4))
@@ -243,6 +246,15 @@ async def extract_page_content(page: Page) -> dict[str, Any]:
         };
     }""")
 
+def safe_log_url(value: str) -> str:
+    """Keep query strings and fragments out of operational logs."""
+    try:
+        parsed = urlsplit(value)
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"[:500]
+    except Exception:
+        return "<invalid-url>"
+
+
 def require_key(value: str | None) -> None:
     if not API_KEY:
         raise HTTPException(status_code=503, detail="ADA_BROWSER_API_KEY não foi configurada.")
@@ -280,6 +292,8 @@ async def health() -> dict[str, str]:
 @app.post("/v1/action")
 async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None = Header(default=None)) -> dict[str, Any]:
     require_key(x_ada_browser_key)
+    request_id = uuid.uuid4().hex[:12]
+    logger.info("browser_action_received request_id=%s action=%s", request_id, payload.action)
     if not SESSION_ID_RE.fullmatch(payload.session_id):
         raise HTTPException(status_code=400, detail="Identificador de sessão inválido.")
     allowed = {"open", "inspect", "click", "fill", "select", "press", "text", "screenshot", "tabs", "new_tab", "close_tab", "back", "forward", "refresh", "close", "hover", "scroll"}
@@ -313,6 +327,7 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
             if payload.action == "open":
                 if not payload.url or not await is_public_url(payload.url):
                     raise HTTPException(status_code=400, detail="Informe uma URL HTTP(S) pública válida.")
+                logger.info("browser_open_start request_id=%s url=%s", request_id, safe_log_url(payload.url))
                 response = await page.goto(payload.url, wait_until="domcontentloaded", timeout=ACTION_TIMEOUT_MS)
                 try:
                     await page.wait_for_load_state("networkidle", timeout=2500)
@@ -322,6 +337,7 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 content_type = response.headers.get("content-type", "") if response else ""
                 readable = is_readable_content_type(content_type)
                 extracted = await extract_page_content(page) if readable else {"title": (await page.title())[:300], "text": "", "headings": [], "links": []}
+                logger.info("browser_open_complete request_id=%s status=%s final_url=%s title=%r", request_id, response.status if response else None, safe_log_url(page.url), extracted["title"][:160])
                 result = {
                     "ok": True,
                     "url": page.url,
@@ -337,6 +353,7 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 return result
             if payload.action == "inspect":
                 elements = await page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").evaluate_all("""els => els.filter(el => el.getClientRects().length).slice(0, 80).map((el, index) => ({index, tag: el.tagName.toLowerCase(), text: (el.innerText || el.value || el.getAttribute("aria-label") || "").trim().replace(/\\s+/g, " ").slice(0, 180), role: el.getAttribute("role") || "", aria_label: el.getAttribute("aria-label") || "", href: el.getAttribute("href") || "", type: el.getAttribute("type") || "", name: el.getAttribute("name") || "", placeholder: el.getAttribute("placeholder") || ""}))""")
+                logger.info("browser_inspect_complete request_id=%s url=%s visible_elements=%d", request_id, safe_log_url(page.url), len(elements))
                 return {"ok": True, "url": page.url, "title": (await page.title())[:300], "elements": elements}
             if payload.action == "hover":
                 if not payload.selector and payload.index is None:
@@ -385,9 +402,14 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 if not payload.selector and payload.index is None:
                     raise HTTPException(status_code=400, detail="A ação click exige selector ou index obtido em inspect.")
                 target = page.locator(payload.selector).first if payload.selector else page.locator("a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible").nth(payload.index)
+                target_count = await target.count()
+                target_info = await target.first.evaluate("""el => ({tag: el.tagName.toLowerCase(), role: el.getAttribute("role") || "", text: (el.innerText || el.value || el.getAttribute("aria-label") || "").trim().replace(/\\s+/g, " ").slice(0, 120)})""") if target_count else None
+                logger.info("browser_click_start request_id=%s selector=%r index=%s matches=%d target=%s", request_id, (payload.selector or "")[:240], payload.index, target_count, target_info)
                 await target.click()
+                logger.info("browser_click_dispatched request_id=%s playwright=success", request_id)
                 await page.wait_for_timeout(250)
                 extracted = await extract_page_content(page)
+                logger.info("browser_click_complete request_id=%s final_url=%s title=%r extracted_chars=%d", request_id, safe_log_url(page.url), extracted["title"][:160], len(extracted["text"]))
                 return {"ok": True, "url": page.url, **extracted}
             if payload.action == "fill":
                 if not payload.selector and payload.index is None:
@@ -440,7 +462,9 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
                 await page.reload(wait_until="domcontentloaded", timeout=ACTION_TIMEOUT_MS)
             extracted = await extract_page_content(page)
             return {"ok": True, "url": page.url, **extracted}
-        except HTTPException:
+        except HTTPException as exc:
+            logger.warning("browser_action_http_error request_id=%s action=%s status=%s detail=%r", request_id, payload.action, exc.status_code, str(exc.detail)[:200])
             raise
         except Exception as exc:
+            logger.exception("browser_action_failed request_id=%s action=%s error_type=%s", request_id, payload.action, type(exc).__name__)
             raise HTTPException(status_code=502, detail=f"Falha na ação do navegador: {type(exc).__name__}: {str(exc)[:240]}") from exc
