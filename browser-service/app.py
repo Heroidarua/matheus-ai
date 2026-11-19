@@ -177,7 +177,7 @@ def is_readable_content_type(value: str | None) -> bool:
 
 async def extract_page_content(page: Page) -> dict[str, Any]:
     """Extrai conteúdo visível e útil, sem scripts, estilos, navegação ou texto técnico."""
-    return await page.evaluate("""() => {
+    return await page.evaluate(r"""() => {
         const preferred = document.querySelector("main, [role='main'], article");
         const root = preferred || document.body;
         if (!root) return {title: document.title || "", text: "", headings: [], links: []};
