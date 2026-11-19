@@ -18,7 +18,7 @@ from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse, quote
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -47,6 +47,7 @@ from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, is_age
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
+from app.generated_files import create_generated_file, get_generated_file
 from app.long_term_memory import (
     forget_all as forget_long_term_memory,
     list_memories as list_long_term_memories,
@@ -337,6 +338,27 @@ async def download_response_artifact(artifact_id: str, http_request: Request) ->
         media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+
+@app.get("/api/generated-files/{file_id}", dependencies=[Depends(require_app_key)])
+async def download_generated_file(file_id: str, http_request: Request) -> Response:
+    """Baixa um arquivo criado pela ADA-M somente na sessão que o gerou."""
+    owner_id = http_request.session.get("companion_id")
+    artifact = await asyncio.to_thread(get_generated_file, owner_id, file_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado ou não pertence a esta sessão.")
+    file_name, mime_type, content = artifact
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "-", file_name)[:120] or "arquivo-ada-m"
+    return Response(
+        content=content,
+        media_type=mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}"; filename*=UTF-8\'\'{quote(file_name)}',
             "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
         },
@@ -1739,7 +1761,7 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
 
 def parse_tool_call(reply: str):
     """Extrai e valida uma chamada JSON de ferramenta permitida."""
-    call = parse_agent_tool_call(reply or "", {"web_search", "web_fetch", "calculate", "browser", "terminal"})
+    call = parse_agent_tool_call(reply or "", {"web_search", "web_fetch", "calculate", "browser", "terminal", "create_file"})
     if call is None:
         return None
     args = call.arguments
@@ -1753,6 +1775,14 @@ def parse_tool_call(reply: str):
         return "web_fetch", {"url": normalize_tool_url(args["url"])[:2000]}
     if call.name == "calculate" and args.get("expression"):
         return "calculate", {"expression": str(args["expression"])[:300]}
+    if call.name == "create_file":
+        name = args.get("name")
+        content = args.get("content")
+        if not isinstance(name, str) or not name.strip() or len(name) > 180:
+            return None
+        if not isinstance(content, str) or not content.strip() or len(content) > 200000:
+            return None
+        return "create_file", {"name": name.strip(), "content": content}
     if call.name == "terminal" and args.get("command") is not None:
         command = args.get("command")
         if not isinstance(command, str) or not command.strip() or len(command) > 4000:
@@ -2578,6 +2608,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         terminal_calls_total = int(saved_state.get("terminal_calls_total", 0))
         step_count = int(saved_state.get("step_count", 0))
         events = list(saved_state.get("events") or [])
+        generated_files = list(saved_state.get("generated_files") or [])
         pending_tool = saved_state.get("pending_tool")
         required_browser_steps = required_browser_actions(job_task)
         completed_browser_steps = {
@@ -2623,6 +2654,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 "terminal_calls_total": 0,
                 "step_count": 0,
                 "events": [],
+                "generated_files": [],
                 "pending_tool": None,
             }
             job_id = await asyncio.to_thread(
@@ -2639,12 +2671,30 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 "terminal_calls_total": terminal_calls_total,
                 "step_count": step_count,
                 "events": events[-80:],
+                "generated_files": generated_files[-30:],
                 "pending_tool": pending_tool,
                 "pause_reason": pause_reason,
             }
             await asyncio.to_thread(
                 save_agent_job, session_id, job_id, job_task, status, state
             )
+
+        file_tool_instruction = (
+            "FERRAMENTA DE ARQUIVOS create_file: quando o usuário pedir um arquivo para baixar, "
+            "crie o arquivo de verdade usando uma chamada JSON EXCLUSIVA no formato "
+            '{"tool":"create_file","args":{"name":"relatorio.pdf","content":"conteúdo"}}. '
+            "Não diga que criou antes de receber ok=true. Formatos: TXT, MD, CSV, JSON, HTML, XML, PY, JS, CSS, YAML, SQL, LOG, PDF, DOCX, XLSX e PPTX. "
+            "Para PDF e DOCX, envie texto com títulos Markdown (#, ##, ###). "
+            "Para XLSX, content deve ser JSON no formato {\"sheets\":[{\"name\":\"Dados\",\"rows\":[[\"Coluna\\"],[\"Valor\"]] }]}. "
+            "Para PPTX, content deve ser JSON no formato {\"slides\":[{\"title\":\"Título\",\"bullets\":[\"Ponto 1\"]}]}. "
+            "Crie um arquivo por chamada; depois de receber o resultado, continue se houver outros arquivos solicitados. "
+            "A resposta final deve informar que os links de download aparecerão no chat."
+        )
+        if loop_messages and loop_messages[0].get("role") == "system":
+            if "FERRAMENTA DE ARQUIVOS create_file" not in str(loop_messages[0].get("content", "")):
+                loop_messages[0]["content"] = str(loop_messages[0].get("content", "")) + "\n\n" + file_tool_instruction
+        else:
+            loop_messages.insert(0, {"role": "system", "content": file_tool_instruction})
 
         if job_id:
             await persist_job("running")
@@ -2975,6 +3025,24 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                             "text": fallback.get("text", ""),
                             "note": "O Chromium falhou ao abrir a página. O texto foi obtido por web_fetch em modo somente leitura; cliques, formulários e navegação interativa não foram executados.",
                         }
+            elif name == "create_file":
+                loop_status["status"] = "Gerando arquivo para download…"
+                try:
+                    file_metadata = await asyncio.to_thread(
+                        create_generated_file, session_id, args["name"], args["content"]
+                    )
+                    generated_files.append(file_metadata)
+                    result = {"ok": True, "file": file_metadata}
+                    events.append({
+                        "step": step_count, "tool": "create_file", "ok": True,
+                        "file_name": file_metadata["file_name"], "file_id": file_metadata["id"],
+                    })
+                except Exception as file_error:
+                    result = {"ok": False, "error": str(file_error)[:400]}
+                    events.append({
+                        "step": step_count, "tool": "create_file", "ok": False,
+                        "file_name": args.get("name"), "error": type(file_error).__name__,
+                    })
             elif name == "terminal":
                 terminal_calls += 1
                 loop_status["status"] = f"Executando comando de terminal {terminal_calls_this_run}…"
@@ -3102,6 +3170,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         elif job_id:
             loop_messages.append({"role": "assistant", "content": final_text})
             await persist_job("completed")
+        data["generated_files"] = generated_files
         return final_text, data
 
     try:
@@ -3127,7 +3196,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                             artifact = await asyncio.to_thread(save_response_artifact, session_id, streamed_reply)
                         except Exception as artifact_error:
                             print(f"Agent response artifact save failed ({type(artifact_error).__name__})")
-                        done_payload = {"model": str(streamed_data.get("model", active_model_name)), "sources": sources}
+                        done_payload = {"model": str(streamed_data.get("model", active_model_name)), "sources": sources, "files": streamed_data.get("generated_files", [])}
                         if artifact:
                             done_payload["artifact"] = artifact
                         yield "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
