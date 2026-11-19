@@ -2685,7 +2685,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             '{"tool":"create_file","args":{"name":"relatorio.pdf","content":"conteúdo"}}. '
             "Não diga que criou antes de receber ok=true. Formatos: TXT, MD, CSV, JSON, HTML, XML, PY, JS, CSS, YAML, SQL, LOG, PDF, DOCX, XLSX e PPTX. "
             "Para PDF e DOCX, envie texto com títulos Markdown (#, ##, ###). "
-            "Para XLSX, content deve ser JSON no formato {\"sheets\":[{\"name\":\"Dados\",\"rows\":[[\"Coluna\\"],[\"Valor\"]] }]}. "
+            "Para XLSX, content deve ser JSON no formato {\"sheets\":[{\"name\":\"Dados\",\"rows\":[[\"Coluna\"],[\"Valor\"]]}]}. "
             "Para PPTX, content deve ser JSON no formato {\"slides\":[{\"title\":\"Título\",\"bullets\":[\"Ponto 1\"]}]}. "
             "Crie um arquivo por chamada; depois de receber o resultado, continue se houver outros arquivos solicitados. "
             "A resposta final deve informar que os links de download aparecerão no chat."
