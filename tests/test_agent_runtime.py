@@ -535,3 +535,19 @@ async def test_run_tool_loop_has_no_default_call_cap_over_one_hundred():
     result = await run_tool_loop([{"role": "user", "content": "Conclua todas as etapas"}], model, tools)
     assert len(executed) == 125
     assert result == "Tarefa concluída após 125 chamadas."
+
+
+def test_parse_create_file_accepts_native_and_common_argument_envelopes():
+    tools = {"create_file"}
+    responses = [
+        '{"tool":"create_file","args":{"name":"teste.pdf","content":"Olá"}}',
+        '{"name":"create_file","arguments":{"name":"teste.pdf","content":"Olá"}}',
+        '{"tool_calls":[{"type":"function","function":{"name":"create_file","arguments":"{\\"name\\":\\"teste.pdf\\",\\"content\\":\\"Olá\\"}"}}]}',
+        '{"tool":"create_file","args":{"filename":"teste.pdf","text":"Olá"}}',
+    ]
+    for response in responses:
+        call = parse_tool_call(response, tools)
+        assert call is not None
+        assert call.name == "create_file"
+        assert call.arguments["name"] == "teste.pdf"
+        assert call.arguments["content"] == "Olá"
