@@ -27,7 +27,9 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 logger = logging.getLogger("ada_browser.audit")
 API_KEY = os.getenv("ADA_BROWSER_API_KEY", "").strip()
-MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "1")), 10))
+# Each chat receives an isolated BrowserContext. Keep a practical default and
+# allow operators to raise it according to available VPS memory.
+MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "20")), 100))
 MAX_TABS = max(1, min(int(os.getenv("BROWSER_MAX_TABS", "1")), 4))
 SESSION_TTL = max(60, min(int(os.getenv("BROWSER_SESSION_TTL", "1800")), 86400))
 ACTION_TIMEOUT_MS = max(3000, min(int(os.getenv("BROWSER_ACTION_TIMEOUT_MS", "15000")), 30000))
