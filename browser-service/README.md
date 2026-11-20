@@ -13,6 +13,16 @@ Serviço Chromium/Playwright separado da API principal. Ele não altera nem subs
 7. Na API ADA-M principal, configure `BROWSER_SERVICE_URL` com a URL HTTPS desse serviço e `BROWSER_SERVICE_API_KEY` com exatamente a mesma chave `ADA_BROWSER_API_KEY`.
 8. Faça o redeploy da API principal depois de configurar as duas variáveis.
 
+## Render Free e inicialização após inatividade
+
+Quando o serviço fica suspenso por inatividade no plano gratuito, a API principal da ADA-M
+consulta a rota pública `/health`
+antes de cada nova navegação para despertar a instância. A API aguarda até o Chromium informar
+`browser=ready`, com tentativas e pausas progressivas, antes de enviar a ação `open`.
+Se o serviço não acordar dentro da janela de espera, a ADA-M retorna uma mensagem clara para
+tentar novamente, em vez de tratar a hibernação como falha definitiva. Ações externas como
+`click` não são repetidas automaticamente.
+
 ## API interna
 
 Todas as ações (exceto `/health`) exigem `X-ADA-Browser-Key`. Use `POST /v1/action` com JSON:
