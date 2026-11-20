@@ -452,6 +452,10 @@ async def test_browser_open_retries_transient_502(monkeypatch):
         async def __aexit__(self, *args):
             return False
 
+        async def get(self, url, **kwargs):
+            assert url == "https://browser.example/health"
+            return FakeResponse(200, payload={"ok": "true", "service": "ada-m-browser", "browser": "ready"})
+
         async def post(self, *args, **kwargs):
             calls.append(kwargs["json"]["action"])
             assert kwargs["json"]["url"] == "https://example.com"
