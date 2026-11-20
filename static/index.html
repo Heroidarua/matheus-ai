@@ -2165,7 +2165,7 @@ const history = [];
           method: 'POST',
           signal: activeController.signal,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, mode: currentMode, response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true })
+          body: JSON.stringify({ messages: history, conversation_id: activeConversationId, mode: currentMode, response_length: responseLength.value, web_search: webSearchToggle.checked, stream: true })
         });
         if (!response.ok) {
           const failureText = await response.text();
