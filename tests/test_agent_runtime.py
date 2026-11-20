@@ -225,6 +225,19 @@ def test_browser_intent_requires_action_and_browser_reference(message):
     assert not is_browser_task(message)
 
 
+@pytest.mark.parametrize("message", [
+    "Abra o navegador",
+    "Acesse o navegador",
+    "Navegador",
+    "Abra uma nova aba",
+    "Quero usar o navegador",
+    "Abra o navegador em branco e aguarde minhas instruções",
+])
+def test_open_browser_alone_is_a_browser_task_without_navigation(message):
+    assert is_browser_task(message)
+    assert required_browser_actions(message) == ("new_tab",)
+
+
 @pytest.mark.parametrize("message,expected", [
     ("Acesse https://sos01.com.br pelo navegador", ("open", "inspect")),
     ("Explore https://sos01.com.br pelo navegador e descreva a página", ("open", "inspect")),
@@ -237,6 +250,10 @@ def test_required_browser_actions_follow_explicit_user_request(message, expected
 
 def test_required_browser_actions_does_not_force_browser_for_general_questions():
     assert required_browser_actions("O que é um navegador?") == ()
+
+
+def test_browser_open_only_does_not_plan_any_url():
+    assert browser_task_plan("Abra o navegador") == ("", None)
 
 
 @pytest.mark.parametrize("value,expected", [
