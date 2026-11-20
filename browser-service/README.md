@@ -8,7 +8,7 @@ Serviço Chromium/Playwright separado da API principal. Ele não altera nem subs
 2. Selecione o runtime **Docker**.
 3. Defina **Root Directory** como `browser-service` (assim o Render usará `browser-service/Dockerfile`).
 4. Configure `ADA_BROWSER_API_KEY` com uma chave aleatória longa (32 bytes ou mais). Não reutilize a chave do modelo nem a `APP_API_KEY`.
-5. Opcional: configure `BROWSER_MAX_SESSIONS=1`, `BROWSER_MAX_TABS=1`, `BROWSER_SESSION_TTL=1800`. Os padrões agora são uma sessão e uma aba para reduzir picos de RAM e reinicializações do Chromium em instâncias pequenas; aumente somente se o plano tiver memória suficiente.
+5. Opcional: configure `BROWSER_MAX_SESSIONS=20`, `BROWSER_MAX_TABS=1`, `BROWSER_SESSION_TTL=1800`. O padrão suporta até 20 sessões isoladas (uma por conversa), com uma aba por sessão. Ajuste `BROWSER_MAX_SESSIONS` conforme a memória disponível na VPS.
 6. Configure o Health Check Path como `/health` e faça deploy. A rota deve responder com `ok=true`. O padrão é uma sessão simultânea para reduzir o consumo de RAM; aumente esse limite somente se a instância tiver memória suficiente.
 7. Na API ADA-M principal, configure `BROWSER_SERVICE_URL` com a URL HTTPS desse serviço e `BROWSER_SERVICE_API_KEY` com exatamente a mesma chave `ADA_BROWSER_API_KEY`.
 8. Faça o redeploy da API principal depois de configurar as duas variáveis.
