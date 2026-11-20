@@ -16,7 +16,7 @@ Serviço Chromium/Playwright separado da API principal. Ele não altera nem subs
 ## Render Free e inicialização após inatividade
 
 Quando o serviço fica suspenso por inatividade no plano gratuito, a API principal da ADA-M
-faz uma verificação autenticada? Não: `/health` é uma rota pública de saúde e é consultada
+consulta a rota pública `/health`
 antes de cada nova navegação para despertar a instância. A API aguarda até o Chromium informar
 `browser=ready`, com tentativas e pausas progressivas, antes de enviar a ação `open`.
 Se o serviço não acordar dentro da janela de espera, a ADA-M retorna uma mensagem clara para
