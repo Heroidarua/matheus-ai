@@ -238,14 +238,35 @@ def is_agent_task(message: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
 
 
-def is_browser_task(message: str) -> bool:
-    """Recognize browser requests even when a URL or context precedes the verb."""
+def is_browser_open_only_request(message: str) -> bool:
+    """Detect a request to open the browser without authorizing navigation."""
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     if not text:
         return False
+    text = re.sub(r"[.!?,;:]+", " ", text)
+    # Remove only common opening/voice-command fillers. Any remaining intent
+    # (for example "pesquise", "acesse o site", or a URL) means navigation.
+    text = re.sub(
+        r"\b(?:por favor|quero que|preciso que|a ada-m|ada-m|abra|abrir|"
+        r"acesse|acessar|inicie|iniciar|use|usar|abra|o|a|seu|meu|uma|"
+        r"nova|aba|em branco|agora|e aguarde|aguarde|e espere|espere|"
+        r"instru[cç][aã]o|instru[cç][oõ]es|comando)\b",
+        " ",
+        text,
+    )
+    text = re.sub(r"\b(?:navegador|browser|chromium)\b", " ", text)
+    return not re.sub(r"\s+", "", text)
+
+
+def is_browser_task(message: str) -> bool:
+    """Recognize browser requests, including open-only commands."""
+    text = re.sub(r"\s+", " ", (message or "").strip().casefold())
+    if not text:
+        return False
+    if is_browser_open_only_request(text):
+        return True
     browser_terms = r"(?:navegador|chromium|browser)"
     action_terms = r"(?:acesse|acessar|abra|abrir|entre|entrar|visite|visitar|navegue|navegar|explore|explorar|descubra|descobrir|inspecione|inspecionar|analise|analisar|verifique|verificar|role|rolar|scroll)"
-    # Require both an explicit navigation action and an explicit browser reference.
     return bool(re.search(action_terms + r".{0,100}" + browser_terms, text) or
                 re.search(browser_terms + r".{0,100}" + action_terms, text))
 
@@ -254,6 +275,8 @@ def required_browser_actions(message: str) -> tuple[str, ...]:
     """Return browser actions explicitly required by a navigation/exploration request."""
     if not is_browser_task(message):
         return ()
+    if is_browser_open_only_request(message):
+        return ("new_tab",)
     text = re.sub(r"\s+", " ", (message or "").strip().casefold())
     # Toda navegação visual precisa inspecionar o estado real após abrir a página.
     # Isso impede que o texto inicial de carregamento seja tratado como exploração concluída.
