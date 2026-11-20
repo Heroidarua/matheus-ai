@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from urllib.parse import quote_plus
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping
 
@@ -535,12 +536,34 @@ def normalize_tool_url(value: Any) -> str:
 
 
 def browser_task_plan(message: str) -> tuple[str, int | None]:
-    """Extract a user-supplied URL and optional requested vertical scroll."""
+    """Plan browser navigation from an explicit URL or a browser-directed search request."""
     text = re.sub(r"\s+", " ", (message or "").strip())
     match = re.search(r"""https?://[^\s<>"']+""", text, re.IGNORECASE)
-    if not match:
-        return "", None
-    url = normalize_tool_url(match.group(0).rstrip(".,;:!?)]}"))
+    if match:
+        url = normalize_tool_url(match.group(0).rstrip(".,;:!?)]}"))
+    else:
+        # Requests to search "through the browser" must not depend on the model
+        # remembering to emit a browser tool call. Open a real search results page.
+        wants_search = re.search(
+            r"\b(pesquise|pesquisar|pesquisa|busque|buscar|procure|procurar|investigue|investigar)\b",
+            text,
+            re.IGNORECASE,
+        )
+        if not wants_search:
+            return "", None
+        query = re.sub(
+            r"\b(?:acesse|acessar|abra|abrir|use|utilize)\s+(?:o\s+|seu\s+|meu\s+)?(?:navegador|chromium|browser)\b",
+            " ",
+            text,
+            flags=re.IGNORECASE,
+        )
+        query = re.sub(r"\b(?:pelo|no|atrav[eé]s do)\s+(?:seu\s+)?(?:navegador|chromium|browser)\b", " ", query, flags=re.IGNORECASE)
+        query = re.sub(r"\bpesquise\s+(?:para\s+mim\s+)?|\bbusque\s+(?:para\s+mim\s+)?|\bprocure\s+(?:para\s+mim\s+)?", " ", query, flags=re.IGNORECASE)
+        query = re.sub(r"\s+", " ", query).strip(" ,.;:-")
+        query = re.sub(r"^(?:e|ent[aã]o)\s+", "", query, flags=re.IGNORECASE)
+        if not query:
+            return "", None
+        url = "https://www.google.com/search?q=" + quote_plus(query)
     scroll_delta: int | None = None
     if re.search(r"\b(role|rolar|scroll|desça|descer|deslize|deslizar)\b", text, re.IGNORECASE):
         amount = re.search(r"\b(\d{1,4})\s*(?:pixels?|px)\b", text, re.IGNORECASE)
