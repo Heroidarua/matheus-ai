@@ -2010,6 +2010,44 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     browser_session_id = hashlib.sha256(
         f"{session_id}:{request.conversation_id or 'default'}".encode("utf-8")
     ).hexdigest()
+
+    # Abertura simples do navegador é tratada antes de montar o prompt do modelo.
+    # Assim o Gemma nunca pode escolher um site por conta própria (por exemplo, SOS01).
+    if is_browser_task(last_user_message) and is_browser_open_only_request(last_user_message):
+        blank_tab_result = await tool_browser_action(browser_session_id, action="new_tab")
+        blank_tab_ok = bool(
+            blank_tab_result.get("ok")
+            and not blank_tab_result.get("fallback_used")
+        )
+        if blank_tab_ok:
+            browser_reply = (
+                "Navegador aberto em uma nova aba em branco. Estou aguardando sua próxima "
+                "instrução; não acessei nenhum site nem fiz pesquisas."
+            )
+        else:
+            error_text = blank_tab_result.get("error") or "O serviço não confirmou a abertura da aba em branco."
+            browser_reply = (
+                "❌ **Não consegui abrir uma nova aba em branco no navegador.** "
+                f"Erro: {error_text}"
+            )
+        if request.stream:
+            async def blank_browser_stream():
+                import json
+                yield "data: " + json.dumps({"token": browser_reply}, ensure_ascii=False) + "\\n\\n"
+                yield "event: done\\ndata: " + json.dumps(
+                    {"model": "ferramenta-navegador", "sources": [],
+                     "browser": "blank_tab_opened" if blank_tab_ok else "error"},
+                    ensure_ascii=False,
+                ) + "\\n\\n"
+            return StreamingResponse(
+                blank_browser_stream(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+            )
+        return ChatResponse(
+            reply=browser_reply,
+            model="ferramenta-navegador",
+        )
     normalized_command = re.sub(r"\s+", " ", last_user_message.casefold()).strip()
     continuation_requested = is_agent_continuation_request(last_user_message)
     pending_agent_job = await asyncio.to_thread(get_pending_agent_job, session_id) if continuation_requested else None
