@@ -2074,6 +2074,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         print(f"Long-term memory unavailable ({type(exc).__name__})")
         long_term_items = []
     combined_memory = list(request.memory) + long_term_items
+    file_creation_requested = is_file_creation_request(last_user_message)
     system_prompt = build_system_prompt("livre", last_user_message, combined_memory, request.response_length)  # Sempre sem censura
     system_prompt += "\n\n" + build_companion_prompt(affective_state)
     if deep_research:
@@ -2132,7 +2133,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "Não diga que pesquisou na web, não invente citações ou fontes. É proibido afirmar que um evento atual não aconteceu só porque não conseguiu consultar a internet. "
             "Diga claramente que não conseguiu verificar o resultado em tempo real e evite concluir quem venceu."
         )
-    if agent_mode_active:
+    if agent_mode_active or file_creation_requested:
         system_prompt += "\n\n" + AGENT_TOOLS_SPEC
         if BROWSER_SERVICE_ENABLED:
             system_prompt += (
@@ -2297,7 +2298,6 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     # Pedidos de documento com download sempre precisam passar pelo backend
     # de arquivos; não podem cair no caminho de resposta textual do modelo.
     document_download_requested = is_document_download_request(last_user_message)
-    file_creation_requested = is_file_creation_request(last_user_message)
     web_loop_active = file_creation_requested or document_download_requested or should_run_agent_loop(
         agent_mode_active=agent_mode_active,
         summary_requested=summary_requested,
