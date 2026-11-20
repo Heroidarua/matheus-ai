@@ -560,6 +560,7 @@ def browser_task_plan(message: str) -> tuple[str, int | None]:
         query = re.sub(r"\b(?:pelo|no|atrav[eé]s do)\s+(?:seu\s+)?(?:navegador|chromium|browser)\b", " ", query, flags=re.IGNORECASE)
         query = re.sub(r"\bpesquise\s+(?:para\s+mim\s+)?|\bbusque\s+(?:para\s+mim\s+)?|\bprocure\s+(?:para\s+mim\s+)?", " ", query, flags=re.IGNORECASE)
         query = re.sub(r"\s+", " ", query).strip(" ,.;:-")
+        query = re.sub(r"^(?:e|ent[aã]o)\s+", "", query, flags=re.IGNORECASE)
         if not query:
             return "", None
         url = "https://www.google.com/search?q=" + quote_plus(query)
