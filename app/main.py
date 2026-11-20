@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, extract_explicit_file_request, extract_generated_document_content, is_document_download_request, is_substantive_document_content, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, extract_explicit_file_request, extract_generated_document_content, is_document_download_request, is_file_creation_request, is_substantive_document_content, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
@@ -2297,7 +2297,8 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     # Pedidos de documento com download sempre precisam passar pelo backend
     # de arquivos; não podem cair no caminho de resposta textual do modelo.
     document_download_requested = is_document_download_request(last_user_message)
-    web_loop_active = document_download_requested or should_run_agent_loop(
+    file_creation_requested = is_file_creation_request(last_user_message)
+    web_loop_active = file_creation_requested or document_download_requested or should_run_agent_loop(
         agent_mode_active=agent_mode_active,
         summary_requested=summary_requested,
         code_generation_needed=code_generation_needed,
