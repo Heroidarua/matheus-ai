@@ -300,6 +300,7 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
     if payload.action not in allowed:
         raise HTTPException(status_code=400, detail="Ação de navegador não permitida.")
 
+    session_was_created = False
     session = sessions.get(payload.session_id)
     if session and time.monotonic() - session.last_used > SESSION_TTL:
         try:
@@ -315,6 +316,7 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
         return {"ok": True, "closed": True}
     if session is None:
         session = await create_session(payload.session_id)
+        session_was_created = True
 
     async with session.lock:
         session.last_used = time.monotonic()
@@ -440,6 +442,10 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
             if payload.action == "tabs":
                 return {"ok": True, "active": session.active_page, "tabs": [{"index": i, "url": p.url, "title": (await p.title())[:200]} for i, p in enumerate(session.pages)]}
             if payload.action == "new_tab":
+                # A new session already owns one fresh about:blank page. Reuse it
+                # instead of creating an unnecessary second tab on first open.
+                if session_was_created:
+                    return {"ok": True, "tab": session.active_page, "tabs": len(session.pages), "url": page.url}
                 if len(session.pages) >= MAX_TABS:
                     raise HTTPException(status_code=429, detail=f"Limite de {MAX_TABS} abas por sessão atingido.")
                 new_page = await session.context.new_page()
