@@ -514,8 +514,26 @@ def test_browser_task_plan_extracts_url_and_scroll(message, expected):
     assert browser_task_plan(message) == expected
 
 
-def test_browser_task_plan_requires_explicit_url():
+def test_browser_task_plan_requires_explicit_url_or_search_intent():
     assert browser_task_plan("Explore o site pelo Chromium") == ("", None)
+
+
+def test_browser_task_plan_turns_browser_search_without_url_into_google_navigation():
+    from urllib.parse import urlparse, parse_qs
+
+    url, scroll = browser_task_plan(
+        "Acesse seu navegador e pesquise para mim processos administrativos, "
+        "o que posso usar contra meu líder na empresa pois ele está me perseguindo"
+    )
+    assert url.startswith("https://www.google.com/search?")
+    query = parse_qs(urlparse(url).query)["q"][0]
+    assert "processos administrativos" in query
+    assert "meu líder" in query
+    assert scroll is None
+
+
+def test_browser_task_plan_does_not_turn_non_search_browser_request_into_google_search():
+    assert browser_task_plan("Acesse seu navegador e abra a página inicial") == ("", None)
 
 
 @pytest.mark.asyncio
