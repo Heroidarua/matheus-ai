@@ -1700,6 +1700,48 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
     max_attempts = 3 if retryable_action else 1
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(40.0, connect=8.0)) as client:
+            # Render Free pode suspender o serviço após inatividade. A primeira
+            # chamada /health desperta a instância; aguarde o Chromium ficar pronto
+            # antes de enviar a navegação, sem repetir ações externas não idempotentes.
+            if action == "open":
+                print("[browser] cold_start_wakeup_started service=ada-m-browser")
+                health_ready = False
+                wake_delays = (2.0, 4.0, 6.0, 8.0, 8.0)
+                last_health_error = "serviço ainda inicializando"
+                for wake_attempt in range(6):
+                    try:
+                        health = await client.get(
+                            f"{BROWSER_SERVICE_URL}/health",
+                            timeout=12.0,
+                        )
+                        if health.status_code == 200:
+                            try:
+                                health_data = health.json()
+                            except (ValueError, AttributeError):
+                                health_data = {}
+                            if isinstance(health_data, dict) and health_data.get("browser") == "ready":
+                                health_ready = True
+                                print(f"[browser] cold_start_wakeup_complete attempts={wake_attempt + 1}")
+                                break
+                            last_health_error = "Chromium ainda inicializando"
+                        elif health.status_code in {502, 503, 504}:
+                            last_health_error = f"health HTTP {health.status_code}"
+                        else:
+                            last_health_error = f"health HTTP {health.status_code}"
+                            break
+                    except httpx.TimeoutException:
+                        last_health_error = "timeout no health check"
+                    except httpx.HTTPError as health_exc:
+                        last_health_error = f"conexão: {type(health_exc).__name__}"
+                    if wake_attempt < len(wake_delays):
+                        await asyncio.sleep(wake_delays[wake_attempt])
+                if not health_ready:
+                    print(f"[browser] cold_start_wakeup_failed detail={last_health_error}")
+                    return {
+                        "ok": False,
+                        "error": "O navegador está acordando no Render, mas o Chromium ainda não ficou pronto. Aguarde alguns segundos e tente novamente.",
+                        "retryable": True,
+                    }
             response = None
             for attempt in range(max_attempts):
                 try:
