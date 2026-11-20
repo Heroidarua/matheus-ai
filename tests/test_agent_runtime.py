@@ -227,6 +227,9 @@ def test_browser_intent_requires_action_and_browser_reference(message):
 
 @pytest.mark.parametrize("message", [
     "Abra o navegador",
+    "Abre o navegador",
+    "Pode abrir o navegador",
+    "Poderia abrir o navegador em branco",
     "Acesse o navegador",
     "Navegador",
     "Abra uma nova aba",
