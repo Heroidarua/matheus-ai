@@ -27,7 +27,9 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 logger = logging.getLogger("ada_browser.audit")
 API_KEY = os.getenv("ADA_BROWSER_API_KEY", "").strip()
-MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "1")), 10))
+# Each chat receives an isolated BrowserContext. Keep a practical default and
+# allow operators to raise it according to available VPS memory.
+MAX_SESSIONS = max(1, min(int(os.getenv("BROWSER_MAX_SESSIONS", "20")), 100))
 MAX_TABS = max(1, min(int(os.getenv("BROWSER_MAX_TABS", "1")), 4))
 SESSION_TTL = max(60, min(int(os.getenv("BROWSER_SESSION_TTL", "1800")), 86400))
 ACTION_TIMEOUT_MS = max(3000, min(int(os.getenv("BROWSER_ACTION_TIMEOUT_MS", "15000")), 30000))
@@ -442,17 +444,12 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
             if payload.action == "tabs":
                 return {"ok": True, "active": session.active_page, "tabs": [{"index": i, "url": p.url, "title": (await p.title())[:200]} for i, p in enumerate(session.pages)]}
             if payload.action == "new_tab":
-                # A new session already owns one fresh about:blank page. Reuse it
-                # instead of creating an unnecessary second tab on first open.
-                if session_was_created:
-                    return {"ok": True, "tab": session.active_page, "tabs": len(session.pages), "url": page.url}
-                if len(session.pages) >= MAX_TABS:
-                    raise HTTPException(status_code=429, detail=f"Limite de {MAX_TABS} abas por sessão atingido.")
-                new_page = await session.context.new_page()
-                new_page.set_default_timeout(ACTION_TIMEOUT_MS)
-                session.pages.append(new_page)
-                session.active_page = len(session.pages) - 1
-                return {"ok": True, "tab": session.active_page, "tabs": len(session.pages)}
+                # "Abra o navegador" means show a blank browser, not create an
+                # additional tab. Reuse the current tab so the one-tab default
+                # remains compatible with small deployments and never returns 429.
+                if not session_was_created and page.url != "about:blank":
+                    await page.goto("about:blank", wait_until="commit", timeout=ACTION_TIMEOUT_MS)
+                return {"ok": True, "tab": session.active_page, "tabs": len(session.pages), "url": page.url}
             if payload.action == "close_tab":
                 if len(session.pages) <= 1:
                     raise HTTPException(status_code=400, detail="A última aba não pode ser fechada; use close para encerrar a sessão.")

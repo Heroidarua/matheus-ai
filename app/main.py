@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import ipaddress
 import asyncio
 import subprocess
@@ -195,6 +196,7 @@ def response_looks_incomplete(reply: str) -> bool:
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=20)
+    conversation_id: str | None = Field(default=None, min_length=8, max_length=128, pattern="^[A-Za-z0-9_-]+$")
     mode: str = Field(default="normal", pattern="^(normal|livre|programador|estudo|criativo|agente)$")
     response_length: str = Field(default="detalhada", pattern="^(curta|normal|detalhada)$")
     web_search: bool = False
@@ -2004,6 +2006,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if not session_id:
         session_id = secrets.token_urlsafe(32)
         http_request.session["companion_id"] = session_id
+    # Browser context is isolated per chat, while memory/jobs remain tied to the user.
+    browser_session_id = hashlib.sha256(
+        f"{session_id}:{request.conversation_id or 'default'}".encode("utf-8")
+    ).hexdigest()
     normalized_command = re.sub(r"\s+", " ", last_user_message.casefold()).strip()
     continuation_requested = is_agent_continuation_request(last_user_message)
     pending_agent_job = await asyncio.to_thread(get_pending_agent_job, session_id) if continuation_requested else None
@@ -2849,7 +2855,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         # tab deterministically and return immediately so the model cannot choose a site.
         if required_browser_steps == ("new_tab",) and not resume_agent_job:
             loop_status["status"] = "Abrindo uma nova aba em branco…"
-            blank_tab_result = await tool_browser_action(session_id, action="new_tab")
+            blank_tab_result = await tool_browser_action(browser_session_id, action="new_tab")
             blank_tab_ok = bool(
                 blank_tab_result.get("ok")
                 and not blank_tab_result.get("fallback_used")
@@ -3178,7 +3184,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 result = {"ok": True, "result": calcular_seguro(args["expression"])}
             elif name == "browser":
                 loop_status["status"] = "Navegando…"
-                result = await tool_browser_action(session_id, **args)
+                result = await tool_browser_action(browser_session_id, **args)
                 action = args.get("action")
                 action_confirmed = bool(result.get("ok") and not result.get("fallback_used"))
                 if action == "open":
@@ -3244,7 +3250,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                         re.IGNORECASE,
                     ):
                         fetch_error = result.get("error", "Falha transitória na leitura")
-                        browser_fallback = await tool_browser_action(session_id, "open", url=args["url"])
+                        browser_fallback = await tool_browser_action(browser_session_id, "open", url=args["url"])
                         if browser_fallback.get("ok"):
                             result = {
                                 "ok": True,
