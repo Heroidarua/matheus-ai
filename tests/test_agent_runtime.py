@@ -624,6 +624,31 @@ def test_ignores_unknown_or_invalid_document_action_envelopes():
     assert extract_generated_document_content('{"action":"delete_file","content":"texto"}') is None
     assert extract_generated_document_content('{"action":"generate_pdf","content":42}') is None
 
+@pytest.mark.parametrize("message", [
+    "Crie um arquivo TXT chamado notas.txt",
+    "Gere uma planilha Excel com os gastos do mês",
+    "Faça um arquivo JSON com os dados de exemplo",
+    "Monte uma apresentação PPTX sobre energia solar",
+    "Salve o código em um arquivo script.py",
+])
+def test_detects_general_file_creation_requests(message):
+    from app.agent_runtime import is_file_creation_request
+
+    assert is_file_creation_request(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Como criar um arquivo TXT?",
+    "O que é uma planilha Excel?",
+    "Quais formatos de arquivo existem?",
+    "Explique como funciona um PDF",
+])
+def test_general_file_creation_detection_does_not_match_questions(message):
+    from app.agent_runtime import is_file_creation_request
+
+    assert not is_file_creation_request(message)
+
+
 def test_document_download_request_is_detected_for_redacao_pdf():
     from app.agent_runtime import is_document_download_request
 

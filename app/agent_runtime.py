@@ -179,6 +179,28 @@ def is_document_download_request(message: str) -> bool:
     return wants_document and wants_download
 
 
+def is_file_creation_request(message: str) -> bool:
+    """Route explicit requests to create/export a file through the file tool loop."""
+    if not isinstance(message, str) or not message.strip():
+        return False
+    text = re.sub(r"\s+", " ", message.casefold()).strip()
+    if re.match(r"^(como|o que|qual|quais|por que|porque|quando|onde)\b", text):
+        return False
+    wants_action = bool(re.search(
+        r"\b(crie|criar|cria|gere|gerar|gera|monte|montar|produza|produzir|"
+        r"faça|fazer|salve|salvar|exporte|exportar|prepare|preparar)\b",
+        text,
+    ))
+    wants_file = bool(re.search(
+        r"\b(arquivo|ficheiro|planilha|tabela|documento|apresenta[cç][aã]o|"
+        r"pdf|docx|xlsx|xls|csv|json|txt|markdown|html|xml|pptx|"
+        r"word|excel|powerpoint|script|c[oó]digo-fonte)\b"
+        r"|\.(?:txt|md|csv|json|html|xml|py|js|css|ya?ml|sql|log|pdf|docx|xlsx|pptx)\b",
+        text,
+    ))
+    return wants_action and wants_file
+
+
 def is_substantive_document_content(content: str) -> bool:
     """Reject short success claims; require an actual body before creating a file."""
     if not isinstance(content, str):
@@ -531,7 +553,7 @@ def browser_task_plan(message: str) -> tuple[str, int | None]:
 
 AGENT_TOOLS_SPEC = """
 MODO AGENTE — FERRAMENTAS DISPONÍVEIS
-- Criação de arquivos: use create_file com name e content quando o usuário pedir um documento/arquivo baixável. Não simule a criação nem invente links.
+- Criação de arquivos: sempre use create_file com name (incluindo extensão) e content quando o usuário pedir para criar, gerar, montar, produzir, salvar ou exportar qualquer arquivo. Formatos aceitos: TXT, MD, CSV, JSON, HTML, XML, PY, JS, CSS, YAML, SQL, LOG, PDF, DOCX, XLSX e PPTX. Para planilhas use XLSX/CSV; para documentos editáveis use DOCX; para apresentações use PPTX. Não responda apenas com o conteúdo no chat, não simule a criação e não invente links. Após executar create_file, confirme somente o arquivo retornado pela ferramenta.
 FERRAMENTAS LINUX PREVISTAS PARA O EXECUTOR:
 - Diagnóstico/rede: nmap, nc (netcat), curl, wget, jq.
 - Auditoria web: nikto e gobuster.
