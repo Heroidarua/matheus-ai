@@ -247,7 +247,7 @@ def is_browser_open_only_request(message: str) -> bool:
     # Remove only common opening/voice-command fillers. Any remaining intent
     # (for example "pesquise", "acesse o site", or a URL) means navigation.
     text = re.sub(
-        r"\b(?:por favor|quero que|preciso que|a ada-m|ada-m|abra|abrir|"
+        r"\b(?:por favor|quero que|quero|preciso que|minhas|minha|a ada-m|ada-m|abra|abrir|"
         r"acesse|acessar|inicie|iniciar|use|usar|abra|o|a|seu|meu|uma|"
         r"nova|aba|em branco|agora|e aguarde|aguarde|e espere|espere|"
         r"instru[cç][aã]o|instru[cç][oõ]es|comando)\b",
