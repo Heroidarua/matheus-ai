@@ -43,7 +43,7 @@ from app.companion import (
     get_companion_state,
     update_companion_state,
 )
-from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, extract_explicit_file_request, extract_generated_document_content, is_document_download_request, is_file_creation_request, is_substantive_document_content, is_agent_task, is_browser_task, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
+from app.agent_runtime import AGENT_TOOLS_SPEC, extract_terminal_command, extract_explicit_file_request, extract_generated_document_content, is_document_download_request, is_file_creation_request, is_substantive_document_content, is_agent_task, is_browser_task, is_browser_open_only_request, is_terminal_task, is_admin_install_tools_request, is_security_audit_request, requires_terminal_execution, normalize_tool_url, required_browser_actions, browser_task_plan, parse_tool_call as parse_agent_tool_call, should_run_agent_loop, looks_like_tool_call
 from app.terminal_sandbox import is_terminal_configured, run_terminal_command
 from app.agent_jobs import create_job as create_agent_job, save_job as save_agent_job, get_pending_job as get_pending_agent_job, list_jobs as list_agent_jobs, is_agent_continuation_request
 from app.response_artifacts import get_response_artifact, save_response_artifact
@@ -2844,6 +2844,28 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 await persist_job("completed")
                 print(f"[webloop] forced terminal execution -> {str(result)[:300]}")
                 return terminal_reply(result), {"model": active_model_name}
+
+        # Opening the browser alone is not permission to navigate. Create a blank
+        # tab deterministically and return immediately so the model cannot choose a site.
+        if required_browser_steps == ("new_tab",) and not resume_agent_job:
+            loop_status["status"] = "Abrindo uma nova aba em branco…"
+            blank_tab_result = await tool_browser_action(session_id, action="new_tab")
+            blank_tab_ok = bool(
+                blank_tab_result.get("ok")
+                and not blank_tab_result.get("fallback_used")
+            )
+            if not blank_tab_ok:
+                error_text = blank_tab_result.get("error") or "O serviço não confirmou a abertura da aba em branco."
+                return (
+                    "❌ **Não consegui abrir uma nova aba em branco no navegador.** "
+                    f"Erro: {error_text}",
+                    {"model": active_model_name, "browser_error": error_text},
+                )
+            return (
+                "Navegador aberto em uma nova aba em branco. Estou aguardando sua próxima instrução; "
+                "não acessei nenhum site nem fiz pesquisas.",
+                {"model": active_model_name, "browser": "blank_tab_opened"},
+            )
 
         # Execute mandatory navigation in the backend, not through model-generated JSON.
         # This guarantees Chromium opens, inspects, scrolls (when requested), and reinspects.
