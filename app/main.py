@@ -2033,12 +2033,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         if request.stream:
             async def blank_browser_stream():
                 import json
-                yield "data: " + json.dumps({"token": browser_reply}, ensure_ascii=False) + "\\n\\n"
-                yield "event: done\\ndata: " + json.dumps(
+                yield "data: " + json.dumps({"token": browser_reply}, ensure_ascii=False) + "\n\n"
+                yield "event: done\ndata: " + json.dumps(
                     {"model": "ferramenta-navegador", "sources": [],
                      "browser": "blank_tab_opened" if blank_tab_ok else "error"},
                     ensure_ascii=False,
-                ) + "\\n\\n"
+                ) + "\n\n"
             return StreamingResponse(
                 blank_browser_stream(),
                 media_type="text/event-stream",
@@ -2192,7 +2192,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if security_audit_requested:
         if authorized_security_audit:
             system_prompt += (
-                "\\n\\nAUDITORIA AUTORIZADA SOLICITADA: o usuário declarou que o alvo é próprio ou que tem autorização. "
+                "\n\nAUDITORIA AUTORIZADA SOLICITADA: o usuário declarou que o alvo é próprio ou que tem autorização. "
                 "Você TEM uma ferramenta de terminal real quando o executor estiver configurado. Não diga que está simulando, "
                 "que não possui terminal ou que não consegue acessar VPS sem antes verificar a configuração e tentar a ferramenta. "
                 "Execute as verificações somente pelo tool terminal e baseie cada afirmação no stdout/stderr/código de saída recebido. "
@@ -2203,7 +2203,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             )
         else:
             system_prompt += (
-                "\\n\\nPEDIDO DE TESTE DE SEGURANÇA: não afirme que executou ou que está conectado. "
+                "\n\nPEDIDO DE TESTE DE SEGURANÇA: não afirme que executou ou que está conectado. "
                 "Antes de usar o terminal, peça confirmação explícita de que o usuário é proprietário ou tem autorização, "
                 "além do hostname/URL exato e do escopo permitido. Não faça nenhuma varredura até receber esses dados."
             )
@@ -2841,12 +2841,12 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                     + "\n\nA tarefa está rodando em segundo plano. O início foi confirmado, mas a conclusão ainda NÃO foi verificada."
                 )
             if result.get("error"):
-                return "❌ **O terminal não conseguiu executar o comando.**\\n\\n" + str(result["error"])
+                return "❌ **O terminal não conseguiu executar o comando.**\n\n" + str(result["error"])
             stdout = str(result.get("stdout") or "")
             stderr = str(result.get("stderr") or "")
             output = stdout
             if stderr:
-                output += ("\\n" if output else "") + "[stderr]\\n" + stderr
+                output += ("\n" if output else "") + "[stderr]\n" + stderr
             if not output:
                 output = "(comando executado sem saída)"
             exit_code = result.get("exit_code", 0)
@@ -2856,9 +2856,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 else "⚠️ **Comando executado, mas terminou com erro.**"
             )
             return (
-                heading + "\\n\\n"
+                heading + "\n\n"
                 + output[:10000]
-                + f"\\n\\nCódigo de saída: {exit_code}\\nWorkspace: {result.get('workspace', '/home/ada-runner/workspace')}"
+                + f"\n\nCódigo de saída: {exit_code}\nWorkspace: {result.get('workspace', '/home/ada-runner/workspace')}"
             )
 
         if terminal_required:
@@ -3169,7 +3169,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                                 "A tentativa anterior de criação de arquivo veio incompleta ou inválida. "
                                 "NENHUMA ferramenta foi executada. Gere uma chamada NOVA e completa, "
                                 "respondendo APENAS com JSON válido em uma linha, exatamente neste formato: "
-                                '{"tool":"create_file","args":{"name":"teste.pdf","content":"# Título\\nConteúdo do documento"}}. '
+                                '{"tool":"create_file","args":{"name":"teste.pdf","content":"# Título\nConteúdo do documento"}}. '
                                 "O objeto args deve conter obrigatoriamente name (nome com extensão) e content "
                                 "(todo o conteúdo textual). Não use filename, text, markdown ao redor, comentários "
                                 "ou texto antes/depois do JSON. Para PDF, use texto simples com títulos Markdown. "
