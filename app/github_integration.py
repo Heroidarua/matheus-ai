@@ -522,10 +522,10 @@ async def confirm_new_project(body: ConfirmNewProject, request: Request) -> dict
     account = proposal["account"]
     name = proposal["name"]
     repo = f"{account}/{name}"
-    token = await _installation_token(installation_id, write=True, repository_admin=True)
     created = False
     committed: list[str] = []
     try:
+        token = await _installation_token(installation_id, write=True, repository_admin=True)
         repository = await _github_request(
             "POST", "/user/repos", token=token,
             json_body={
