@@ -1840,10 +1840,15 @@ const history = [];
           link.style.cssText = 'color:var(--accent);font-weight:650;';
           card.replaceChildren(heading, name, description, files, status, link);
         } catch (error) {
-          status.textContent = 'Falha: ' + String(error.message || error);
+          const message = String(error.message || error);
+          status.textContent = 'Falha: ' + message;
           status.style.color = '#ff8f8f';
-          confirm.disabled = false;
-          confirm.textContent = 'Tentar novamente';
+          if (/foi criado, mas a gravação dos arquivos/i.test(message)) {
+            confirm.remove();
+          } else {
+            confirm.disabled = false;
+            confirm.textContent = 'Tentar novamente';
+          }
         }
       });
 
