@@ -2043,6 +2043,21 @@ const history = [];
       return bubble;
     }
 
+    // Recebe o retorno da autorização da GitHub App e registra a confirmação no chat.
+    window.ADAHandleGitHubConnected = function(account) {
+      const message = '✅ GitHub conectado com sucesso! Conta: @' + (account || 'conta GitHub') + '. Agora você pode escolher um repositório para começar.';
+      if (!activeConversationId) {
+        const fresh = makeConversation();
+        conversations.push(fresh);
+        activeConversationId = fresh.id;
+      }
+      addBubble(message, 'assistant');
+      history.push({ role: 'assistant', content: message });
+      while (history.length > 12) history.shift();
+      chatTranscript.push({ role: 'assistant', text: message });
+      persistCurrentConversation();
+    };
+
 
     // Estúdio de criação de imagens via Cloudflare Workers AI.
     const imageStudioDialog = document.getElementById('image-studio-dialog');
