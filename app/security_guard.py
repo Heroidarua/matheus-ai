@@ -36,7 +36,8 @@ def is_sensitive_internal_config_request(message: str) -> bool:
         return False
     normalized = unicodedata.normalize("NFKC", message)
     normalized = re.sub(r"\s+", " ", normalized).strip()
-    if not _SECRET_TARGET.search(normalized):
+    has_env_file = bool(re.search(r"(?<![A-Za-z0-9_])\\.env\\b", normalized, re.IGNORECASE))
+    if not _SECRET_TARGET.search(normalized) and not has_env_file:
         return False
     return bool(_EXTRACTION_INTENT.search(normalized) or _CURRENT_CONFIG.search(normalized))
 
