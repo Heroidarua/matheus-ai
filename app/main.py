@@ -2295,7 +2295,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "<web_search_results>\n" + web_context[:7000] + "\n</web_search_results>"
         )
     github_project_requested = bool(re.search(
-        r"\\b(?:crie|criar|monte|montar|desenvolva|desenvolver|construa|construir)\\b.{0,120}\\b(?:projeto|aplicativo|app|site)\\b.{0,160}\\b(?:github|git\\s*hub|reposit[oó]rio|repo)\\b",
+        r"\b(?:crie|criar|monte|montar|desenvolva|desenvolver|construa|construir)\b.{0,120}\b(?:projeto|aplicativo|app|site)\b.{0,160}\b(?:github|git\s*hub|reposit[oó]rio|repo)\b",
         last_user_message or "", re.IGNORECASE,
     ))
     # Contexto GitHub sob demanda: somente leitura e apenas quando o usuário menciona
