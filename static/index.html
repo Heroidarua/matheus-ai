@@ -2147,6 +2147,33 @@ const history = [];
       }
       const pending = addBubble('Analisando...', 'assistant');
       try {
+        // Permite iniciar a instalação/autorização da GitHub App diretamente pelo chat.
+        // A autorização final continua acontecendo no domínio oficial github.com.
+        const githubConnectIntent =
+          !files.length &&
+          /\\b(conecte|conectar|conecta|vincule|vincular|autorize|autorizar)\\b/i.test(userText) &&
+          /\\b(github|git\\s*hub)\\b/i.test(userText) &&
+          !/\\b(como|por que|porque|o que|qual|quando|onde|ajuda|tutorial)\\b/i.test(userText) &&
+          !/\\?\\s*$/.test(userText);
+        if (githubConnectIntent) {
+          const statusResponse = await fetch('/api/github/status', { credentials: 'same-origin' });
+          const githubStatus = await statusResponse.json().catch(() => ({}));
+          if (!statusResponse.ok || !githubStatus.configured) {
+            throw new Error('A integração GitHub ainda não está configurada no servidor.');
+          }
+          if (githubStatus.connected) {
+            const message = 'Sua conta GitHub já está conectada como @' + (githubStatus.account || 'usuário') + '.';
+            pending.textContent = message;
+            history.push({ role: 'assistant', content: message });
+            while (history.length > 12) history.shift();
+            chatTranscript.push({ role: 'assistant', text: message });
+            persistCurrentConversation();
+            return;
+          }
+          pending.textContent = 'Vou abrir a autorização oficial do GitHub. Escolha sua conta e os repositórios que deseja liberar para a ADA-M.';
+          window.location.assign('/api/github/connect');
+          return;
+        }
         if (imageEditPrompt && imageFile && window.ADAEditImageInChat) {
           const imageResult = await window.ADAEditImageInChat(imageFile, imageEditPrompt, pending, currentMode === 'livre' ? 'livre' : 'normal');
           history.push({ role: 'assistant', content: imageResult });
