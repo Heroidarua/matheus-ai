@@ -79,8 +79,19 @@ def _build_file(file_name: str, content: str) -> tuple[bytes, str]:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib.units import mm
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, HRFlowable
         from xml.sax.saxutils import escape
+
+        def inline_markup(value: str) -> str:
+            # Escape source text first, then translate a small, safe Markdown subset.
+            value = escape(value)
+            value = re.sub(r"`([^`]+)`", r"<font name='Courier'>\1</font>", value)
+            value = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", value)
+            value = re.sub(r"__(.+?)__", r"<b>\1</b>", value)
+            value = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", value)
+            value = re.sub(r"(?<!_)_([^_\n]+)_(?!_)", r"<i>\1</i>", value)
+            value = re.sub(r"~~(.+?)~~", r"<strike>\1</strike>", value)
+            return value
 
         output = BytesIO()
         document = SimpleDocTemplate(
@@ -91,17 +102,37 @@ def _build_file(file_name: str, content: str) -> tuple[bytes, str]:
         styles = getSampleStyleSheet()
         story = []
         for line in content.splitlines():
-            clean = escape(line.strip())
-            if not clean:
+            stripped = line.strip()
+            if not stripped:
                 story.append(Spacer(1, 5))
-            elif line.startswith("# "):
-                story.append(Paragraph(clean[2:] if clean.startswith("# ") else clean, styles["Title"]))
-            elif line.startswith("## "):
-                story.append(Paragraph(escape(line[3:].strip()), styles["Heading2"]))
-            elif line.startswith("### "):
-                story.append(Paragraph(escape(line[4:].strip()), styles["Heading3"]))
+                continue
+            if stripped in {"---", "***", "___"}:
+                story.append(HRFlowable(width="100%", thickness=0.6, spaceBefore=5, spaceAfter=8))
+                continue
+
+            heading = re.match(r"^(#{1,6})\s+(.+)$", stripped)
+            if heading:
+                level = len(heading.group(1))
+                style_name = "Title" if level == 1 else "Heading2" if level == 2 else "Heading3"
+                story.append(Paragraph(inline_markup(heading.group(2)), styles[style_name]))
+                continue
+
+            indent = len(line) - len(line.lstrip(" "))
+            bullet = re.match(r"^(?:[-+*])\s+(.+)$", stripped)
+            numbered = re.match(r"^(\d+[.)])\s+(.+)$", stripped)
+            if bullet:
+                style = styles["BodyText"].clone("MarkdownBullet")
+                style.leftIndent = 12 + min(indent, 8) * 2
+                style.firstLineIndent = 0
+                story.append(Paragraph(inline_markup(bullet.group(1)), style, bulletText="•"))
+            elif numbered:
+                style = styles["BodyText"].clone("MarkdownNumber")
+                style.leftIndent = 18 + min(indent, 8) * 2
+                style.firstLineIndent = 0
+                story.append(Paragraph(inline_markup(numbered.group(2)), style, bulletText=numbered.group(1)))
             else:
-                story.append(Paragraph(clean, styles["BodyText"]))
+                story.append(Paragraph(inline_markup(stripped), styles["BodyText"]))
+
         if not story:
             story.append(Paragraph("Documento ADA-M", styles["Title"]))
         document.build(story)
