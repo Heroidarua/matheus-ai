@@ -2294,6 +2294,10 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "Se os resultados forem fracos, conflitantes ou insuficientes, reconheça a limitação.\n"
             "<web_search_results>\n" + web_context[:7000] + "\n</web_search_results>"
         )
+    github_project_requested = bool(re.search(
+        r"\b(?:crie|criar|monte|montar|desenvolva|desenvolver|construa|construir)\b.{0,120}\b(?:projeto|aplicativo|app|site)\b.{0,160}\b(?:github|git\s*hub|reposit[oó]rio|repo)\b",
+        last_user_message or "", re.IGNORECASE,
+    ))
     # Contexto GitHub sob demanda: somente leitura e apenas quando o usuário menciona
     # explicitamente repositórios, arquivos, branches, commits, issues ou Pull Requests.
     try:
@@ -2316,6 +2320,27 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "\n\nNão foi possível consultar o GitHub nesta mensagem. "
             "Informe que a consulta falhou e não invente conteúdo do repositório."
         )
+
+    if github_project_requested:
+        if not isinstance(http_request.session.get("github_installation_id"), int):
+            system_prompt += (
+                "\n\nPEDIDO DE PROJETO NO GITHUB: o usuário pediu para criar um projeto independente no GitHub, "
+                "mas esta sessão não está conectada. Explique que ele precisa conectar a GitHub App ADA-M antes de preparar o projeto. "
+                "Não afirme que criou ou enviou arquivos."
+            )
+        else:
+            system_prompt += (
+                "\n\nCRIAÇÃO DE PROJETO INDEPENDENTE NO GITHUB: o usuário pediu explicitamente um projeto novo no GitHub. "
+                "Projete uma aplicação funcional, determine a estrutura adequada e gere os arquivos completos. "
+                "Não use terminal, clone, nem altere repositórios existentes. O repositório será privado e independente. "
+                "Responda primeiro com uma explicação curta e, ao final, inclua EXATAMENTE um bloco de dados entre "
+                "[[ADA_GITHUB_PROJECT]] e [[/ADA_GITHUB_PROJECT]]. Dentro dele, coloque JSON válido com as chaves "
+                "{\"name\":\"nome-do-repo\",\"description\":\"descrição curta\",\"files\":[{\"path\":\"README.md\",\"content\":\"conteúdo integral\"}]}. "
+                "Inclua todos os arquivos necessários, com conteúdo integral em UTF-8. Use caminhos relativos seguros, "
+                "não inclua segredos, tokens, chaves privadas ou credenciais. Nome do repositório em kebab-case, até 100 caracteres. "
+                "O bloco será convertido em uma prévia e NADA será publicado até o usuário clicar em Confirmar criação. "
+                "Não diga que o repositório já existe."
+            )
 
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     
