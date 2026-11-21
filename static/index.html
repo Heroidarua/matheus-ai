@@ -1779,6 +1779,105 @@ const history = [];
       }
     }
 
+    async function prepareGitHubProjectFromAnswer(answer) {
+      const pattern = /\\[\\[ADA_GITHUB_PROJECT\\]\\]([\\s\\S]*?)\\[\\[\\/ADA_GITHUB_PROJECT\\]\\]/;
+      const match = String(answer || '').match(pattern);
+      if (!match) return { text: String(answer || ''), card: null };
+      const visibleText = String(answer || '').replace(pattern, '').trim();
+      let project;
+      try {
+        project = JSON.parse(match[1].trim());
+        if (!project || typeof project.name !== 'string' || !Array.isArray(project.files) || !project.files.length) {
+          throw new Error('A estrutura do projeto está incompleta.');
+        }
+      } catch (error) {
+        return { text: visibleText, card: makeGitHubProjectNotice('Não consegui validar a estrutura de arquivos gerada. Peça à ADA-M para preparar o projeto novamente.', true) };
+      }
+
+      const card = document.createElement('section');
+      card.className = 'ada-github-project-preview';
+      card.style.cssText = 'margin-top:14px;padding:15px;border:1px solid var(--border);border-radius:14px;background:var(--panel);display:grid;gap:10px;';
+      const heading = document.createElement('strong');
+      heading.textContent = 'Prévia do novo repositório privado';
+      const name = document.createElement('div');
+      name.textContent = String(project.name);
+      name.style.fontWeight = '650';
+      const description = document.createElement('p');
+      description.textContent = String(project.description || 'Projeto criado pela ADA-M.');
+      description.style.cssText = 'margin:0;color:var(--muted);font-size:13px;';
+      const files = document.createElement('div');
+      files.style.cssText = 'display:grid;gap:5px;font-size:12px;color:var(--muted);';
+      project.files.slice(0, 50).forEach(file => {
+        const row = document.createElement('div');
+        row.textContent = '📄 ' + String(file?.path || 'arquivo');
+        files.appendChild(row);
+      });
+      const status = document.createElement('div');
+      status.style.cssText = 'font-size:12px;color:var(--muted);';
+      status.textContent = 'Nenhum repositório foi criado ainda. Confirme para publicar os arquivos no GitHub.';
+      const confirm = document.createElement('button');
+      confirm.type = 'button';
+      confirm.textContent = 'Confirmar criação do repositório';
+      confirm.style.cssText = 'justify-self:start;padding:10px 14px;border-radius:18px;';
+      confirm.addEventListener('click', async () => {
+        confirm.disabled = true;
+        confirm.textContent = 'Criando repositório…';
+        status.textContent = 'A ADA-M está criando o repositório privado e enviando os arquivos.';
+        try {
+          const response = await fetch('/api/github/new-project/confirm', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ proposal_id: card.dataset.proposalId })
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.detail || 'O GitHub não confirmou a criação.');
+          status.textContent = 'Projeto criado com ' + (data.files || []).length + ' arquivo(s).';
+          const link = document.createElement('a');
+          link.href = data.url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = 'Abrir repositório no GitHub ↗';
+          link.style.cssText = 'color:var(--accent);font-weight:650;';
+          card.replaceChildren(heading, name, description, files, status, link);
+        } catch (error) {
+          status.textContent = 'Falha: ' + String(error.message || error);
+          status.style.color = '#ff8f8f';
+          confirm.disabled = false;
+          confirm.textContent = 'Tentar novamente';
+        }
+      });
+
+      try {
+        const response = await fetch('/api/github/new-project/prepare', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: project.name,
+            description: project.description || '',
+            files: project.files
+          })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || 'Não foi possível preparar a prévia.');
+        card.dataset.proposalId = data.proposal_id;
+        status.textContent = 'Prévia pronta: ' + (data.files || []).length + ' arquivo(s). A publicação depende da sua confirmação.';
+        card.append(heading, name, description, files, status, confirm);
+      } catch (error) {
+        return {
+          text: visibleText,
+          card: makeGitHubProjectNotice('Não foi possível preparar o projeto no GitHub: ' + String(error.message || error), true)
+        };
+      }
+      return { text: visibleText, card };
+    }
+
+    function makeGitHubProjectNotice(message, error = false) {
+      const note = document.createElement('p');
+      note.className = error ? 'stream-incomplete-warning' : 'voice-status';
+      note.textContent = message;
+      return note;
+    }
+
     function contentText(content) {
       if (typeof content === 'string') return content;
       return Array.isArray(content) ? content.map(part => part && part.type === 'text' ? part.text || '' : '').join(' ') : '';
@@ -2316,7 +2415,7 @@ const history = [];
               speakLiveChunks(false);
             }
 
-            pending.replaceChildren(renderMarkdown(stripThinking(answer)));
+            pending.replaceChildren(renderMarkdown(stripThinking(answer).replace(/\\[\\[ADA_GITHUB_PROJECT\\]\\][\\s\\S]*$/, '').trim()));
             pending.scrollIntoView({ behavior: 'smooth', block: 'end' });
           }
         };
@@ -2343,10 +2442,13 @@ const history = [];
           history.pop();
           return;
         }
+        liveSpeechBuffer = liveSpeechBuffer.replace(/\\[\\[ADA_GITHUB_PROJECT\\]\\][\\s\\S]*$/, '');
         speakLiveChunks(true);
-        displayAssistantReply(pending, stripThinking(answer), streamSources, streamArtifact, streamArtifactWarning, streamFiles);
+        const githubProjectResult = await prepareGitHubProjectFromAnswer(stripThinking(answer));
+        displayAssistantReply(pending, githubProjectResult.text, streamSources, streamArtifact, streamArtifactWarning, streamFiles);
+        if (githubProjectResult.card) pending.appendChild(githubProjectResult.card);
         if (pending.__adaTerminalPreview) pending.appendChild(pending.__adaTerminalPreview.panel);
-        history.push({ role: 'assistant', content: answer });
+        history.push({ role: 'assistant', content: githubProjectResult.text });
         while (history.length > 12) history.shift();
         chatTranscript.push({role:'assistant',text:answer,files:streamFiles}); persistCurrentConversation();
       } catch (error) {
