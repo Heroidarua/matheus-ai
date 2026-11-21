@@ -566,6 +566,8 @@ async def confirm_new_project(body: ConfirmNewProject, request: Request) -> dict
                 status_code=502,
                 detail=f"O repositório {repo} foi criado, mas a gravação dos arquivos parou após {len(committed)} arquivo(s). Abra https://github.com/{repo} para conferir; erro: {exc.detail}",
             )
+        # Falha antes de criar o repositório: permite corrigir permissão/nome e tentar novamente.
+        PENDING_PROJECTS[body.proposal_id] = proposal
         raise
 
 
