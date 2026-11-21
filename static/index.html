@@ -1780,7 +1780,7 @@ const history = [];
     }
 
     async function prepareGitHubProjectFromAnswer(answer) {
-      const pattern = /\\[\\[ADA_GITHUB_PROJECT\\]\\]([\\s\\S]*?)\\[\\[\\/ADA_GITHUB_PROJECT\\]\\]/;
+      const pattern = /\[\[ADA_GITHUB_PROJECT\]\]([\s\S]*?)\[\[\/ADA_GITHUB_PROJECT\]\]/;
       const match = String(answer || '').match(pattern);
       if (!match) return { text: String(answer || ''), card: null };
       const visibleText = String(answer || '').replace(pattern, '').trim();
@@ -2415,7 +2415,7 @@ const history = [];
               speakLiveChunks(false);
             }
 
-            pending.replaceChildren(renderMarkdown(stripThinking(answer).replace(/\\[\\[ADA_GITHUB_PROJECT\\]\\][\\s\\S]*$/, '').trim()));
+            pending.replaceChildren(renderMarkdown(stripThinking(answer).replace(/\[\[ADA_GITHUB_PROJECT\]\][\s\S]*$/, '').trim()));
             pending.scrollIntoView({ behavior: 'smooth', block: 'end' });
           }
         };
