@@ -694,3 +694,33 @@ def test_document_download_request_is_detected_for_redacao_pdf():
         "Faça uma redação sobre o impacto da inteligência artificial na educação brasileira e gere um PDF para download."
     )
 
+
+
+def test_pdf_renders_markdown_without_exposing_formatting_markers():
+    from io import BytesIO
+    from pypdf import PdfReader
+    from app.generated_files import _build_file
+
+    markdown = """# Relatório: IA e Desenvolvimento Social
+
+## 1. Introdução
+A **Inteligência Artificial** amplia a capacidade humana de resolver problemas.
+
+### 2. Áreas de impacto
+- **Saúde:** diagnósticos mais precoces.
+- Educação: *tutoria adaptativa*.
+1. Primeiro ponto numerado.
+2. Segundo ponto numerado.
+
+Texto com `código` e ~~conteúdo removido~~.
+"""
+    raw, mime_type = _build_file("relatorio.pdf", markdown)
+    assert mime_type == "application/pdf"
+    extracted = "\\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(raw)).pages)
+    assert "Inteligência Artificial" in extracted
+    assert "Saúde:" in extracted
+    assert "tutoria adaptativa" in extracted
+    assert "Primeiro ponto numerado" in extracted
+    assert "**" not in extracted
+    assert "##" not in extracted
+    assert "~~" not in extracted
