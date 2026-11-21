@@ -9,7 +9,8 @@ _SECRET_TARGET = re.compile(
     r"\b(?:credencia(?:is|l)|chaves?\s+(?:de\s+)?api|api\s*keys?|tokens?|senhas?|passwords?|"
     r"secrets?|segredos?|cookies?|vari[aá]veis?\s+de\s+ambiente|environment\s+variables?|"
     r"\.env\b|arquivos?\s+de\s+configura[cç][aã]o|configura[cç][oõ]es?\s+internas?|"
-    r"prompt\s+(?:interno|de\s+sistema)|system\s+prompt|"
+    r"configura[cç][oõ]es?\s+(?:que\s+(?:voc[eê]|ada[- ]?m)\s+usa|atuais?|do\s+sistema|da\s+ada[- ]?m)|"
+    r"par[aâ]metros?\s+(?:internos?|do\s+sistema)|prompt\s+(?:interno|de\s+sistema)|system\s+prompt|"
     r"chaves?\s+privadas?|private\s+keys?)\b",
     re.IGNORECASE,
 )
