@@ -1742,7 +1742,7 @@ async def tool_browser_action(session_id: str, action: str, **arguments: Any) ->
                     print(f"[browser] cold_start_wakeup_failed detail={last_health_error}")
                     return {
                         "ok": False,
-                        "error": "O navegador está acordando no Render, mas o Chromium ainda não ficou pronto. Aguarde alguns segundos e tente novamente.",
+                        "error": "O navegador está inicializando na VPS, mas o Chromium ainda não ficou pronto. Aguarde alguns segundos e tente novamente.",
                         "retryable": True,
                     }
             response = None
