@@ -85,12 +85,12 @@ def _build_file(file_name: str, content: str) -> tuple[bytes, str]:
         def inline_markup(value: str) -> str:
             # Escape source text first, then translate a small, safe Markdown subset.
             value = escape(value)
-            value = re.sub(r"`([^`]+)`", r"<font name='Courier'>\\1</font>", value)
-            value = re.sub(r"\\*\\*(.+?)\\*\\*", r"<b>\\1</b>", value)
-            value = re.sub(r"__(.+?)__", r"<b>\\1</b>", value)
-            value = re.sub(r"(?<!\\*)\\*([^*\\n]+)\\*(?!\\*)", r"<i>\\1</i>", value)
-            value = re.sub(r"(?<!_)_([^_\\n]+)_(?!_)", r"<i>\\1</i>", value)
-            value = re.sub(r"~~(.+?)~~", r"<strike>\\1</strike>", value)
+            value = re.sub(r"`([^`]+)`", r"<font name='Courier'>\1</font>", value)
+            value = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", value)
+            value = re.sub(r"__(.+?)__", r"<b>\1</b>", value)
+            value = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", value)
+            value = re.sub(r"(?<!_)_([^_\n]+)_(?!_)", r"<i>\1</i>", value)
+            value = re.sub(r"~~(.+?)~~", r"<strike>\1</strike>", value)
             return value
 
         output = BytesIO()
@@ -110,7 +110,7 @@ def _build_file(file_name: str, content: str) -> tuple[bytes, str]:
                 story.append(HRFlowable(width="100%", thickness=0.6, spaceBefore=5, spaceAfter=8))
                 continue
 
-            heading = re.match(r"^(#{1,6})\\s+(.+)$", stripped)
+            heading = re.match(r"^(#{1,6})\s+(.+)$", stripped)
             if heading:
                 level = len(heading.group(1))
                 style_name = "Title" if level == 1 else "Heading2" if level == 2 else "Heading3"
@@ -118,8 +118,8 @@ def _build_file(file_name: str, content: str) -> tuple[bytes, str]:
                 continue
 
             indent = len(line) - len(line.lstrip(" "))
-            bullet = re.match(r"^(?:[-+*])\\s+(.+)$", stripped)
-            numbered = re.match(r"^(\\d+[.)])\\s+(.+)$", stripped)
+            bullet = re.match(r"^(?:[-+*])\s+(.+)$", stripped)
+            numbered = re.match(r"^(\d+[.)])\s+(.+)$", stripped)
             if bullet:
                 style = styles["BodyText"].clone("MarkdownBullet")
                 style.leftIndent = 12 + min(indent, 8) * 2
