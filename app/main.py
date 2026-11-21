@@ -2002,7 +2002,21 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         )
     last_user_message = next((content_as_text(m.content) for m in reversed(request.messages) if m.role == "user"), "")
     # Bloqueio determinístico antes do modelo, memória, busca ou ferramentas.
+    # Quando o cliente solicita streaming, manter o protocolo SSE esperado pela interface.
     if is_sensitive_internal_config_request(last_user_message):
+        if request.stream:
+            async def blocked_sensitive_request_stream():
+                yield "data: " + json.dumps({"token": SENSITIVE_REQUEST_REPLY}, ensure_ascii=False) + "\n\n"
+                yield "event: done\ndata: " + json.dumps(
+                    {"model": "proteção-de-segredos", "sources": []},
+                    ensure_ascii=False,
+                ) + "\n\n"
+
+            return StreamingResponse(
+                blocked_sensitive_request_stream(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+            )
         return ChatResponse(reply=SENSITIVE_REQUEST_REPLY, model="proteção-de-segredos")
     if not last_user_message and isinstance(request.messages[-1].content, str):
         raise HTTPException(status_code=400, detail="Envie uma mensagem ou anexe um arquivo.")
