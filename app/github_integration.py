@@ -23,6 +23,7 @@ API_HEADERS = {
 }
 PROPOSAL_TTL_SECONDS = 15 * 60
 PENDING_PROPOSALS: dict[str, dict[str, Any]] = {}
+PENDING_PROJECTS: dict[str, dict[str, Any]] = {}
 
 
 def _config() -> tuple[str, str, str, str]:
@@ -91,10 +92,12 @@ async def _github_request(
         return {}
 
 
-async def _installation_token(installation_id: int, write: bool = False, pull_requests: bool = False) -> str:
+async def _installation_token(installation_id: int, write: bool = False, pull_requests: bool = False, repository_admin: bool = False) -> str:
     permissions: dict[str, str] = {"contents": "write" if write else "read"}
     if pull_requests:
         permissions["pull_requests"] = "write"
+    if repository_admin:
+        permissions["administration"] = "write"
     data = await _github_request(
         "POST",
         f"/app/installations/{installation_id}/access_tokens",
@@ -155,6 +158,16 @@ class ConfirmProposal(BaseModel):
 class CreatePullRequest(BaseModel):
     title: str = Field(min_length=5, max_length=200)
     body: str = Field(default="", max_length=10000)
+
+
+class PrepareNewProject(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=350)
+    files: list[dict[str, str]] = Field(min_length=1, max_length=50)
+
+
+class ConfirmNewProject(BaseModel):
+    proposal_id: str = Field(min_length=20, max_length=100)
 
 
 @router.get("/connect")
@@ -436,6 +449,124 @@ async def confirm_repository_changes(body: ConfirmProposal, request: Request) ->
         "url": f"https://github.com/{repo}/tree/{branch}",
         "message": "Alterações gravadas somente na nova branch. A branch principal não foi modificada.",
     }
+
+
+@router.post("/new-project/prepare")
+async def prepare_new_project(body: PrepareNewProject, request: Request) -> dict[str, Any]:
+    """Prepara a criação de um repositório privado independente, sem escrever no GitHub."""
+    _same_origin(request)
+    installation_id = _installation_id(request)
+    account = request.session.get("github_account")
+    if not isinstance(account, str) or not re.fullmatch(r"[A-Za-z0-9-]{1,39}", account):
+        raise HTTPException(status_code=401, detail="Não foi possível identificar a conta conectada do GitHub.")
+    name = body.name.strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", name) or name in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Nome de repositório inválido.")
+    files: list[dict[str, str]] = []
+    seen: set[str] = set()
+    total_chars = 0
+    for item in body.files:
+        path = str(item.get("path", "")).strip().lstrip("/")
+        content = item.get("content")
+        if not path or not isinstance(content, str) or len(content) > 500_000:
+            raise HTTPException(status_code=400, detail="Cada arquivo precisa de caminho e conteúdo de texto com até 500 KB.")
+        if ".." in path.split("/") or path.startswith(".git/") or path in seen:
+            raise HTTPException(status_code=400, detail="Caminho inválido ou repetido na lista de arquivos.")
+        seen.add(path)
+        total_chars += len(content)
+        if total_chars > 2_000_000:
+            raise HTTPException(status_code=413, detail="O projeto excede o limite de 2 milhões de caracteres.")
+        files.append({"path": path, "content": content})
+    # Confirma que a instalação continua válida antes de guardar a proposta.
+    await _installation_token(installation_id)
+    proposal_id = secrets.token_urlsafe(24)
+    owner = _session_owner(request)
+    now = time.time()
+    for key in list(PENDING_PROJECTS):
+        if PENDING_PROJECTS[key].get("expires_at", 0) <= now:
+            PENDING_PROJECTS.pop(key, None)
+    if len(PENDING_PROJECTS) >= 50:
+        oldest = min(PENDING_PROJECTS, key=lambda key: PENDING_PROJECTS[key].get("created_at", 0))
+        PENDING_PROJECTS.pop(oldest, None)
+    PENDING_PROJECTS[proposal_id] = {
+        "owner": owner, "installation_id": installation_id, "account": account,
+        "name": name, "description": body.description.strip(), "files": files,
+        "created_at": now, "expires_at": now + PROPOSAL_TTL_SECONDS,
+    }
+    return {
+        "proposal_id": proposal_id,
+        "repository": f"{account}/{name}",
+        "private": True,
+        "files": [{"path": item["path"], "characters": len(item["content"])} for item in files],
+        "expires_in_seconds": PROPOSAL_TTL_SECONDS,
+        "message": "Prévia preparada. Nenhum repositório ou arquivo foi criado. Confirme explicitamente para publicar o projeto privado.",
+    }
+
+
+@router.post("/new-project/confirm")
+async def confirm_new_project(body: ConfirmNewProject, request: Request) -> dict[str, Any]:
+    """Cria o repositório privado e grava os arquivos somente após confirmação explícita."""
+    _same_origin(request)
+    installation_id = _installation_id(request)
+    owner = _session_owner(request)
+    proposal = PENDING_PROJECTS.get(body.proposal_id)
+    if not proposal or proposal.get("expires_at", 0) <= time.time():
+        PENDING_PROJECTS.pop(body.proposal_id, None)
+        raise HTTPException(status_code=410, detail="A prévia expirou. Prepare o projeto novamente.")
+    if not secrets.compare_digest(str(proposal.get("owner", "")), owner):
+        raise HTTPException(status_code=403, detail="Esta prévia pertence a outra sessão.")
+    if proposal.get("installation_id") != installation_id or proposal.get("account") != request.session.get("github_account"):
+        raise HTTPException(status_code=409, detail="A conta GitHub conectada mudou. Prepare o projeto novamente.")
+    # Consome a confirmação antes da primeira escrita para impedir replay.
+    PENDING_PROJECTS.pop(body.proposal_id, None)
+    account = proposal["account"]
+    name = proposal["name"]
+    repo = f"{account}/{name}"
+    token = await _installation_token(installation_id, write=True, repository_admin=True)
+    created = False
+    committed: list[str] = []
+    try:
+        repository = await _github_request(
+            "POST", "/user/repos", token=token,
+            json_body={
+                "name": name,
+                "description": proposal["description"],
+                "private": True,
+                "auto_init": True,
+                "has_issues": True,
+                "has_projects": False,
+                "has_wiki": False,
+            },
+        )
+        created = True
+        repo = str(repository.get("full_name") or repo)
+        branch = str(repository.get("default_branch") or "main")
+        for item in proposal["files"]:
+            path = item["path"]
+            payload: dict[str, Any] = {
+                "message": f"Add {path}",
+                "content": base64.b64encode(item["content"].encode("utf-8")).decode("ascii"),
+                "branch": branch,
+            }
+            # auto_init cria README.md; se o projeto também fornecer um, atualize-o.
+            if path.casefold() == "readme.md":
+                existing = await _github_request("GET", f"/repos/{repo}/contents/{path}", token=token, params={"ref": branch})
+                if existing.get("sha"):
+                    payload["sha"] = existing["sha"]
+            await _github_request("PUT", f"/repos/{repo}/contents/{path}", token=token, json_body=payload)
+            committed.append(path)
+        return {
+            "ok": True, "repository": repo, "private": True, "branch": branch,
+            "files": committed, "url": str(repository.get("html_url") or f"https://github.com/{repo}"),
+            "message": "Projeto criado como repositório privado independente no GitHub.",
+        }
+    except HTTPException as exc:
+        if created:
+            raise HTTPException(
+                status_code=502,
+                detail=f"O repositório {repo} foi criado, mas a gravação dos arquivos parou após {len(committed)} arquivo(s). Abra https://github.com/{repo} para conferir; erro: {exc.detail}",
+            )
+        raise
 
 
 @router.post("/pull-request")
