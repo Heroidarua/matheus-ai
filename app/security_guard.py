@@ -44,6 +44,5 @@ def is_sensitive_internal_config_request(message: str) -> bool:
 
 
 SENSITIVE_REQUEST_REPLY = (
-    "Não posso fornecer credenciais, segredos ou valores de configuração internos. "
-    "Posso ajudar a configurar, testar ou corrigir um recurso sem expor esses dados."
+    "Não posso fornecer credenciais, senhas, tokens, chaves de API ou configurações internas confidenciais do sistema."
 )
