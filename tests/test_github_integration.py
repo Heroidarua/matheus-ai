@@ -61,7 +61,7 @@ async def test_chat_context_ignores_messages_without_github_intent():
 
 
 @pytest.mark.asyncio
-async def test_installation_token_can_scope_repository_creation_permission(monkeypatch):
+async def test_installation_token_requests_repository_creation_permission(monkeypatch):
     captured = {}
 
     monkeypatch.setattr(github, "_app_jwt", lambda: "signed-app-jwt")
@@ -71,11 +71,11 @@ async def test_installation_token_can_scope_repository_creation_permission(monke
         return {"token": "short-lived-installation-token"}
 
     monkeypatch.setattr(github, "_github_request", fake_request)
-    token = await github._installation_token(123, write=True, repository_admin=True)
+    token = await github._installation_token(123, write=True, repository_creation=True)
 
     assert token == "short-lived-installation-token"
     assert captured["json_body"] == {
-        "permissions": {"contents": "write", "administration": "write"}
+        "permissions": {"contents": "write", "repository_creation": "write"}
     }
 
 

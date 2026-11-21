@@ -92,12 +92,12 @@ async def _github_request(
         return {}
 
 
-async def _installation_token(installation_id: int, write: bool = False, pull_requests: bool = False, repository_admin: bool = False) -> str:
+async def _installation_token(installation_id: int, write: bool = False, pull_requests: bool = False, repository_creation: bool = False) -> str:
     permissions: dict[str, str] = {"contents": "write" if write else "read"}
     if pull_requests:
         permissions["pull_requests"] = "write"
-    if repository_admin:
-        permissions["administration"] = "write"
+    if repository_creation:
+        permissions["repository_creation"] = "write"
     data = await _github_request(
         "POST",
         f"/app/installations/{installation_id}/access_tokens",
@@ -525,7 +525,7 @@ async def confirm_new_project(body: ConfirmNewProject, request: Request) -> dict
     created = False
     committed: list[str] = []
     try:
-        token = await _installation_token(installation_id, write=True, repository_admin=True)
+        token = await _installation_token(installation_id, write=True, repository_creation=True)
         repository = await _github_request(
             "POST", "/user/repos", token=token,
             json_body={

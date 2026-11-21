@@ -10,6 +10,7 @@ A integração usa uma GitHub App instalada apenas nos repositórios que o propr
 4. Setup URL: `https://matheus-ai.onrender.com/api/github/callback`.
 5. Em **Repository permissions**, configure:
    - **Contents: Read and write** — listar e ler arquivos, criar branches e gravar alterações na branch de trabalho.
+   - **Repository creation: Read and write** — criar novos repositórios privados. Essa permissão específica evita conceder administração ampla.
    - **Pull requests: Read and write** — abrir Pull Requests para revisão.
    - **Metadata: Read-only** — permissão padrão obrigatória.
 6. Não habilite permissões de administração, Actions, secrets, deployments ou webhooks. A versão atual não precisa delas.
