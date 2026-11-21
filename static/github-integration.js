@@ -229,15 +229,19 @@
     query.delete("github");
     const clean = window.location.pathname + (query.toString() ? "?" + query.toString() : "") + window.location.hash;
     window.history.replaceState({}, "", clean);
-    dialog.showModal();
+
+    // O callback retorna diretamente ao chat. Só confirma sucesso após validar a sessão no servidor.
     refreshStatus().then(() => {
-      if (!state.connected) return;
-      // Mostra a confirmação no chat somente após o servidor confirmar a conexão.
-      if (typeof window.addBubble === "function") {
-        window.addBubble("Conectado ao GitHub, vamos começar?", "assistant");
+      if (!state.connected) {
         dialog.close();
+        return;
+      }
+      dialog.close();
+      if (typeof window.ADAHandleGitHubConnected === "function") {
+        window.ADAHandleGitHubConnected(state.account || "");
       } else {
-        setStatus("Conectado ao GitHub, vamos começar?");
+        dialog.showModal();
+        setStatus("GitHub conectado com sucesso como @" + (state.account || "conta GitHub") + ".");
       }
     });
   }
