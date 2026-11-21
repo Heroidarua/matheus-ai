@@ -1548,14 +1548,14 @@ const history = [];
         if (!line.trim()) { flushParagraph(); continue; }
         // Cabeçalhos Markdown aceitam de um a seis sinais #.
         // Isso impede que #### ou ##### apareçam literalmente no chat.
-        const heading = line.match(/^\\s{0,3}(#{1,6})\\s+(.+?)\\s*#*\\s*$/);
+        const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
         if (heading) {
           flushParagraph(); flushList();
           const h = document.createElement('h' + heading[1].length);
           renderInline(h, heading[2]); root.appendChild(h); continue;
         }
         // Separadores Markdown viram uma linha visual, não texto cru.
-        if (/^\\s{0,3}(?:(?:\\*\\s*){3,}|(?:-\\s*){3,}|(?:_\\s*){3,})$/.test(line)) {
+        if (/^\s{0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(line)) {
           flushParagraph(); flushList();
           root.appendChild(document.createElement('hr'));
           continue;
