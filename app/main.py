@@ -2363,8 +2363,14 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "role": "system",
             "content": "Você é um assistente que resume páginas web. Resuma o conteúdo abaixo de forma clara, objetiva e em português do Brasil. Use no máximo 3 parágrafos curtos."
         })
-    for message in request.messages:
-        messages.append({"role": message.role, "content": provider_content(message.content)})
+    if github_project_requested:
+        # Não deixe respostas antigas do histórico (por exemplo, alegações de acesso
+        # somente leitura) contaminarem uma nova solicitação explícita de projeto.
+        # O fluxo de projeto usa apenas a instrução atual e o pedido mais recente.
+        messages.append({"role": "user", "content": last_user_message})
+    else:
+        for message in request.messages:
+            messages.append({"role": message.role, "content": provider_content(message.content)})
     
     # Se foi pedido resumo, substitui a última mensagem do usuário pelo texto da página
     if summary_requested and tool_result:
