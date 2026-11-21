@@ -2298,6 +2298,11 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
         r"\b(?:crie|criar|monte|montar|desenvolva|desenvolver|construa|construir)\b.{0,120}\b(?:projeto|aplicativo|app|site)\b.{0,160}\b(?:github|git\s*hub|reposit[oó]rio|repo)\b",
         last_user_message or "", re.IGNORECASE,
     ))
+    # Pedidos de projeto no GitHub devem usar exclusivamente o fluxo de prévia/publicação.
+    # Evita que detectores genéricos gerem anexos para download ou forcem execução de código.
+    if github_project_requested:
+        file_creation_requested = False
+        code_generation_needed = False
     # Contexto GitHub sob demanda: somente leitura e apenas quando o usuário menciona
     # explicitamente repositórios, arquivos, branches, commits, issues ou Pull Requests.
     try:
@@ -2422,7 +2427,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
 
     # Pedidos de documento com download sempre precisam passar pelo backend
     # de arquivos; não podem cair no caminho de resposta textual do modelo.
-    document_download_requested = is_document_download_request(last_user_message)
+    document_download_requested = (
+        is_document_download_request(last_user_message) and not github_project_requested
+    )
     web_loop_active = file_creation_requested or document_download_requested or should_run_agent_loop(
         agent_mode_active=agent_mode_active,
         summary_requested=summary_requested,
