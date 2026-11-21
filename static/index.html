@@ -2442,7 +2442,7 @@ const history = [];
           history.pop();
           return;
         }
-        liveSpeechBuffer = liveSpeechBuffer.replace(/\\[\\[ADA_GITHUB_PROJECT\\]\\][\\s\\S]*$/, '');
+        liveSpeechBuffer = liveSpeechBuffer.replace(/\[\[ADA_GITHUB_PROJECT\]\][\s\S]*$/, '');
         speakLiveChunks(true);
         const githubProjectResult = await prepareGitHubProjectFromAnswer(stripThinking(answer));
         displayAssistantReply(pending, githubProjectResult.text, streamSources, streamArtifact, streamArtifactWarning, streamFiles);
@@ -2450,7 +2450,7 @@ const history = [];
         if (pending.__adaTerminalPreview) pending.appendChild(pending.__adaTerminalPreview.panel);
         history.push({ role: 'assistant', content: githubProjectResult.text });
         while (history.length > 12) history.shift();
-        chatTranscript.push({role:'assistant',text:answer,files:streamFiles}); persistCurrentConversation();
+        chatTranscript.push({role:'assistant',text:githubProjectResult.text,files:streamFiles}); persistCurrentConversation();
       } catch (error) {
         if (error.name === 'AbortError') {
           pending.replaceChildren(document.createTextNode('Geração interrompida.'));
