@@ -537,7 +537,7 @@ async def prepare_new_project(body: PrepareNewProject, request: Request) -> dict
 
 @router.post("/new-project/confirm")
 async def confirm_new_project(body: ConfirmNewProject, request: Request) -> dict[str, Any]:
-    """Cria o repositório privado e grava os arquivos somente após confirmação explícita."""
+    """Cria o repositório com a visibilidade escolhida e grava arquivos após confirmação."""
     _same_origin(request)
     installation_id = _installation_id(request)
     owner = _session_owner(request)
