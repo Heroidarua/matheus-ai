@@ -160,7 +160,7 @@ class VersionedStaticFiles(StaticFiles):
 
 
 app.mount("/static", VersionedStaticFiles(directory=str(STATIC_DIR)), name="static")
-from app.github_integration import router as github_router, github_chat_context
+from app.github_integration import router as github_router, github_chat_context, is_github_project_request
 app.include_router(github_router)
 app.include_router(google_workspace_router)
 app.include_router(file_library_router)
@@ -2294,10 +2294,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             "Se os resultados forem fracos, conflitantes ou insuficientes, reconheça a limitação.\n"
             "<web_search_results>\n" + web_context[:7000] + "\n</web_search_results>"
         )
-    github_project_requested = bool(re.search(
-        r"\b(?:crie|criar|monte|montar|desenvolva|desenvolver|construa|construir)\b.{0,120}\b(?:projeto|aplicativo|app|site)\b.{0,160}\b(?:github|git\s*hub|reposit[oó]rio|repo)\b",
-        last_user_message or "", re.IGNORECASE,
-    ))
+    # Reconhece pedidos diretos de criação de repositório mesmo quando o usuário
+    # não usa a palavra "projeto" (ex.: "crie um repo no GitHub").
+    github_project_requested = is_github_project_request(last_user_message)
     # Pedidos de projeto no GitHub devem usar exclusivamente o fluxo de prévia/publicação.
     # Evita que detectores genéricos gerem anexos para download ou forcem execução de código.
     if github_project_requested:
@@ -2306,7 +2305,9 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     # Contexto GitHub sob demanda: somente leitura e apenas quando o usuário menciona
     # explicitamente repositórios, arquivos, branches, commits, issues ou Pull Requests.
     try:
-        github_context = await github_chat_context(http_request, last_user_message)
+        # A criação de repositório é um fluxo próprio; não injete o contexto
+        # somente-leitura, que pode contradizer a instrução de criação logo abaixo.
+        github_context = "" if github_project_requested else await github_chat_context(http_request, last_user_message)
         if github_context:
             system_prompt += (
                 "\n\n<github_repository_context>\n"
@@ -2329,22 +2330,24 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     if github_project_requested:
         if not isinstance(http_request.session.get("github_installation_id"), int):
             system_prompt += (
-                "\n\nPEDIDO DE PROJETO NO GITHUB: o usuário pediu para criar um projeto independente no GitHub, "
-                "mas esta sessão não está conectada. Explique que ele precisa conectar a GitHub App ADA-M antes de preparar o projeto. "
-                "Não afirme que criou ou enviou arquivos."
+                "\n\nPEDIDO DE CRIAÇÃO NO GITHUB: o usuário pediu um novo repositório/projeto. "
+                "Esta sessão não está conectada à GitHub App ADA-M. Explique que ele precisa conectar a integração antes de preparar o projeto. "
+                "Não diga que a ADA-M é incapaz de criar repositórios; não ofereça comandos manuais como substituição e não afirme que criou arquivos."
             )
         else:
             system_prompt += (
-                "\n\nCRIAÇÃO DE PROJETO INDEPENDENTE NO GITHUB: o usuário pediu explicitamente um projeto novo no GitHub. "
-                "Projete uma aplicação funcional, determine a estrutura adequada e gere os arquivos completos. "
-                "Não use terminal, clone, nem altere repositórios existentes. O repositório será privado e independente. "
-                "Responda primeiro com uma explicação curta e, ao final, inclua EXATAMENTE um bloco de dados entre "
-                "[[ADA_GITHUB_PROJECT]] e [[/ADA_GITHUB_PROJECT]]. Dentro dele, coloque JSON válido com as chaves "
+                "\n\nPEDIDO DE CRIAÇÃO NO GITHUB: o usuário pediu explicitamente para criar um repositório novo e independente. "
+                "A GitHub App está conectada nesta sessão e a ADA-M possui um fluxo próprio para preparar e publicar o repositório. "
+                "Gere uma aplicação funcional quando o usuário pedir um projeto; se pedir apenas um repositório, prepare ao menos README.md e .gitignore adequados. "
+                "Não use terminal, git clone, GitHub CLI nem instrua o usuário a criar manualmente pela interface. "
+                "O repositório será privado e independente. "
+                "Responda com uma explicação curta e, ao final, inclua EXATAMENTE um bloco entre "
+                "[[ADA_GITHUB_PROJECT]] e [[/ADA_GITHUB_PROJECT]], contendo JSON válido com as chaves "
                 "{\"name\":\"nome-do-repo\",\"description\":\"descrição curta\",\"files\":[{\"path\":\"README.md\",\"content\":\"conteúdo integral\"}]}. "
-                "Inclua todos os arquivos necessários, com conteúdo integral em UTF-8. Use caminhos relativos seguros, "
-                "não inclua segredos, tokens, chaves privadas ou credenciais. Nome do repositório em kebab-case, até 100 caracteres. "
-                "O bloco será convertido em uma prévia e NADA será publicado até o usuário clicar em Confirmar criação. "
-                "Não diga que o repositório já existe."
+                "Inclua todos os arquivos necessários com conteúdo integral em UTF-8. Use caminhos relativos seguros e não inclua segredos, tokens, chaves privadas ou credenciais. "
+                "Use o nome solicitado; se não houver nome, escolha um nome curto em kebab-case com até 100 caracteres. "
+                "O bloco será convertido automaticamente em uma prévia. NADA será publicado até o usuário clicar em Confirmar criação. "
+                "Nunca afirme que não consegue criar repositórios nem que o repositório já existe."
             )
 
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
