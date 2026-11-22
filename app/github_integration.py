@@ -25,6 +25,37 @@ PROPOSAL_TTL_SECONDS = 15 * 60
 PENDING_PROPOSALS: dict[str, dict[str, Any]] = {}
 PENDING_PROJECTS: dict[str, dict[str, Any]] = {}
 
+def is_github_project_request(message: str) -> bool:
+    """Detecta pedidos diretos para criar repositórios/projetos no GitHub.
+
+    Mantém perguntas instrutivas ("como criar...?") no fluxo normal de conversa.
+    """
+    text = re.sub(r"\\s+", " ", str(message or "").casefold()).strip()
+    if not text:
+        return False
+    if re.match(r"^(?:como|onde|qual|quais|por que|me ensine|ensine|tutorial|passo a passo)\\b", text):
+        return False
+    if re.search(r"\\b(?:como faço|como posso|como eu faço|me explique como)\\b", text):
+        return False
+
+    mentions_github = bool(re.search(r"\\b(?:github|git\\s*hub)\\b", text))
+    mentions_target = bool(re.search(
+        r"\\b(?:reposit[oó]rios?|repos?|projetos?|aplicativos?|apps?|sites?)\\b",
+        text,
+    ))
+    creation_action = bool(re.search(
+        r"\\b(?:crie|cria|criar|criação|faça|fazer|monte|montar|desenvolva|desenvolver|"
+        r"construa|construir|gere|gerar|abra|abrir|prepare|preparar|inicie|iniciar|"
+        r"publique|publicar|suba|subir)\\b",
+        text,
+    ))
+    expressed_need = bool(re.search(
+        r"\\b(?:quero|preciso|gostaria|necessito)\\b.{0,80}\\b(?:um|uma|novo|nova|criar|criação)\\b",
+        text,
+    ))
+    return mentions_github and mentions_target and (creation_action or expressed_need)
+
+
 
 def _config() -> tuple[str, str, str, str]:
     app_id = os.getenv("GITHUB_APP_ID", "").strip()
