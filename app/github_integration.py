@@ -194,6 +194,7 @@ class CreatePullRequest(BaseModel):
 class PrepareNewProject(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=350)
+    private: bool = True
     files: list[dict[str, str]] = Field(min_length=1, max_length=50)
 
 
@@ -521,16 +522,16 @@ async def prepare_new_project(body: PrepareNewProject, request: Request) -> dict
         PENDING_PROJECTS.pop(oldest, None)
     PENDING_PROJECTS[proposal_id] = {
         "owner": owner, "installation_id": installation_id, "account": account,
-        "name": name, "description": body.description.strip(), "files": files,
+        "name": name, "description": body.description.strip(), "private": body.private, "files": files,
         "created_at": now, "expires_at": now + PROPOSAL_TTL_SECONDS,
     }
     return {
         "proposal_id": proposal_id,
         "repository": f"{account}/{name}",
-        "private": True,
+        "private": body.private,
         "files": [{"path": item["path"], "characters": len(item["content"])} for item in files],
         "expires_in_seconds": PROPOSAL_TTL_SECONDS,
-        "message": "Prévia preparada. Nenhum repositório ou arquivo foi criado. Confirme explicitamente para publicar o projeto privado.",
+        "message": "Prévia preparada. Nenhum repositório ou arquivo foi criado. Confirme explicitamente para publicar o projeto " + ("privado." if body.private else "público."),
     }
 
 
@@ -552,6 +553,7 @@ async def confirm_new_project(body: ConfirmNewProject, request: Request) -> dict
     PENDING_PROJECTS.pop(body.proposal_id, None)
     account = proposal["account"]
     name = proposal["name"]
+    is_private = bool(proposal.get("private", True))
     repo = f"{account}/{name}"
     created = False
     committed: list[str] = []
@@ -562,7 +564,7 @@ async def confirm_new_project(body: ConfirmNewProject, request: Request) -> dict
             json_body={
                 "name": name,
                 "description": proposal["description"],
-                "private": True,
+                "private": is_private,
                 "auto_init": True,
                 "has_issues": True,
                 "has_projects": False,
@@ -587,9 +589,9 @@ async def confirm_new_project(body: ConfirmNewProject, request: Request) -> dict
             await _github_request("PUT", f"/repos/{repo}/contents/{path}", token=token, json_body=payload)
             committed.append(path)
         return {
-            "ok": True, "repository": repo, "private": True, "branch": branch,
+            "ok": True, "repository": repo, "private": is_private, "branch": branch,
             "files": committed, "url": str(repository.get("html_url") or f"https://github.com/{repo}"),
-            "message": "Projeto criado como repositório privado independente no GitHub.",
+            "message": "Projeto criado como repositório " + ("privado" if is_private else "público") + " independente no GitHub.",
         }
     except HTTPException as exc:
         if created:
