@@ -131,3 +131,31 @@ async def test_confirm_new_project_creates_private_repo_and_uploads_files(monkey
     assert create_call[2]["json_body"]["auto_init"] is True
     assert any(call[0] == "PUT" and call[1] == "/repos/Heroidarua/ada-test-project/contents/app.py" for call in calls)
     assert proposal_id not in github.PENDING_PROJECTS
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Crie um repositório no GitHub chamado ada-teste",
+        "No meu GitHub, crie um repo público chamado ada-demo",
+        "Quero que você crie um projeto chamado teste-app no GitHub",
+        "Preciso de um novo repositório no GitHub",
+        "Crie do zero um aplicativo e publique no GitHub",
+    ],
+)
+def test_detects_direct_github_repository_creation_requests(message):
+    assert github.is_github_project_request(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Como criar um repositório no GitHub?",
+        "Me ensine a criar um projeto no GitHub",
+        "Analise meu repositório no GitHub",
+        "Liste os repositórios conectados no GitHub",
+        "Crie uma pasta no meu computador",
+    ],
+)
+def test_does_not_misclassify_github_questions_or_read_requests(message):
+    assert github.is_github_project_request(message) is False
