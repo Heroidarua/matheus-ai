@@ -1794,11 +1794,12 @@ const history = [];
         return { text: visibleText, card: makeGitHubProjectNotice('Não consegui validar a estrutura de arquivos gerada. Peça à ADA-M para preparar o projeto novamente.', true) };
       }
 
+      const isPrivate = project.private !== false;
       const card = document.createElement('section');
       card.className = 'ada-github-project-preview';
       card.style.cssText = 'margin-top:14px;padding:15px;border:1px solid var(--border);border-radius:14px;background:var(--panel);display:grid;gap:10px;';
       const heading = document.createElement('strong');
-      heading.textContent = 'Prévia do novo repositório privado';
+      heading.textContent = 'Prévia do novo repositório ' + (isPrivate ? 'privado' : 'público');
       const name = document.createElement('div');
       name.textContent = String(project.name);
       name.style.fontWeight = '650';
@@ -1814,7 +1815,7 @@ const history = [];
       });
       const status = document.createElement('div');
       status.style.cssText = 'font-size:12px;color:var(--muted);';
-      status.textContent = 'Nenhum repositório foi criado ainda. Confirme para publicar os arquivos no GitHub.';
+      status.textContent = 'Nenhum repositório foi criado ainda. Confirme para publicar os arquivos no GitHub (' + (isPrivate ? 'privado' : 'público') + ').';
       const confirm = document.createElement('button');
       confirm.type = 'button';
       confirm.textContent = 'Confirmar criação do repositório';
@@ -1859,6 +1860,7 @@ const history = [];
           body: JSON.stringify({
             name: project.name,
             description: project.description || '',
+            private: isPrivate,
             files: project.files
           })
         });

@@ -79,8 +79,9 @@ async def test_installation_token_requests_repository_creation_permission(monkey
     }
 
 
+@pytest.mark.parametrize("is_private", [True, False])
 @pytest.mark.asyncio
-async def test_confirm_new_project_creates_private_repo_and_uploads_files(monkeypatch):
+async def test_confirm_new_project_creates_repo_with_requested_visibility_and_uploads_files(monkeypatch, is_private):
     calls = []
 
     class FakeRequest:
@@ -95,6 +96,7 @@ async def test_confirm_new_project_creates_private_repo_and_uploads_files(monkey
         "account": "Heroidarua",
         "name": "ada-test-project",
         "description": "Projeto de teste",
+        "private": is_private,
         "files": [{"path": "app.py", "content": "print('hello')"}],
         "created_at": 1,
         "expires_at": time.time() + 300,
@@ -124,10 +126,38 @@ async def test_confirm_new_project_creates_private_repo_and_uploads_files(monkey
     )
 
     assert result["ok"] is True
-    assert result["private"] is True
+    assert result["private"] is is_private
     assert result["url"] == "https://github.com/Heroidarua/ada-test-project"
     create_call = next(call for call in calls if call[0] == "POST" and call[1] == "/user/repos")
-    assert create_call[2]["json_body"]["private"] is True
+    assert create_call[2]["json_body"]["private"] is is_private
     assert create_call[2]["json_body"]["auto_init"] is True
     assert any(call[0] == "PUT" and call[1] == "/repos/Heroidarua/ada-test-project/contents/app.py" for call in calls)
     assert proposal_id not in github.PENDING_PROJECTS
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Crie um repositório no GitHub chamado ada-teste",
+        "No meu GitHub, crie um repo público chamado ada-demo",
+        "Quero que você crie um projeto chamado teste-app no GitHub",
+        "Preciso de um novo repositório no GitHub",
+        "Crie do zero um aplicativo e publique no GitHub",
+    ],
+)
+def test_detects_direct_github_repository_creation_requests(message):
+    assert github.is_github_project_request(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Como criar um repositório no GitHub?",
+        "Me ensine a criar um projeto no GitHub",
+        "Analise meu repositório no GitHub",
+        "Liste os repositórios conectados no GitHub",
+        "Crie uma pasta no meu computador",
+    ],
+)
+def test_does_not_misclassify_github_questions_or_read_requests(message):
+    assert github.is_github_project_request(message) is False
