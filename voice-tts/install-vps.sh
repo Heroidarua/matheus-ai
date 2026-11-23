@@ -139,6 +139,7 @@ values = {
     "TTS_API_URL": "http://127.0.0.1:8002",
     "TTS_API_KEY": key,
     "TTS_VOICE": "F",
+    "TTS_ENGINE": "tiny-voca-ptbr",
 }
 for name, value in values.items():
     pattern = re.compile(rf"^{re.escape(name)}=")
