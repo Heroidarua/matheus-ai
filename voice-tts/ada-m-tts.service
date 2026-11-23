@@ -1,0 +1,37 @@
+[Unit]
+Description=ADA-M Brazilian Portuguese TTS (tiny-voca ONNX)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=ada-tts
+Group=ada-tts
+WorkingDirectory=/opt/ada-m-tts
+EnvironmentFile=/etc/ada-m-tts.env
+Environment=TINY_VOCA_PATH=/opt/ada-m-tts/engine
+Environment=OMP_NUM_THREADS=1
+Environment=OPENBLAS_NUM_THREADS=1
+Environment=ORT_NUM_THREADS=1
+ExecStart=/opt/ada-m-tts/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8002 --workers 1
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=120
+TimeoutStopSec=20
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=384M
+CPUQuota=100%
+TasksMax=64
+LimitNOFILE=1024
+
+[Install]
+WantedBy=multi-user.target
