@@ -1,4 +1,4 @@
-<!-- cache-buster: 2026-11-14-ada-m-red-plus-v12 -->
+<!-- cache-buster: 2026-11-23-ada-m-tiny-voca-tts-v1 -->
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -1097,39 +1097,10 @@ const history = [];
         || null;
     }
 
+    // Compatibilidade com os pontos do modo Live: toda fala usa o TTS local,
+    // nunca a síntese nativa do navegador.
     function queueNativeBrowserSpeech(text) {
-      const clean = prepareSpeechText(text);
-      if (!clean) return;
-      if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
-        voiceStatus.textContent = 'Leitura em voz alta não é suportada neste navegador.';
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.lang = 'pt-BR';
-      utterance.rate = 1.19;
-      utterance.pitch = 1.02;
-      utterance.volume = 1;
-      const voice = selectedSpeechVoice();
-      if (voice) { utterance.voice = voice; utterance.lang = voice.lang || 'pt-BR'; }
-      utterance.onstart = () => {
-        voiceStatus.textContent = 'ADA-M falando… Pode interromper quando quiser.';
-        startBargeInRecognition();
-      };
-      utterance.onend = () => {
-        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-          stopBargeInRecognition();
-          bargeInHandled = false;
-          voiceStatus.textContent = voiceSessionActive ? 'Sua vez. Estou ouvindo…' : 'Leitura concluída.';
-          if (voiceSessionActive) startVoiceRecognition();
-        }
-      };
-      utterance.onerror = event => {
-        if (event.error !== 'canceled' && event.error !== 'interrupted') {
-          voiceStatus.textContent = 'O navegador não conseguiu reproduzir a voz.';
-          if (voiceSessionActive) startVoiceRecognition();
-        }
-      };
-      window.speechSynthesis.speak(utterance);
+      queueBrowserSpeech(text);
     }
 
     function queueBrowserSpeech(text) {
@@ -1166,7 +1137,8 @@ const history = [];
           stopBargeInRecognition();
         } catch (error) {
           if (error.name !== 'AbortError' && generation === serverTtsGeneration) {
-            queueNativeBrowserSpeech(clean);
+            voiceStatus.textContent = 'Não foi possível reproduzir a voz da ADA-M: ' + (error.message || 'serviço de voz indisponível') + '.';
+            if (voiceSessionActive) startVoiceRecognition();
           }
         } finally {
           if (generation === serverTtsGeneration) {
@@ -1234,18 +1206,13 @@ const history = [];
 
     function speakText(text) {
       stopBrowserSpeech();
-      if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
-        voiceStatus.textContent = 'Leitura em voz alta não é suportada neste navegador.';
-        return;
-      }
       const normalized = prepareSpeechText(text);
       if (!normalized) {
         voiceStatus.textContent = 'Não há texto para leitura.';
         return;
       }
 
-      // Leitura manual usa diretamente a síntese nativa do navegador.
-      // Trechos menores evitam que o Chrome Android silencie respostas longas.
+      // Leitura manual também usa o tiny-voca da VPS.
       const chunks = [];
       let remaining = normalized;
       while (remaining.length > 0) {
@@ -1253,13 +1220,12 @@ const history = [];
           chunks.push(remaining);
           break;
         }
-        // Prefere encerrar cada bloco após pontuação, preservando a pausa
-        // natural de vírgulas, pontos, ponto e vírgula e interrogações.
         let cut = -1;
-        const windowText = remaining.slice(0, 180);
         const punctuation = /[,;:.!?](?:[”"'»)]*)?\s/g;
         let match;
-        while ((match = punctuation.exec(windowText)) !== null) cut = match.index + match[0].length - 1;
+        while ((match = punctuation.exec(remaining.slice(0, 180))) !== null) {
+          cut = match.index + match[0].length;
+        }
         if (cut < 90) cut = remaining.lastIndexOf(' ', 180);
         if (cut < 90) cut = remaining.indexOf(' ', 180);
         if (cut < 0) cut = Math.min(180, remaining.length);
@@ -1267,41 +1233,9 @@ const history = [];
         remaining = remaining.slice(cut).trim();
       }
 
-      voiceStatus.textContent = 'Preparando leitura…';
-      chunks.forEach((chunk, index) => {
-        const utterance = new SpeechSynthesisUtterance(chunk);
-        utterance.lang = 'pt-BR';
-        utterance.rate = 1.19;
-        utterance.pitch = 1.02;
-        utterance.volume = 1;
-        const voice = selectedSpeechVoice();
-        if (voice) {
-          utterance.voice = voice;
-          utterance.lang = voice.lang || 'pt-BR';
-        }
-        utterance.onstart = () => {
-          voiceStatus.textContent = 'ADA-M lendo a resposta…';
-          if (voiceSessionActive) startBargeInRecognition();
-        };
-        utterance.onend = () => {
-          if (index === chunks.length - 1) {
-            stopBargeInRecognition();
-            voiceStatus.textContent = 'Leitura concluída.';
-            if (voiceSessionActive) startVoiceRecognition();
-          }
-        };
-        utterance.onerror = event => {
-          if (event.error !== 'canceled' && event.error !== 'interrupted') {
-            voiceStatus.textContent = 'O navegador não conseguiu reproduzir a voz. Verifique se há uma voz instalada nas configurações do Android.';
-          }
-        };
-        window.speechSynthesis.speak(utterance);
-      });
+      voiceStatus.textContent = 'Preparando voz feminina da ADA-M…';
+      chunks.forEach(queueBrowserSpeech);
     }
-
-    speechTestButton.addEventListener('click', () => {
-      speakText('Olá! Eu sou a ADA-M. Esta é uma demonstração da minha voz. Como posso ajudar você hoje?');
-    });
 
     async function loadDiagnostics() {
       const panel = document.getElementById('diagnostics-panel');
@@ -1978,7 +1912,8 @@ const history = [];
 
     function startVoiceRecognition() {
       if (!voiceSessionActive || !SpeechRecognitionAPI || sendBtn.disabled ||
-          (window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) return;
+          (window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) ||
+          (serverTtsAudio && !serverTtsAudio.paused && !serverTtsAudio.ended)) return;
       stopVoiceRecognition();
       const instance = new SpeechRecognitionAPI();
       recognition = instance;
@@ -2013,7 +1948,8 @@ const history = [];
       instance.onend = () => {
         if (recognition === instance) recognition = null;
         if (voiceSessionActive && !sendBtn.disabled &&
-            !(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending))) {
+            !(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) &&
+            !(serverTtsAudio && !serverTtsAudio.paused && !serverTtsAudio.ended)) {
           recognitionRestartTimer = setTimeout(startVoiceRecognition, 350);
         }
       };
@@ -2478,8 +2414,9 @@ const history = [];
         if (voiceSessionActive) {
           const resumeListening = () => {
             if (!voiceSessionActive) return;
-            const speechBusy = window.speechSynthesis &&
-              (window.speechSynthesis.speaking || window.speechSynthesis.pending);
+            const speechBusy = (window.speechSynthesis &&
+              (window.speechSynthesis.speaking || window.speechSynthesis.pending)) ||
+              (serverTtsAudio && !serverTtsAudio.paused && !serverTtsAudio.ended);
             if (sendBtn.disabled || speechBusy) {
               voiceStatus.textContent = 'ADA-M está respondendo…';
               window.__adaLiveResumeTimer = setTimeout(resumeListening, 250);
