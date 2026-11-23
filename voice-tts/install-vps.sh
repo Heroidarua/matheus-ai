@@ -57,9 +57,11 @@ echo "==> Instalando runtime ONNX e API (CPU)"
 "$TTS_ROOT/.venv/bin/python" -m pip install -r "$SCRIPT_DIR/requirements.txt"
 chown -R ada-tts:ada-tts "$TTS_ROOT"
 
-if [[ ! -s "$ENV_FILE" ]] || ! grep -q '^TTS_API_KEY=.' "$ENV_FILE"; then
+if [[ ! -e "$ENV_FILE" ]]; then
   umask 077
   printf 'TTS_API_KEY=%s\n' "$(openssl rand -hex 32)" > "$ENV_FILE"
+elif ! grep -q '^TTS_API_KEY=.' "$ENV_FILE"; then
+  printf '\nTTS_API_KEY=%s\n' "$(openssl rand -hex 32)" >> "$ENV_FILE"
 fi
 chown root:root "$ENV_FILE"
 chmod 0600 "$ENV_FILE"
@@ -139,7 +141,6 @@ values = {
     "TTS_API_URL": "http://127.0.0.1:8002",
     "TTS_API_KEY": key,
     "TTS_VOICE": "F",
-    "TTS_ENGINE": "tiny-voca-ptbr",
 }
 for name, value in values.items():
     pattern = re.compile(rf"^{re.escape(name)}=")
