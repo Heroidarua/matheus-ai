@@ -363,9 +363,13 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
         sessions.pop(payload.session_id, None)
         session = None
     if payload.action == "close":
-        if session:
-            await session.context.close()
-            sessions.pop(payload.session_id, None)
+        async with sessions_lock:
+            closing_session = sessions.get(payload.session_id)
+            if closing_session:
+                async with closing_session.lock:
+                    if sessions.get(payload.session_id) is closing_session:
+                        sessions.pop(payload.session_id, None)
+                        await closing_session.context.close()
         return {"ok": True, "closed": True}
     if session is None:
         session = await create_session(payload.session_id)
