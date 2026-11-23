@@ -47,6 +47,7 @@ class BrowserSession:
 
 
 sessions: dict[str, BrowserSession] = {}
+sessions_lock = asyncio.Lock()
 browser: Browser | None = None
 playwright = None
 
@@ -126,16 +127,32 @@ async def guard_request(route) -> None:
     await route.continue_()
 
 
-async def cleanup_expired() -> None:
+async def _cleanup_expired_locked() -> None:
+    """Remove sessões expiradas sem interromper uma ação ainda em andamento."""
     now = time.monotonic()
-    expired = [key for key, value in sessions.items() if now - value.last_used > SESSION_TTL]
-    for key in expired:
-        item = sessions.pop(key, None)
-        if item:
-            try:
-                await item.context.close()
-            except Exception:
-                pass
+    expired = [
+        (key, value)
+        for key, value in sessions.items()
+        if now - value.last_used > SESSION_TTL and not value.lock.locked()
+    ]
+    for key, item in expired:
+        if sessions.get(key) is not item or item.lock.locked():
+            continue
+        await item.lock.acquire()
+        try:
+            if sessions.get(key) is item and now - item.last_used > SESSION_TTL:
+                sessions.pop(key, None)
+                try:
+                    await item.context.close()
+                except Exception:
+                    logger.warning("expired_browser_session_close_failed")
+        finally:
+            item.lock.release()
+
+
+async def cleanup_expired() -> None:
+    async with sessions_lock:
+        await _cleanup_expired_locked()
 
 
 async def _track_new_page(session: BrowserSession, page: Page) -> None:
@@ -150,25 +167,59 @@ async def _track_new_page(session: BrowserSession, page: Page) -> None:
 
 
 async def create_session(session_id: str) -> BrowserSession:
+    """Create a context atomically, reclaiming the least-recently-used idle one."""
     if browser is None:
         raise HTTPException(status_code=503, detail="Navegador ainda não inicializado.")
-    await cleanup_expired()
-    if session_id not in sessions and len(sessions) >= MAX_SESSIONS:
-        raise HTTPException(status_code=429, detail="Limite de sessões de navegador atingido. Tente novamente em instantes.")
-    context = await browser.new_context(
-        viewport={"width": 1365, "height": 900},
-        locale="pt-BR",
-        timezone_id="America/Manaus",
-        accept_downloads=False,
-        service_workers="block",
-    )
-    await context.route("**/*", guard_request)
-    page = await context.new_page()
-    page.set_default_timeout(ACTION_TIMEOUT_MS)
-    session = BrowserSession(context=context, pages=[page])
-    context.on("page", lambda new_page: asyncio.create_task(_track_new_page(session, new_page)))
-    sessions[session_id] = session
-    return session
+
+    async with sessions_lock:
+        await _cleanup_expired_locked()
+
+        existing = sessions.get(session_id)
+        if existing is not None:
+            return existing
+
+        if len(sessions) >= MAX_SESSIONS:
+            candidates = sorted(sessions.items(), key=lambda item: item[1].last_used)
+            reclaimed = False
+            for old_id, old_session in candidates:
+                if old_session.lock.locked():
+                    continue
+                await old_session.lock.acquire()
+                try:
+                    if sessions.get(old_id) is not old_session:
+                        continue
+                    sessions.pop(old_id, None)
+                    try:
+                        await old_session.context.close()
+                    except Exception:
+                        logger.warning("idle_browser_session_close_failed")
+                    logger.info("browser_session_reclaimed reason=capacity")
+                    reclaimed = True
+                    break
+                finally:
+                    old_session.lock.release()
+
+            if not reclaimed:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Todas as sessões do navegador estão em uso. Aguarde uma ação terminar e tente novamente.",
+                    headers={"Retry-After": "3"},
+                )
+
+        context = await browser.new_context(
+            viewport={"width": 1365, "height": 900},
+            locale="pt-BR",
+            timezone_id="America/Manaus",
+            accept_downloads=False,
+            service_workers="block",
+        )
+        await context.route("**/*", guard_request)
+        page = await context.new_page()
+        page.set_default_timeout(ACTION_TIMEOUT_MS)
+        session = BrowserSession(context=context, pages=[page])
+        context.on("page", lambda new_page: asyncio.create_task(_track_new_page(session, new_page)))
+        sessions[session_id] = session
+        return session
 
 
 def is_readable_content_type(value: str | None) -> bool:
@@ -304,17 +355,18 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
 
     session_was_created = False
     session = sessions.get(payload.session_id)
-    if session and time.monotonic() - session.last_used > SESSION_TTL:
-        try:
-            await session.context.close()
-        except Exception:
-            pass
-        sessions.pop(payload.session_id, None)
+    # Deixe a expiração e remoção sob o bloqueio global de create_session;
+    # se a sessão estiver ocupada, aguarde a ação atual em vez de fechá-la.
+    if session and time.monotonic() - session.last_used > SESSION_TTL and not session.lock.locked():
         session = None
     if payload.action == "close":
-        if session:
-            await session.context.close()
-            sessions.pop(payload.session_id, None)
+        async with sessions_lock:
+            closing_session = sessions.get(payload.session_id)
+            if closing_session:
+                async with closing_session.lock:
+                    if sessions.get(payload.session_id) is closing_session:
+                        sessions.pop(payload.session_id, None)
+                        await closing_session.context.close()
         return {"ok": True, "closed": True}
     if session is None:
         session = await create_session(payload.session_id)
