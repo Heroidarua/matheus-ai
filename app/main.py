@@ -79,7 +79,6 @@ load_dotenv()
 TTS_API_URL = os.getenv("TTS_API_URL", "").strip().rstrip("/")
 TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
 TTS_VOICE = os.getenv("TTS_VOICE", "pf_dora").strip() or "pf_dora"
-TTS_ENGINE = os.getenv("TTS_ENGINE", "Kokoro-82M").strip() or "Kokoro-82M"
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
@@ -375,7 +374,7 @@ async def tts_status() -> dict[str, Any]:
     """Informa se a síntese feminina remota está configurada, sem revelar segredos."""
     return {
         "configured": bool(TTS_API_URL),
-        "engine": TTS_ENGINE if TTS_API_URL else "browser-fallback",
+        "engine": "Kokoro-82M" if TTS_API_URL else "browser-fallback",
         "voice": TTS_VOICE if TTS_API_URL else None,
         "language": "pt-BR",
     }
