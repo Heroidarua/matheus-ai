@@ -1571,7 +1571,15 @@ async def tool_web_search(query: str, limit: int = 10) -> dict:
                 return {"found": False, "note": f"Brave Search consultado para '{query}', nada encontrado"}
             except (httpx.HTTPError, ValueError) as exc:
                 return {"ok": False, "error": f"Brave Search falhou: {type(exc).__name__}"}
-        return {"ok": False, "error": "Nenhum provedor de busca configurado (SEARXNG_URL ou BRAVE_SEARCH_API_KEY)"}
+        # Reaproveita os buscadores públicos já implementados em search_web
+        # quando SearXNG e Brave não estão configurados.
+        try:
+            fallback_results = await search_web(query)
+        except HTTPException as exc:
+            return {"ok": False, "error": f"Pesquisa indisponível: {str(exc.detail)[:300]}"}
+        if fallback_results:
+            return {"found": True, "results": fallback_results[:limit]}
+        return {"found": False, "note": f"Nenhum resultado encontrado para '{query}' nos buscadores disponíveis"}
 
 async def tool_web_fetch(url: str) -> dict:
     """Baixa a página e devolve o texto principal (trafilatura, fallback por parágrafos)."""
