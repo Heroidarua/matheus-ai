@@ -172,11 +172,11 @@ async def create_session(session_id: str) -> BrowserSession:
         raise HTTPException(status_code=503, detail="Navegador ainda não inicializado.")
 
     async with sessions_lock:
+        await _cleanup_expired_locked()
+
         existing = sessions.get(session_id)
         if existing is not None:
             return existing
-
-        await _cleanup_expired_locked()
 
         if len(sessions) >= MAX_SESSIONS:
             candidates = sorted(sessions.items(), key=lambda item: item[1].last_used)
