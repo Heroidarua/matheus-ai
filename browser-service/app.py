@@ -355,12 +355,9 @@ async def browser_action(payload: BrowserAction, x_ada_browser_key: str | None =
 
     session_was_created = False
     session = sessions.get(payload.session_id)
-    if session and time.monotonic() - session.last_used > SESSION_TTL:
-        try:
-            await session.context.close()
-        except Exception:
-            pass
-        sessions.pop(payload.session_id, None)
+    # Deixe a expiração e remoção sob o bloqueio global de create_session;
+    # se a sessão estiver ocupada, aguarde a ação atual em vez de fechá-la.
+    if session and time.monotonic() - session.last_used > SESSION_TTL and not session.lock.locked():
         session = None
     if payload.action == "close":
         async with sessions_lock:
