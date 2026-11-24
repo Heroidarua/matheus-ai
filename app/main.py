@@ -15,7 +15,9 @@ import re
 import secrets
 import time
 from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
+import xml.etree.ElementTree as ET
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -1264,6 +1266,10 @@ def _normalize_search_result_url(value: str, engine_url: str) -> str:
 
         if host.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
             candidate = params.get("uddg", [candidate])[0]
+        elif host.endswith("bing.com") and parsed.path.startswith("/news/apiclick.aspx"):
+            destination = params.get("url", [""])[0]
+            if _public_http_url(destination):
+                return destination
         elif host.endswith("bing.com") and parsed.path.startswith("/ck/a"):
             encoded = params.get("u", [""])[0]
             if encoded.startswith("a1"):
@@ -1285,13 +1291,71 @@ def _normalize_search_result_url(value: str, engine_url: str) -> str:
     return urljoin(engine_url, candidate)
 
 
+def _parse_news_rss(content: str) -> list[dict[str, str]]:
+    """Extrai título, URL, veículo e data de feeds RSS de notícias."""
+    try:
+        root = ET.fromstring(content)
+    except (ET.ParseError, TypeError, ValueError):
+        return []
+    results: list[dict[str, str]] = []
+    for node in root.findall(".//item"):
+        title = (node.findtext("title") or "").strip()
+        link = (node.findtext("link") or "").strip()
+        published = (node.findtext("pubDate") or "").strip()
+        publisher = (node.findtext("source") or "").strip()
+        description = (node.findtext("description") or "").strip()
+        description = re.sub(r"<[^>]+>", " ", description)
+        description = re.sub(r"\s+", " ", description).strip()
+        published_iso = ""
+        if published:
+            try:
+                parsed_date = parsedate_to_datetime(published)
+                if parsed_date.tzinfo is None:
+                    parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+                published_iso = parsed_date.astimezone(timezone.utc).strftime("%Y-%m-%d")
+            except (TypeError, ValueError, OverflowError):
+                pass
+        if title and link:
+            results.append({
+                "title": title[:200],
+                "url": link[:2000],
+                "snippet": " ".join(part for part in (
+                    description[:500],
+                    f"Veículo: {publisher}" if publisher else "",
+                    f"Publicado em {published_iso}" if published_iso else "",
+                ) if part),
+            })
+    return results
+
+
+async def _resolve_news_feed_url(client: httpx.AsyncClient, value: str) -> str:
+    """Resolve wrappers RSS do Bing/Google para o endereço público do veículo."""
+    candidate = _normalize_search_result_url(value, "https://www.bing.com/news/search")
+    if not _public_http_url(candidate):
+        return ""
+    host = (urlparse(candidate).hostname or "").lower()
+    if host == "news.google.com" or host.endswith(".news.google.com"):
+        try:
+            response = await client.get(candidate, follow_redirects=True)
+            destination = str(response.url)
+            destination_host = (urlparse(destination).hostname or "").lower()
+            if response.is_success and _public_http_url(destination) and not (
+                destination_host == "news.google.com" or destination_host.endswith(".news.google.com")
+            ):
+                return destination
+        except (httpx.HTTPError, ValueError):
+            pass
+        return ""
+    return candidate
+
+
 async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[str, str]:
     """Tenta ler a página de origem para enriquecer o resultado, sem bloquear a busca."""
     url = source.get("url", "")
     if not _public_http_url(url):
         return source
     try:
-        response = await client.get(url, follow_redirects=False)
+        response = await client.get(url, follow_redirects=True)
         if not response.is_success or "text/html" not in response.headers.get("content-type", "").lower():
             return source
         # Revalida a URL final após redirecionamentos.
@@ -1343,7 +1407,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
     )
     if not google_key and "generativelanguage.googleapis.com" in MODEL_BASE_URL:
         google_key = OPENAI_API_KEY.strip()
-    if google_key:
+    if google_key and topic != "news":
         try:
             summary, grounded_sources = await google_grounded_search(
                 original_query,
@@ -1375,6 +1439,54 @@ async def search_web(query: str) -> list[dict[str, str]]:
     )
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), headers=headers, follow_redirects=True) as client:
+        # Para intenção jornalística, feeds de notícias evitam resultados lexicais
+        # (dicionários, páginas de produto e páginas iniciais de buscadores).
+        if topic == "news":
+            rss_query = re.sub(
+                r"^(?:pesquise|busque|procure|encontre)\s+",
+                "",
+                original_query,
+                flags=re.IGNORECASE,
+            ).strip()
+            rss_feeds = [
+                (
+                    "Google Notícias RSS",
+                    "https://news.google.com/rss/search",
+                    {"q": rss_query, "hl": "pt-BR", "gl": "BR", "ceid": "BR:pt-419"},
+                ),
+                (
+                    "Bing Notícias RSS",
+                    "https://www.bing.com/news/search",
+                    {"q": rss_query, "format": "rss", "setlang": "pt-br", "cc": "BR"},
+                ),
+            ]
+            rss_sources: list[dict[str, str]] = []
+            for provider, feed_url, feed_params in rss_feeds:
+                try:
+                    feed_response = await client.get(feed_url, params=feed_params)
+                    feed_response.raise_for_status()
+                    for item in _parse_news_rss(feed_response.text)[:30]:
+                        destination = await _resolve_news_feed_url(client, item["url"])
+                        if not destination:
+                            continue
+                        candidate = {
+                            "title": item["title"],
+                            "url": destination,
+                            "snippet": item["snippet"],
+                        }
+                        if is_relevant_result(
+                            original_query, candidate, allow_incomplete_metadata=True
+                        ):
+                            rss_sources.append(candidate)
+                    if rss_sources:
+                        DIAGNOSTICS["last_search_provider"] = provider
+                        print(f"{provider}: accepted={len(rss_sources)}")
+                        break
+                except (httpx.HTTPError, ValueError, TypeError, ET.ParseError) as exc:
+                    print(f"{provider} failed ({type(exc).__name__})")
+            if rss_sources:
+                sources = rss_sources
+
         # O Brave é opcional. Se a chave estiver inválida, registre o erro e
         # continue para os buscadores públicos em vez de interromper a pesquisa.
         brave_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
