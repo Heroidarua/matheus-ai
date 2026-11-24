@@ -1320,6 +1320,7 @@ def _parse_news_rss(content: str) -> list[dict[str, str]]:
                 "title": title[:200],
                 "url": link[:2000],
                 "snippet": " ".join(part for part in (
+                    "Notícia indexada em feed jornalístico.",
                     description[:500],
                     f"Veículo: {publisher}" if publisher else "",
                     f"Publicado em {published_iso}" if published_iso else "",
@@ -1465,7 +1466,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 try:
                     feed_response = await client.get(feed_url, params=feed_params)
                     feed_response.raise_for_status()
-                    for item in _parse_news_rss(feed_response.text)[:30]:
+                    for item in _parse_news_rss(feed_response.text)[:12]:
                         destination = await _resolve_news_feed_url(client, item["url"])
                         if not destination:
                             continue
@@ -1476,12 +1477,11 @@ async def search_web(query: str) -> list[dict[str, str]]:
                         }
                         if is_relevant_result(
                             original_query, candidate, allow_incomplete_metadata=True
-                        ):
+                        ) and not any(existing["url"] == destination for existing in rss_sources):
                             rss_sources.append(candidate)
                     if rss_sources:
                         DIAGNOSTICS["last_search_provider"] = provider
                         print(f"{provider}: accepted={len(rss_sources)}")
-                        break
                 except (httpx.HTTPError, ValueError, TypeError, ET.ParseError) as exc:
                     print(f"{provider} failed ({type(exc).__name__})")
             if rss_sources:
