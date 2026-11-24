@@ -24,6 +24,9 @@
   let lastVoiceCandidate = '';
   let voiceCandidateCount = 0;
   let currentAssistantSpeech = '';
+  let transcriptBuffer = [];
+  let transcriptTimer = null;
+  const transcriptPauseMs = 1400;
 
   function setStatus(message, visible = true) {
     status.textContent = message;
@@ -47,6 +50,36 @@
     liveOverlay.hidden = true;
     document.body.classList.remove('live-experience-open');
     liveOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  function clearTranscriptTimer() {
+    if (transcriptTimer) {
+      clearTimeout(transcriptTimer);
+      transcriptTimer = null;
+    }
+  }
+
+  function flushTranscriptBuffer() {
+    clearTranscriptTimer();
+    const transcript = transcriptBuffer.join(' ').replace(/\\s+/g, ' ').trim();
+    transcriptBuffer = [];
+    if (!transcript || !active) return;
+    setLiveCaption('Você: ' + transcript);
+    setStatus('Entendi. Preparando resposta…');
+    if (typeof window.__adaLiveSubmitTranscript === 'function') {
+      window.__adaLiveSubmitTranscript(transcript);
+    } else {
+      prompt.value = transcript;
+      form.requestSubmit();
+    }
+  }
+
+  function queueTranscriptSegment(value) {
+    const clean = String(value || '').replace(/\\s+/g, ' ').trim();
+    if (!clean) return;
+    transcriptBuffer.push(clean);
+    clearTranscriptTimer();
+    transcriptTimer = setTimeout(flushTranscriptBuffer, transcriptPauseMs);
   }
 
   function setLiveCaption(value) {
@@ -242,6 +275,8 @@
 
   async function cleanup(message = 'Modo Live encerrado.', visible = false) {
     active = false;
+    clearTranscriptTimer();
+    transcriptBuffer = [];
     window.__adaLiveActive = false;
     stopPlayback();
     if (processor) {
@@ -309,19 +344,19 @@
           resolveReady();
         } else if (data.type === 'partial') {
           if (data.text) {
+            // A new partial means the user continued speaking; keep earlier finalized
+            // Vosk segments buffered instead of submitting a sentence fragment.
+            clearTranscriptTimer();
             setLiveCaption('Você: ' + data.text);
             considerVoiceInterruption(data.text);
           }
           if (!activeAudio && !playbackAbort) setStatus('Estou ouvindo você…');
         } else if (data.type === 'transcript' && data.text) {
-          setLiveCaption('Você: ' + data.text);
-          setStatus('Entendi. Preparando resposta…');
-          if (typeof window.__adaLiveSubmitTranscript === 'function') {
-            window.__adaLiveSubmitTranscript(data.text);
-          } else {
-            prompt.value = data.text;
-            form.requestSubmit();
-          }
+          // Vosk may finalize a phrase after a short pause. Accumulate consecutive
+          // finalized segments and submit only after a longer, deliberate pause.
+          queueTranscriptSegment(data.text);
+          setLiveCaption('Você: ' + transcriptBuffer.join(' '));
+          setStatus('Estou ouvindo… conclua sua frase.');
         } else if (data.type === 'error') {
           const message = data.message || 'Falha no reconhecimento de voz.';
           rejectReady(new Error(message));
