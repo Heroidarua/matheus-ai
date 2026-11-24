@@ -68,7 +68,7 @@ async def live_voice_socket(websocket: WebSocket) -> None:
             else:
                 partial = json.loads(recognizer.PartialResult() or "{}").get("partial", "")
                 if partial:
-                    await websocket.send_json({"type": "partial"})
+                    await websocket.send_json({"type": "partial", "text": partial})
     except WebSocketDisconnect:
         return
     except FileNotFoundError as exc:

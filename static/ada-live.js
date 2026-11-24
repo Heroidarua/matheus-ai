@@ -21,6 +21,8 @@
   let playbackAbort = null;
   let activeAudio = null;
   let activeAudioUrl = null;
+  let lastVoiceCandidate = '';
+  let voiceCandidateCount = 0;
 
   function setStatus(message, visible = true) {
     status.textContent = message;
@@ -149,6 +151,37 @@
     await speakWithTinyVoca(text);
   };
 
+  function considerVoiceInterruption(partialText) {
+    if (!activeAudio && !playbackAbort) return;
+    const normalized = String(partialText || '')
+      .toLocaleLowerCase('pt-BR')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const words = normalized.split(' ').filter(Boolean);
+    if (!normalized || !(words.length >= 2 || (words.length === 1 && words[0].length >= 4))) {
+      lastVoiceCandidate = '';
+      voiceCandidateCount = 0;
+      return;
+    }
+    if (normalized === lastVoiceCandidate ||
+        normalized.startsWith(lastVoiceCandidate + ' ') ||
+        lastVoiceCandidate.startsWith(normalized + ' ')) {
+      voiceCandidateCount += 1;
+    } else {
+      lastVoiceCandidate = normalized;
+      voiceCandidateCount = 1;
+    }
+    if (voiceCandidateCount >= 2) {
+      lastVoiceCandidate = '';
+      voiceCandidateCount = 0;
+      stopPlayback();
+      setStatus('Interrompida. Estou ouvindo você…');
+    }
+  }
+
   function downsampleTo16k(input, inputRate) {
     if (inputRate === 16000) {
       const direct = new Int16Array(input.length);
@@ -185,13 +218,6 @@
     processor.onaudioprocess = event => {
       if (!active || !socket || socket.readyState !== WebSocket.OPEN) return;
       const input = event.inputBuffer.getChannelData(0);
-      let energy = 0;
-      for (let i = 0; i < input.length; i++) energy += input[i] * input[i];
-      const rms = Math.sqrt(energy / Math.max(1, input.length));
-      if (rms > 0.035 && (activeAudio || playbackAbort)) {
-        stopPlayback();
-        setStatus('Interrompida. Estou ouvindo você…');
-      }
       const pcm = downsampleTo16k(input, audioContext.sampleRate);
       if (pcm.length) socket.send(pcm.buffer);
     };
@@ -268,8 +294,11 @@
           setStatus('Reconhecimento PT-BR pronto. Ativando microfone…');
           resolveReady();
         } else if (data.type === 'partial') {
-          setStatus('Estou ouvindo você…');
-          setLiveCaption(data.text || 'Estou ouvindo você…');
+          if (data.text) {
+            setLiveCaption('Você: ' + data.text);
+            considerVoiceInterruption(data.text);
+          }
+          if (!activeAudio && !playbackAbort) setStatus('Estou ouvindo você…');
         } else if (data.type === 'transcript' && data.text) {
           setLiveCaption('Você: ' + data.text);
           setStatus('Entendi. Preparando resposta…');
