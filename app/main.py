@@ -1380,7 +1380,10 @@ async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[
         source.update(metadata)
         if metadata.get("page_headline"):
             source["title"] = metadata["page_headline"][:200]
-        editorial_details = [f"Classificação editorial: {metadata['editorial_label']}."]
+        editorial_details = [
+            f"Classificação editorial: {metadata['editorial_label']}.",
+            f"Situação da data: {metadata.get('date_status', 'sem_data_verificavel')}.",
+        ]
         if metadata.get("published_date"):
             editorial_details.append(
                 f"Data publicada na página: {metadata['published_date']} "
