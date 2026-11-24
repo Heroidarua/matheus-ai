@@ -23,6 +23,7 @@ O instalador compila Whisper.cpp para CPU com um job de compilação para limita
 - O backend mantém um pequeno pré-buffer para preservar o início das palavras.
 - A frase é fechada após aproximadamente 850 ms de silêncio; há limite de 18 segundos por trecho.
 - Só depois do fim da fala o Whisper transcreve o áudio. Não há envio de parciais para interromper a voz da ADA-M.
+- O navegador suspende o envio do microfone enquanto a Tiny-Voca está gerando ou reproduzindo a resposta, para impedir que o próprio alto-falante seja reconhecido como uma nova fala.
 - A transcrição completa segue para o Gemma 4; a resposta continua sendo falada pela Tiny-Voca.
 
 O detector de silêncio usa limiar RMS configurável. Se o microfone captar voz muito baixa ou ruído constante, os valores podem precisar de calibração no ambiente real.
