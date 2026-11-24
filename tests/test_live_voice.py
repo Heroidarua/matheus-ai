@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +20,9 @@ async def test_live_websocket_transcribes_complete_whisper_utterance(monkeypatch
     monkeypatch.setattr(live_voice, "ASR_BACKEND", "whisper_cpp")
     monkeypatch.setattr(live_voice, "WHISPER_CLI", str(cli))
     monkeypatch.setattr(live_voice, "WHISPER_MODEL", model)
-    monkeypatch.setattr(live_voice, "VAD_SILENCE_SECONDS", 0.0)
+    monkeypatch.setattr(live_voice, "VAD_SILENCE_SECONDS", 0.1)
+    clock = iter([0.0, 0.1, 0.2, 0.5])
+    monkeypatch.setattr(live_voice, "time", SimpleNamespace(monotonic=lambda: next(clock)))
     monkeypatch.setattr(live_voice, "_whisper_semaphore", asyncio.Semaphore(1))
     monkeypatch.setattr(live_voice, "_transcribe_whisper", lambda chunks: "ola mundo")
 
