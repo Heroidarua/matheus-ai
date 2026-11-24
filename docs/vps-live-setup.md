@@ -21,12 +21,12 @@ O instalador compila Whisper.cpp para CPU com um job de compilação para limita
 
 - O navegador continua enviando áudio PCM mono, 16 bits, 16 kHz.
 - O backend mantém um pequeno pré-buffer para preservar o início das palavras.
-- A frase é fechada após aproximadamente 850 ms de silêncio; há limite de 18 segundos por trecho.
+- A frase é fechada após aproximadamente 1,4 segundo de silêncio. O detector usa limiar RMS adaptativo ao ruído ambiente, histerese durante a fala e pré-buffer de aproximadamente 450 ms para preservar o início das palavras. O limite de segurança por trecho é de 60 segundos.
 - Só depois do fim da fala o Whisper transcreve o áudio. Não há envio de parciais para interromper a voz da ADA-M.
 - O navegador suspende o envio do microfone enquanto a Tiny-Voca está gerando ou reproduzindo a resposta, para impedir que o próprio alto-falante seja reconhecido como uma nova fala.
 - A transcrição completa segue para o Gemma 4; a resposta continua sendo falada pela Tiny-Voca.
 
-O detector de silêncio usa limiar RMS configurável. Se o microfone captar voz muito baixa ou ruído constante, os valores podem precisar de calibração no ambiente real.
+O detector usa um limiar RMS adaptativo com histerese: aprende lentamente o ruído de fundo enquanto não há fala e usa um limiar menor para acompanhar sílabas mais baixas durante a frase. O pré-buffer maior ajuda a não cortar o começo da primeira palavra.
 
 ## Verificação
 
@@ -45,10 +45,10 @@ As variáveis abaixo podem ser adicionadas ao ambiente do serviço, se necessár
 - `ADA_LIVE_ASR=whisper_cpp` — mecanismo padrão. Use `vosk` apenas como fallback temporário.
 - `WHISPER_CLI_PATH=/usr/local/bin/whisper-cli`
 - `WHISPER_MODEL_PATH=/opt/ada-m/models/ggml-base-q5_1.bin`
-- `ADA_LIVE_VAD_RMS=0.009` — sensibilidade inicial do detector de voz.
-- `ADA_LIVE_VAD_SILENCE=0.85` — silêncio necessário para fechar uma frase, em segundos.
-- `ADA_LIVE_MAX_UTTERANCE=18` — duração máxima de um trecho, em segundos.
-- `ADA_LIVE_MIN_SPEECH=0.28` — duração mínima de voz para aceitar um trecho.
+- `ADA_LIVE_VAD_RMS=0.0035` — limiar inicial do detector de voz; o valor é ajustado lentamente conforme o ruído ambiente.
+- `ADA_LIVE_VAD_SILENCE=1.4` — silêncio necessário para fechar uma frase, em segundos.
+- `ADA_LIVE_MAX_UTTERANCE=60` — limite de segurança para a duração de um trecho, em segundos.
+- `ADA_LIVE_MIN_SPEECH=0.35` — duração mínima de voz para aceitar um trecho.
 - `ADA_LIVE_WHISPER_THREADS=2` — threads usadas na transcrição.
 
 Não altere o endpoint do modelo principal, as variáveis TTS ou os arquivos/variáveis antigos do LiveKit.

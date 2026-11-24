@@ -22,12 +22,19 @@ WHISPER_MODEL = Path(os.getenv(
     "WHISPER_MODEL_PATH",
     "/opt/ada-m/models/ggml-base-q5_1.bin",
 ))
-VAD_RMS_THRESHOLD = float(os.getenv("ADA_LIVE_VAD_RMS", "0.009"))
-VAD_SILENCE_SECONDS = float(os.getenv("ADA_LIVE_VAD_SILENCE", "0.85"))
-VAD_MAX_UTTERANCE_SECONDS = float(os.getenv("ADA_LIVE_MAX_UTTERANCE", "18"))
-VAD_MIN_SPEECH_SECONDS = float(os.getenv("ADA_LIVE_MIN_SPEECH", "0.28"))
+VAD_RMS_THRESHOLD = float(os.getenv("ADA_LIVE_VAD_RMS", "0.0035"))
+VAD_SILENCE_SECONDS = float(os.getenv("ADA_LIVE_VAD_SILENCE", "1.4"))
+VAD_MAX_UTTERANCE_SECONDS = float(os.getenv("ADA_LIVE_MAX_UTTERANCE", "60"))
+VAD_MIN_SPEECH_SECONDS = float(os.getenv("ADA_LIVE_MIN_SPEECH", "0.35"))
 WHISPER_THREADS = max(1, int(os.getenv("ADA_LIVE_WHISPER_THREADS", "2")))
 _whisper_semaphore = asyncio.Semaphore(1)
+
+
+def _vad_threshold(noise_floor: float, *, speaking: bool = False) -> float:
+    """Adaptive RMS gate with hysteresis, so quiet syllables are not dropped."""
+    adaptive = max(VAD_RMS_THRESHOLD, noise_floor * 2.2)
+    adaptive = min(adaptive, VAD_RMS_THRESHOLD * 2.2)
+    return adaptive * (0.55 if speaking else 1.0)
 
 
 def _transcribe_whisper(pcm_chunks: list[bytes]) -> str:
@@ -130,12 +137,14 @@ async def live_voice_socket(websocket: WebSocket) -> None:
                 "type": "ready",
                 "message": "Whisper.cpp PT-BR pronto. Fale normalmente; vou aguardar você concluir a frase.",
             })
-            pre_roll: deque[bytes] = deque(maxlen=2)
+            # Cerca de 450 ms de áudio anterior ao gatilho preservam o começo das palavras.
+            pre_roll: deque[bytes] = deque(maxlen=5)
             utterance: list[bytes] = []
             speaking = False
             speech_started_at = 0.0
             last_voice_at = 0.0
             voiced_bytes = 0
+            noise_floor = min(VAD_RMS_THRESHOLD * 0.5, 0.0015)
 
             while True:
                 audio = await websocket.receive_bytes()
@@ -144,7 +153,13 @@ async def live_voice_socket(websocket: WebSocket) -> None:
                 samples = np.frombuffer(audio, dtype="<i2")
                 rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2))) / 32768.0
                 now = time.monotonic()
-                is_voice = rms >= VAD_RMS_THRESHOLD
+
+                # O limiar acompanha o ruído ambiente lentamente. Durante a fala,
+                # a histerese reduz o limiar para não perder sílabas mais baixas.
+                threshold = _vad_threshold(noise_floor, speaking=speaking)
+                is_voice = rms >= threshold
+                if not speaking and not is_voice:
+                    noise_floor = (noise_floor * 0.92) + (rms * 0.08)
 
                 if is_voice:
                     if not speaking:
@@ -156,6 +171,7 @@ async def live_voice_socket(websocket: WebSocket) -> None:
                     voiced_bytes += len(audio)
                     last_voice_at = now
                 elif speaking:
+                    # Mantém o áudio de cauda para o Whisper receber a frase inteira.
                     utterance.append(audio)
 
                 if not speaking:
