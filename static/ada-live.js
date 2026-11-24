@@ -9,12 +9,10 @@
   const liveEndButton = document.getElementById('live-end-button');
   if (!button || !status || !prompt || !form || !liveOverlay || !liveOverlayStatus || !liveCaption || !liveEndButton) return;
 
-  let socket = null;
-  let stream = null;
-  let audioContext = null;
-  let processor = null;
-  let source = null;
-  let mutedGain = null;
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let recognitionPaused = false;
+  let recognitionRestartTimer = null;
   let connecting = false;
   let active = false;
   let playbackGeneration = 0;
@@ -23,7 +21,7 @@
   let activeAudioUrl = null;
   let transcriptBuffer = [];
   let transcriptTimer = null;
-  const transcriptPauseMs = 700;
+  const transcriptPauseMs = 1600;
 
   function setStatus(message, visible = true) {
     status.textContent = message;
@@ -118,61 +116,68 @@
 
   async function speakWithTinyVoca(text) {
     stopPlayback();
+    recognitionPaused = true;
+    stopBrowserRecognition();
     const generation = playbackGeneration;
-    for (const part of speechParts(text)) {
-      if (!active || generation !== playbackGeneration) return;
-      const controller = new AbortController();
-      playbackAbort = controller;
-      setStatus('ADA-M preparando a voz…');
-      try {
-        const response = await fetch('/api/tts/speech', {
-          method: 'POST',
-          credentials: 'same-origin',
-          signal: controller.signal,
-          headers: { 'Content-Type': 'application/json', 'Accept': 'audio/wav' },
-          body: JSON.stringify({ text: part, speed: 1.19 })
-        });
-        if (!response.ok) {
-          let detail = 'Tiny-Voca não conseguiu gerar o áudio.';
-          try { detail = (await response.json()).detail || detail; } catch (_) {}
-          throw new Error(detail);
+    try {
+      for (const part of speechParts(text)) {
+        if (!active || generation !== playbackGeneration) return;
+        const controller = new AbortController();
+        playbackAbort = controller;
+        setStatus('ADA-M preparando a voz…');
+        try {
+          const response = await fetch('/api/tts/speech', {
+            method: 'POST',
+            credentials: 'same-origin',
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json', 'Accept': 'audio/wav' },
+            body: JSON.stringify({ text: part, speed: 1.19 })
+          });
+          if (!response.ok) {
+            let detail = 'Tiny-Voca não conseguiu gerar o áudio.';
+            try { detail = (await response.json()).detail || detail; } catch (_) {}
+            throw new Error(detail);
+          }
+          const blob = await response.blob();
+          if (!blob.size || generation !== playbackGeneration || !active) return;
+          activeAudioUrl = URL.createObjectURL(blob);
+          const audio = new Audio(activeAudioUrl);
+          activeAudio = audio;
+          audio.preload = 'auto';
+          setStatus('ADA-M falando…');
+          await new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = error => {
+              if (settled) return;
+              settled = true;
+              audio.onended = null;
+              audio.onerror = null;
+              audio.onpause = null;
+              error ? reject(error) : resolve();
+            };
+            audio.onended = () => finish();
+            audio.onerror = () => finish(new Error('Falha ao reproduzir o áudio.'));
+            audio.onpause = () => finish();
+            audio.play().catch(finish);
+          });
+          if (activeAudio === audio) activeAudio = null;
+          if (activeAudioUrl) {
+            URL.revokeObjectURL(activeAudioUrl);
+            activeAudioUrl = null;
+          }
+        } catch (error) {
+          if (error.name === 'AbortError' || generation !== playbackGeneration) return;
+          setStatus(error.message || 'Falha na reprodução da voz.');
+          return;
+        } finally {
+          if (playbackAbort === controller) playbackAbort = null;
         }
-        const blob = await response.blob();
-        if (!blob.size || generation !== playbackGeneration || !active) return;
-        activeAudioUrl = URL.createObjectURL(blob);
-        const audio = new Audio(activeAudioUrl);
-        activeAudio = audio;
-        audio.preload = 'auto';
-        setStatus('ADA-M falando…');
-        await new Promise((resolve, reject) => {
-          let settled = false;
-          const finish = error => {
-            if (settled) return;
-            settled = true;
-            audio.onended = null;
-            audio.onerror = null;
-            audio.onpause = null;
-            error ? reject(error) : resolve();
-          };
-          audio.onended = () => finish();
-          audio.onerror = () => finish(new Error('Falha ao reproduzir o áudio.'));
-          audio.onpause = () => finish();
-          audio.play().catch(finish);
-        });
-        if (activeAudio === audio) activeAudio = null;
-        if (activeAudioUrl) {
-          URL.revokeObjectURL(activeAudioUrl);
-          activeAudioUrl = null;
-        }
-      } catch (error) {
-        if (error.name === 'AbortError' || generation !== playbackGeneration) return;
-        setStatus(error.message || 'Falha na reprodução da voz.');
-        return;
-      } finally {
-        if (playbackAbort === controller) playbackAbort = null;
       }
+      if (active && generation === playbackGeneration) setStatus('Sua vez. Pode falar…');
+    } finally {
+      recognitionPaused = false;
+      if (active) startBrowserRecognition();
     }
-    if (active && generation === playbackGeneration) setStatus('Sua vez. Pode falar…');
   }
 
   window.__adaLiveActive = false;
@@ -182,83 +187,99 @@
     await speakWithTinyVoca(text);
   };
 
-  function downsampleTo16k(input, inputRate) {
-    if (inputRate === 16000) {
-      const direct = new Int16Array(input.length);
-      for (let i = 0; i < input.length; i++) {
-        const sample = Math.max(-1, Math.min(1, input[i]));
-        direct[i] = sample < 0 ? sample * 32768 : sample * 32767;
-      }
-      return direct;
+
+  function stopBrowserRecognition() {
+    clearTimeout(recognitionRestartTimer);
+    recognitionRestartTimer = null;
+    if (!recognition) return;
+    const current = recognition;
+    recognition = null;
+    try { current.stop(); } catch (_) {
+      try { current.abort(); } catch (_) {}
     }
-    const ratio = inputRate / 16000;
-    const outputLength = Math.floor(input.length / ratio);
-    const output = new Int16Array(outputLength);
-    for (let i = 0; i < outputLength; i++) {
-      const start = Math.floor(i * ratio);
-      const end = Math.min(Math.floor((i + 1) * ratio), input.length);
-      let sum = 0;
-      for (let j = start; j < end; j++) sum += input[j];
-      const sample = Math.max(-1, Math.min(1, sum / Math.max(1, end - start)));
-      output[i] = sample < 0 ? sample * 32768 : sample * 32767;
-    }
-    return output;
   }
 
-  async function startMicrophone() {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-    });
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    await audioContext.resume();
-    source = audioContext.createMediaStreamSource(stream);
-    processor = audioContext.createScriptProcessor(4096, 1, 1);
-    mutedGain = audioContext.createGain();
-    mutedGain.gain.value = 0;
-    processor.onaudioprocess = event => {
-      // Não envia áudio enquanto a ADA-M gera ou reproduz TTS: evita que o próprio alto-falante vire uma nova fala do usuário.
-      if (!active || activeAudio || playbackAbort || !socket || socket.readyState !== WebSocket.OPEN) return;
-      const input = event.inputBuffer.getChannelData(0);
-      const pcm = downsampleTo16k(input, audioContext.sampleRate);
-      if (pcm.length) socket.send(pcm.buffer);
+  function startBrowserRecognition() {
+    if (!active || recognitionPaused || activeAudio || playbackAbort || recognition) return;
+    if (!SpeechRecognitionAPI) {
+      setStatus('O reconhecimento de voz deste navegador não está disponível. Use Chrome ou Edge atualizado.', true);
+      return;
+    }
+
+    const instance = new SpeechRecognitionAPI();
+    recognition = instance;
+    instance.lang = 'pt-BR';
+    instance.continuous = true;
+    instance.interimResults = true;
+    instance.maxAlternatives = 1;
+
+    instance.onstart = () => {
+      if (active && !recognitionPaused) setStatus('Estou ouvindo você…');
     };
-    source.connect(processor);
-    processor.connect(mutedGain);
-    mutedGain.connect(audioContext.destination);
+
+    instance.onresult = event => {
+      if (!active || recognitionPaused) return;
+      let interim = '';
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const value = String(result[0]?.transcript || '').replace(/\\s+/g, ' ').trim();
+        if (!value) continue;
+        if (result.isFinal) {
+          transcriptBuffer.push(value);
+          clearTranscriptTimer();
+          transcriptTimer = setTimeout(flushTranscriptBuffer, transcriptPauseMs);
+        } else {
+          interim += (interim ? ' ' : '') + value;
+        }
+      }
+
+      if (interim) clearTranscriptTimer();
+      const preview = [...transcriptBuffer, interim].join(' ').replace(/\\s+/g, ' ').trim();
+      if (preview) setLiveCaption('Você: ' + preview);
+      if (active && !recognitionPaused && !activeAudio && !playbackAbort) {
+        setStatus('Estou ouvindo você…');
+      }
+    };
+
+    instance.onerror = event => {
+      if (!active || recognitionPaused || event.error === 'aborted' || event.error === 'no-speech') return;
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setStatus('Permita o acesso ao microfone para usar o reconhecimento de voz.', true);
+        cleanup('Permissão do microfone negada.', true);
+      } else {
+        setStatus('O reconhecimento teve uma interrupção. Tentando novamente…');
+      }
+    };
+
+    instance.onend = () => {
+      if (recognition === instance) recognition = null;
+      if (active && !recognitionPaused && !activeAudio && !playbackAbort) {
+        clearTimeout(recognitionRestartTimer);
+        recognitionRestartTimer = setTimeout(startBrowserRecognition, 350);
+      }
+    };
+
+    try {
+      instance.start();
+    } catch (_) {
+      if (recognition === instance) recognition = null;
+      if (active && !recognitionPaused) {
+        clearTimeout(recognitionRestartTimer);
+        recognitionRestartTimer = setTimeout(startBrowserRecognition, 700);
+      }
+    }
   }
 
   async function cleanup(message = 'Modo Live encerrado.', visible = false) {
     active = false;
+    recognitionPaused = true;
     clearTranscriptTimer();
+    clearTimeout(recognitionRestartTimer);
+    recognitionRestartTimer = null;
     transcriptBuffer = [];
     window.__adaLiveActive = false;
+    stopBrowserRecognition();
     stopPlayback();
-    if (processor) {
-      processor.onaudioprocess = null;
-      try { processor.disconnect(); } catch (_) {}
-      processor = null;
-    }
-    if (source) {
-      try { source.disconnect(); } catch (_) {}
-      source = null;
-    }
-    if (mutedGain) {
-      try { mutedGain.disconnect(); } catch (_) {}
-      mutedGain = null;
-    }
-    if (audioContext) {
-      try { await audioContext.close(); } catch (_) {}
-      audioContext = null;
-    }
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      stream = null;
-    }
-    if (socket) {
-      const old = socket;
-      socket = null;
-      try { old.close(); } catch (_) {}
-    }
     button.disabled = false;
     button.classList.remove('livekit-active');
     button.textContent = '🎙️ Live';
@@ -276,72 +297,21 @@
     connecting = true;
     button.disabled = true;
     openLiveExperience();
-    setStatus('Conectando diretamente à VPS…');
+    setStatus('Preparando reconhecimento de voz do navegador…');
     try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Este navegador não liberou o acesso ao microfone.');
+      if (!SpeechRecognitionAPI) {
+        throw new Error('Este navegador não oferece reconhecimento de voz. Use Chrome ou Edge atualizado.');
+      }
       await window.__adaStopBrowserVoice?.();
-      const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      socket = new WebSocket(scheme + '//' + location.host + '/api/live/ws');
-      socket.binaryType = 'arraybuffer';
-      let resolveReady;
-      let rejectReady;
-      const readyPromise = new Promise((resolve, reject) => {
-        resolveReady = resolve;
-        rejectReady = reject;
-      });
-      socket.addEventListener('message', event => {
-        let data;
-        try { data = JSON.parse(event.data); } catch (_) { return; }
-        if (data.type === 'status') setStatus(data.message);
-        if (data.type === 'ready') {
-          setStatus('Reconhecimento PT-BR pronto. Ativando microfone…');
-          resolveReady();
-        } else if (data.type === 'partial') {
-          if (data.text) {
-            // A new partial means the user continued speaking; keep earlier finalized
-            // Vosk segments buffered instead of submitting a sentence fragment.
-            clearTranscriptTimer();
-            setLiveCaption('Você: ' + data.text);
-          }
-          if (!activeAudio && !playbackAbort) setStatus('Estou ouvindo você…');
-        } else if (data.type === 'utterance' && data.text) {
-          // Whisper.cpp envia somente depois de detectar o fim da frase; não fragmentamos nem interrompemos a fala da ADA-M.
-          clearTranscriptTimer();
-          transcriptBuffer = [data.text];
-          flushTranscriptBuffer();
-        } else if (data.type === 'transcript' && data.text) {
-          // Vosk may finalize a phrase after a short pause. Accumulate consecutive
-          // finalized segments and submit only after a longer, deliberate pause.
-          queueTranscriptSegment(data.text);
-          setLiveCaption('Você: ' + transcriptBuffer.join(' '));
-          setStatus('Estou ouvindo… conclua sua frase.');
-        } else if (data.type === 'error') {
-          const message = data.message || 'Falha no reconhecimento de voz.';
-          rejectReady(new Error(message));
-          cleanup(message, true);
-        }
-      });
-      socket.addEventListener('close', () => {
-        if (active) cleanup('Conexão com a VPS encerrada.', true);
-        else rejectReady(new Error('A VPS encerrou a conexão antes de ficar pronta.'));
-      });
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Tempo esgotado ao conectar à VPS.')), 15000);
-        socket.addEventListener('open', () => { clearTimeout(timeout); resolve(); }, { once: true });
-        socket.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Não foi possível conectar ao WebSocket da VPS.')); }, { once: true });
-      });
-      await Promise.race([
-        readyPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('O reconhecimento de voz da VPS demorou demais para iniciar.')), 45000))
-      ]);
-      await startMicrophone();
       active = true;
       window.__adaLiveActive = true;
+      recognitionPaused = false;
+      startBrowserRecognition();
       button.disabled = false;
       button.classList.add('livekit-active');
       button.textContent = 'Encerrar Live';
       button.setAttribute('aria-label', 'Encerrar conversa ao vivo');
-      setStatus('Conectada à VPS. Pode falar comigo…');
+      setStatus('Microfone conectado. Pode falar comigo…');
     } catch (error) {
       await cleanup(error.message || 'Falha ao iniciar o modo Live.', true);
     } finally {
@@ -357,7 +327,6 @@
   });
   window.addEventListener('beforeunload', () => {
     stopPlayback();
-    try { socket?.close(); } catch (_) {}
-    stream?.getTracks().forEach(track => track.stop());
+    try { recognition?.abort(); } catch (_) {}
   });
 })();
