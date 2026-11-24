@@ -61,7 +61,7 @@
 
   function flushTranscriptBuffer() {
     clearTranscriptTimer();
-    const transcript = transcriptBuffer.join(' ').replace(/\\s+/g, ' ').trim();
+    const transcript = transcriptBuffer.join(' ').replace(/\s+/g, ' ').trim();
     transcriptBuffer = [];
     if (!transcript || !active) return;
     setLiveCaption('Você: ' + transcript);
@@ -75,7 +75,7 @@
   }
 
   function queueTranscriptSegment(value) {
-    const clean = String(value || '').replace(/\\s+/g, ' ').trim();
+    const clean = String(value || '').replace(/\s+/g, ' ').trim();
     if (!clean) return;
     transcriptBuffer.push(clean);
     clearTranscriptTimer();
