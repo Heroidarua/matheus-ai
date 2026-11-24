@@ -16,6 +16,7 @@ def test_live_websocket_transcribes_complete_whisper_utterance(monkeypatch, tmp_
     monkeypatch.setattr(live_voice, "ASR_BACKEND", "whisper_cpp")
     monkeypatch.setattr(live_voice, "WHISPER_CLI", str(cli))
     monkeypatch.setattr(live_voice, "WHISPER_MODEL", model)
+    monkeypatch.setattr(live_voice, "VAD_SILENCE_SECONDS", 0.0)
     monkeypatch.setattr(live_voice, "_transcribe_whisper", lambda chunks: "ola mundo")
 
     with TestClient(app) as client:
@@ -26,8 +27,8 @@ def test_live_websocket_transcribes_complete_whisper_utterance(monkeypatch, tmp_
             assert websocket.receive_json()["type"] == "status"
             assert websocket.receive_json()["type"] == "ready"
 
-            # Três blocos de voz (384 ms), seguidos por silêncio suficiente
-            # para fechar a frase completa no detector de atividade vocal.
+            # Três blocos de voz (384 ms), seguidos por silêncio.
+            # O limite é zerado neste teste para não depender de tempo real.
             voiced = (b"\x88\x13" * 2048)
             silence = b"\x00\x00" * 2048
             for _ in range(3):
