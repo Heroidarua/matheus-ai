@@ -47,13 +47,17 @@ def _date_value(value: str) -> str:
 
 
 def _walk_json(value):
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk_json(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_json(child)
+    """Iterative, bounded traversal for untrusted JSON-LD supplied by publisher pages."""
+    pending = [value]
+    visited = 0
+    while pending and visited < 5000:
+        current = pending.pop()
+        visited += 1
+        if isinstance(current, dict):
+            yield current
+            pending.extend(list(current.values())[:100])
+        elif isinstance(current, list):
+            pending.extend(current[:100])
 
 
 class _MetadataParser(HTMLParser):
@@ -149,7 +153,8 @@ def extract_article_metadata(html: str, page_url: str, feed_date: str = "") -> d
                     structured_author = str(author.get("name") or "").strip()
                 elif isinstance(author, list) and author and isinstance(author[0], dict):
                     structured_author = str(author[0].get("name") or "").strip()
-            if item.get("datePublished"):
+            article_type = any(kind in {"NewsArticle", "Article", "BlogPosting"} for kind in (item_type if isinstance(item_type, list) else [item_type]))
+            if item.get("datePublished") and (article_type or item.get("headline")):
                 structured.append(_date_value(str(item["datePublished"])))
 
     meta_date = ""
@@ -168,7 +173,7 @@ def extract_article_metadata(html: str, page_url: str, feed_date: str = "") -> d
     visible_date = ""
     byline_window = visible_text[:700]
     date_context = re.search(
-        r"(?:publicad[oa]|publicação|postad[oa]|atualizad[oa]|em)\s*[:\-]?\s*"
+        r"\b(?:publicad[oa]|publicação|postad[oa]|atualizad[oa]|em)\b\s*[:\-]?\s*"
         r"(.{0,100}?(?:\d{1,2}\s+de\s+[a-zçãé]+\s+de\s+20\d{2}|\d{1,2}[/.]\d{1,2}[/.]20\d{2}|20\d{2}-\d{2}-\d{2}))",
         byline_window,
         re.I,
