@@ -86,7 +86,7 @@ class _MetadataParser(HTMLParser):
             self.links.append((values.get("href", "").strip(), ""))
         if tag == "h1":
             self._in_h1 = True
-        if tag in {"script", "style", "noscript", "svg"}:
+        if tag in {"script", "style", "noscript", "svg", "nav", "footer", "header", "form"}:
             self._hidden += 1
         if tag == "script":
             self._script = True
@@ -102,7 +102,7 @@ class _MetadataParser(HTMLParser):
             self._script = False
             self._script_jsonld = False
             self._script_parts = []
-        if tag in {"script", "style", "noscript", "svg"} and self._hidden:
+        if tag in {"script", "style", "noscript", "svg", "nav", "footer", "header", "form"} and self._hidden:
             self._hidden -= 1
 
     def handle_data(self, data):
@@ -166,7 +166,7 @@ def extract_article_metadata(html: str, page_url: str, feed_date: str = "") -> d
     time_date = next((_date_value(value) for value in parser.times if _date_value(value)), "")
     visible_text = " ".join(parser.visible)
     visible_date = ""
-    byline_window = visible_text[:1800]
+    byline_window = visible_text[:700]
     date_context = re.search(
         r"(?:publicad[oa]|publicação|postad[oa]|atualizad[oa]|em)\s*[:\-]?\s*"
         r"(.{0,100}?(?:\d{1,2}\s+de\s+[a-zçãé]+\s+de\s+20\d{2}|\d{1,2}[/.]\d{1,2}[/.]20\d{2}|20\d{2}-\d{2}-\d{2}))",
@@ -219,7 +219,7 @@ def extract_article_metadata(html: str, page_url: str, feed_date: str = "") -> d
     canonical_host = (urlparse(canonical).hostname or "").lower().removeprefix("www.") if canonical else ""
     original_url = canonical if canonical and canonical_host and canonical_host != page_host else ""
 
-    lower = (visible_text + " " + " ".join(parser.meta.values()) + " " + page_url).casefold()
+    lower = (visible_text[:12000] + " " + " ".join(parser.meta.values()) + " " + page_url).casefold()
     sponsored_markers = (
         "conteúdo patrocinado", "conteudo patrocinado", "publieditorial",
         "publicidade", "sponsored content", "advertorial", "conteúdo de marca",
