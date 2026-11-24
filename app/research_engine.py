@@ -96,12 +96,57 @@ def _mentions_ai(query: str) -> bool:
 
 
 def _candidate_mentions_ai(text: str) -> bool:
+    """Reconhece IA pelo nome completo ou por sigla acompanhada de contexto técnico."""
     normalized = (text or "").casefold()
-    return bool(
-        re.search(r"\b(?:ia|ai)\b", normalized)
-        or "inteligência artificial" in normalized
-        or "artificial intelligence" in normalized
+    if "inteligência artificial" in normalized or "artificial intelligence" in normalized:
+        return True
+    contextual_patterns = (
+        r"\bia\s+(?:generativa|generativo|generativas|generativos|aplicada|aplicado|responsável|responsavel|autônoma|autonoma|agentiva|multimodal)\b",
+        r"\b(?:modelos?|sistemas?|ferramentas?|soluções|solucoes|aplicações|aplicacoes|plataformas?|tecnologias?)\s+(?:de|com)\s+ia\b",
+        r"\b(?:generative|artificial)\s+ai\b",
+        r"\b(?:ai|artificial intelligence)\s+(?:model|system|tool|platform|technology)\b",
     )
+    return any(re.search(pattern, normalized) for pattern in contextual_patterns)
+
+
+def _query_mentions_brazil(query: str) -> bool:
+    normalized = (query or "").casefold()
+    return "brasil" in normalized or "brasileir" in normalized
+
+
+def _candidate_mentions_brazil(text: str) -> bool:
+    normalized = (text or "").casefold()
+    return "brasil" in normalized or "brasileir" in normalized
+
+
+def _contains_requested_period(query: str, text: str) -> bool:
+    """Exige evidência textual do mês/ano pedido, sem aceitar apenas a data atual."""
+    match = _DATE_FILTER_RE.search(query or "")
+    if not match:
+        return True
+    requested = match.group(0).casefold()
+    normalized = (text or "").casefold()
+    if requested in normalized:
+        return True
+    month_match = re.search(r"(" + "|".join(MONTH_NAMES) + r")", requested)
+    year_match = re.search(r"20\d{2}", requested)
+    if not month_match or not year_match:
+        return False
+    month = month_match.group(1)
+    year = year_match.group(0)
+    month_number = MONTH_NAMES.index(month) + 1
+    short_months = {
+        "janeiro": "jan", "fevereiro": "fev", "março": "mar", "marco": "mar",
+        "abril": "abr", "maio": "mai", "junho": "jun", "julho": "jul",
+        "agosto": "ago", "setembro": "set", "outubro": "out",
+        "novembro": "nov", "dezembro": "dez",
+    }
+    patterns = (
+        rf"\b{short_months[month]}\.?\s+(?:de\s+)?{year}\b",
+        rf"\b{year}-{month_number:02d}(?:-\d{{1,2}})?\b",
+        rf"\b{month_number:02d}/{year}\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
 
 
 def classify_research_topic(query: str) -> str:
@@ -186,11 +231,17 @@ def result_relevance_score(query: str, item: dict[str, str]) -> int:
     return score
 
 
-def is_relevant_result(query: str, item: dict[str, str]) -> bool:
-    """Descarta páginas lexicais e exige correspondência com o assunto central."""
+def is_relevant_result(
+    query: str,
+    item: dict[str, str],
+    allow_incomplete_metadata: bool = False,
+) -> bool:
+    """Valida assunto e, em notícias, país, período e sinais de conteúdo jornalístico."""
     title = item.get("title", "").casefold()
     snippet = item.get("snippet", "").casefold()
-    combined = title + " " + snippet
+    page_text = item.get("page_text", "").casefold()
+    url = item.get("url", "").casefold()
+    combined = " ".join((title, snippet, page_text))
     topic = classify_research_topic(query)
 
     if topic in {"elections", "news", "technology", "science"}:
@@ -212,22 +263,36 @@ def is_relevant_result(query: str, item: dict[str, str]) -> bool:
         return any(term in combined for term in election_terms)
 
     if topic == "news":
-        # Domínio confiável não é passe livre: o conteúdo ainda precisa tratar do assunto.
+        # Para consultas de IA, a sigla isolada "IA" não comprova o assunto.
         if _mentions_ai(query) and not _candidate_mentions_ai(combined):
             return False
+        # Não aceitar páginas institucionais ou de produto como se fossem reportagens.
+        news_markers = (
+            "notícia", "noticia", "news", "reportagem", "reporta", "jornalístico",
+            "jornalistico", "anunciou", "anunciam", "anuncia", "announce", "announced",
+            "announces", "lançou", "lancou", "lançam", "lancam", "launch", "launched",
+            "publicou", "publicada", "publicado", "investiu", "investem", "aprovou",
+            "aprovam", "revelou", "revelam", "segundo", "estudo aponta", "relata",
+            "relatório", "report", "latest", "today",
+        )
+        has_news_signal = (
+            any(term in combined for term in news_markers)
+            or "/noticia/" in url or "/noticias/" in url or "/news/" in url
+            or "/article/" in url
+        )
+        if not has_news_signal:
+            return False
+        if _query_mentions_brazil(query) and not allow_incomplete_metadata:
+            if not _candidate_mentions_brazil(combined):
+                return False
+        if has_explicit_date_filter(query) and not allow_incomplete_metadata:
+            if not _contains_requested_period(query, combined):
+                return False
         subject = _subject_tokens(query)
         if subject:
             matched = sum(1 for token in subject if token in combined)
             return matched >= 1 or (_mentions_ai(query) and _candidate_mentions_ai(combined))
-        topical_terms = (
-            "notícia", "noticias", "news", "reportagem", "jornal",
-            "anunciou", "anuncia", "publicou", "publicado", "publicada",
-            "hoje", "today", "latest",
-        )
-        return bool(title.strip() or snippet.strip()) and (
-            any(term in combined for term in topical_terms)
-            or source_trust_score(item, topic) > 0
-        )
+        return bool(title.strip() or snippet.strip() or page_text.strip())
 
     meaningful_tokens = _subject_tokens(query)
     if not meaningful_tokens:
@@ -237,14 +302,20 @@ def is_relevant_result(query: str, item: dict[str, str]) -> bool:
     return result_relevance_score(query, item) >= 2
 
 
-def rank_results(query: str, items: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Ordena por correspondência temática, depois confiabilidade; remove duplicatas."""
+def rank_results(
+    query: str,
+    items: list[dict[str, str]],
+    allow_incomplete_metadata: bool = False,
+) -> list[dict[str, str]]:
+    """Ordena por relevância e confiança, validando metadados quando disponíveis."""
     topic = classify_research_topic(query)
     ranked: list[tuple[int, int, dict[str, str]]] = []
     seen: set[str] = set()
     for item in items:
         url = item.get("url", "").strip()
-        if not url or url in seen or not is_relevant_result(query, item):
+        if not url or url in seen or not is_relevant_result(
+            query, item, allow_incomplete_metadata=allow_incomplete_metadata
+        ):
             continue
         seen.add(url)
         ranked.append((
