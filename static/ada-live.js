@@ -47,7 +47,7 @@
   }
 
   function setLiveCaption(value) {
-    const clean = String(value || '').replace(/\\s+/g, ' ').trim();
+    const clean = String(value || '').replace(/\s+/g, ' ').trim();
     if (clean) liveCaption.textContent = clean.length > 220 ? clean.slice(0, 217) + '…' : clean;
   }
 
