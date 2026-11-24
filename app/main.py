@@ -1506,6 +1506,9 @@ async def search_web(query: str) -> list[dict[str, str]]:
                             "snippet": item["snippet"],
                             "feed_published_date": item.get("feed_published_date", ""),
                             "feed_publisher": item.get("feed_publisher", ""),
+                            "date_status": "somente_feed" if item.get("feed_published_date") else "sem_data_verificavel",
+                            "editorial_type": "indeterminado",
+                            "editorial_label": "Natureza editorial não confirmada",
                         }
                         if is_relevant_result(
                             original_query, candidate, allow_incomplete_metadata=True
@@ -1637,7 +1640,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 detail="Nenhum buscador retornou resultados nesta tentativa. Verifique a conexão do serviço ou configure uma chave válida em BRAVE_SEARCH_API_KEY.",
             )
 
-        await asyncio.gather(*(_read_page(client, item) for item in sources[:3]), return_exceptions=True)
+        await asyncio.gather(*(_read_page(client, item) for item in sources[:6]), return_exceptions=True)
         # Se a página informa uma data de publicação incompatível com o período
         # pedido, prevalece a data da página e o resultado é descartado.
         if has_explicit_date_filter(original_query):
