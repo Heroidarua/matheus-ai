@@ -195,6 +195,17 @@ async def test_web_search_uses_brave_when_configured(monkeypatch):
             return False
 
         async def get(self, url, *args, **kwargs):
+            if url in {
+                "https://news.google.com/rss/search",
+                "https://www.bing.com/news/search",
+            }:
+                class EmptyFeedResponse:
+                    text = "<rss version='2.0'><channel /></rss>"
+
+                    def raise_for_status(self):
+                        return None
+
+                return EmptyFeedResponse()
             assert url == "https://api.search.brave.com/res/v1/web/search"
             assert kwargs["headers"]["X-Subscription-Token"] == "test-token"
             return FakeResponse()
@@ -431,6 +442,29 @@ def test_rank_results_rejects_unverified_ai_news_metadata():
         "snippet": "Reportagem sobre novos sistemas de inteligência artificial.",
     }
     assert main.rank_results(query, [item]) == []
+
+
+def test_bing_news_rss_redirect_url_is_decoded_to_original_destination():
+    destination = "https://www.reuters.com/technology/artificial-intelligence/example/"
+    bing_url = "https://www.bing.com/news/apiclick.aspx?url=" + main.quote(destination, safe="") + "&ref=FexRss"
+    assert main._normalize_search_result_url(bing_url, "https://www.bing.com/news/search") == destination
+
+
+def test_news_rss_parser_keeps_publisher_and_publication_date():
+    feed = """<?xml version="1.0"?>
+    <rss version="2.0"><channel><item>
+      <title>Brasil anuncia nova política de inteligência artificial</title>
+      <link>https://example.com/noticia/ia</link>
+      <pubDate>Thu, 19 Nov 2026 13:24:00 GMT</pubDate>
+      <source url="https://example.com">Exemplo Notícias</source>
+      <description>Reportagem sobre inteligência artificial no Brasil.</description>
+    </item></channel></rss>"""
+    results = main._parse_news_rss(feed)
+    assert len(results) == 1
+    assert results[0]["title"].startswith("Brasil anuncia")
+    assert "Notícia indexada em feed jornalístico" in results[0]["snippet"]
+    assert "Veículo: Exemplo Notícias" in results[0]["snippet"]
+    assert "Publicado em 2026-11-19" in results[0]["snippet"]
 
 
 def test_bing_redirect_url_is_decoded_to_original_destination():
