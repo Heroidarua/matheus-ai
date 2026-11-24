@@ -13,8 +13,8 @@ A revisão da branch `main` identificou:
 - Backend FastAPI em `app/main.py`.
 - Modelo principal fixado em `gemma4:31b`, com `MODEL_BASE_URL` e `OPENAI_API_KEY` definidos no ambiente.
 - Resposta do chat por streaming em `POST /api/chat`.
-- Proxy TTS em `POST /api/tts/speech`, usando `TTS_API_URL`, `TTS_API_KEY` e `TTS_VOICE`.
-- Frontend estático em `static/index.html`, que hoje usa Web Speech API para reconhecimento e fala nativa do navegador.
+- Proxy TTS em `POST /api/tts/speech`, usando `TTS_API_URL`, `TTS_API_KEY` e `TTS_VOICE=F` para Tiny-Voca.
+- Frontend estático em `static/index.html`, com reconhecimento LiveKit/WebRTC e saída de voz pelo proxy Tiny-Voca.
 - O modo de voz atual envia transcrições para o chat e monitora interrupções no navegador; não é uma sessão de áudio full-duplex via WebRTC.
 
 ## Arquitetura recomendada
@@ -37,7 +37,7 @@ A sessão de voz deve chamar o backend existente da ADA-M para gerar respostas. 
 
 1. **Gemma permanece como LLM principal.** O agente deve consumir o endpoint autenticado da ADA-M ou um adaptador equivalente; não migrar automaticamente para LiveKit Inference.
 2. **STT e TTS são provedores independentes.** Selecionar serviços que suportem português brasileiro, streaming e interrupção. Validar latência, preço, limites e política de dados antes de habilitar produção.
-3. **Kokoro é candidato, não pressuposto.** O proxy atual espera uma API no formato `/v1/audio/speech`; testar o formato real do serviço configurado antes de conectar.
+3. **Tiny-Voca PT-BR já é o motor de voz integrado.** O proxy atual espera uma API no formato `/v1/audio/speech`; testar o formato real do serviço configurado antes de conectar.
 4. **LiveKit exige credenciais e infraestrutura.** Criar projeto LiveKit (Cloud ou servidor próprio) e configurar URL, API key e API secret apenas no servidor. Nunca expor o secret no JavaScript.
 5. **WebRTC não significa automaticamente full-duplex.** O pipeline STT → LLM → TTS oferece streaming e barge-in; a experiência de ouvir e falar simultaneamente depende do agente, VAD, provedor e implementação do cliente.
 6. **Render Free pode não ser adequado para um agente persistente.** Verificar disponibilidade de background worker, processo contínuo, consumo e custo do plano antes de ativar o serviço.
@@ -95,4 +95,9 @@ As variáveis de STT/TTS devem ser adicionadas apenas após escolher os provedor
 
 ## Estado desta branch
 
-Esta branch adiciona o endpoint de tokens, o botão de conexão no navegador e o cliente LiveKit. O serviço worker permanece separado e deve ser implantado como processo contínuo com o nome `ada-m-voice`. O modo LiveKit só conecta quando `LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` estiverem configurados no backend e no worker. O STT usa LiveKit Inference (Deepgram Nova-3) e pode gerar cobrança conforme a conta. Ainda não houve teste de ponta a ponta com credenciais reais; não considerar pronto para produção até validar STT, Kokoro, latência, barge-in e reconexão. Nenhum segredo foi adicionado ao repositório e nenhum serviço pago foi criado automaticamente.
+A implementação Live usa um cliente web que chama Tiny-Voca pelo proxy da ADA-M, com botão próprio e cancelamento de áudio ao detectar fala do usuário. O serviço worker permanece separado e deve ser implantado como processo contínuo com o nome `ada-m-voice`. O modo LiveKit só conecta quando `LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` estiverem configurados no backend e no worker. O STT usa LiveKit Inference (Deepgram Nova-3) e pode gerar cobrança conforme a conta. Ainda não houve teste de ponta a ponta com credenciais reais; não considerar pronto para produção até validar STT, Kokoro, latência, barge-in e reconexão. Nenhum segredo foi adicionado ao repositório e nenhum serviço pago foi criado automaticamente.
+
+
+## Atualização — cliente Live com Tiny-Voca
+
+O botão `🎙️ Live` fica junto ao campo de mensagem. O navegador conecta à sala LiveKit, mantém o microfone ativo com cancelamento de eco e recebe o texto do agente. A fala é sintetizada pelo endpoint `/api/tts/speech`, que encaminha ao Tiny-Voca privado configurado no backend. Ao detectar fala do participante local durante a reprodução, o cliente cancela o áudio atual e volta a ouvir. O modo de ditado/leitura tradicional permanece separado. Como Tiny-Voca gera WAV completo por requisição, a fala é dividida em frases e reproduzida em sequência; não é síntese de áudio token a token.
