@@ -1354,10 +1354,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 sources = grounded_sources
                 DIAGNOSTICS["last_search_provider"] = "Google Search Grounding"
                 if summary:
-                    # Used for relevance ranking and in the model context; the UI still
-                    # lists the individual citation excerpts and URLs.
-                    for item in sources:
-                        item["page_text"] = summary
+                    # Resumo geral não é evidência individual para validar cada URL citada.
                     sources[0]["summary"] = summary
                 print(f"Google Search Grounding: citations={len(grounded_sources)}")
             else:
@@ -1407,7 +1404,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                             "url": url[:2000],
                             "snippet": str(item.get("description") or "")[:500],
                         }
-                        if is_relevant_result(original_query, candidate):
+                        if is_relevant_result(original_query, candidate, allow_incomplete_metadata=True):
                             sources.append(candidate)
             except (httpx.HTTPError, ValueError, TypeError) as exc:
                 print(f"Brave Search failed ({type(exc).__name__}): {str(exc)[:160]}")
@@ -1429,7 +1426,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                             "url": url[:2000],
                             "snippet": str(item.get("content") or item.get("snippet") or "")[:500],
                         }
-                        if is_relevant_result(original_query, candidate):
+                        if is_relevant_result(original_query, candidate, allow_incomplete_metadata=True):
                             sources.append(candidate)
             except (httpx.HTTPError, ValueError, TypeError) as exc:
                 print(f"SearXNG failed ({type(exc).__name__}): {str(exc)[:160]}")
@@ -1470,7 +1467,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                             "url": url[:2000],
                             "snippet": str(item.get("snippet") or "")[:500],
                         }
-                        if not is_relevant_result(original_query, candidate):
+                        if not is_relevant_result(original_query, candidate, allow_incomplete_metadata=True):
                             rejected += 1
                             continue
                         sources.append(candidate)
@@ -1489,7 +1486,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
 
         # Só considera resultados que passaram pela avaliação de relevância.
         # Ordena fontes primárias antes de enviar evidências ao modelo.
-        sources = rank_results(original_query, sources)
+        sources = rank_results(original_query, sources, allow_incomplete_metadata=True)
         if not sources:
             raise HTTPException(
                 status_code=502,
@@ -1497,6 +1494,13 @@ async def search_web(query: str) -> list[dict[str, str]]:
             )
 
         await asyncio.gather(*(_read_page(client, item) for item in sources[:3]), return_exceptions=True)
+        # Revalida com o texto da página: país e mês/ano precisam estar comprovados.
+        sources = rank_results(original_query, sources)
+        if not sources:
+            raise HTTPException(
+                status_code=502,
+                detail="Os buscadores retornaram páginas, mas nenhuma confirmou o assunto, o país e o período solicitados.",
+            )
 
     for source in sources:
         if source.get("page_text"):
@@ -1580,9 +1584,10 @@ async def tool_web_search(query: str, limit: int = 10) -> dict:
                     for i in (data.get("results") or [])[:limit]
                     if _public_http_url(str(i.get("url") or ""))
                 ]
+                results = rank_results(query, results)
                 if results:
-                    return {"found": True, "results": results}
-                return {"found": False, "note": f"SearXNG consultado para '{query}', nada encontrado"}
+                    return {"found": True, "results": results[:limit]}
+                return {"found": False, "note": f"SearXNG consultado para '{query}', nenhum resultado passou pela validação de relevância"}
             except (httpx.HTTPError, ValueError) as exc:
                 print(f"tool_web_search SearXNG failed ({type(exc).__name__})")
         brave_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
@@ -1600,9 +1605,10 @@ async def tool_web_search(query: str, limit: int = 10) -> dict:
                     for i in ((data.get("web") or {}).get("results") or [])[:limit]
                     if _public_http_url(str(i.get("url") or ""))
                 ]
+                results = rank_results(query, results)
                 if results:
-                    return {"found": True, "results": results}
-                return {"found": False, "note": f"Brave Search consultado para '{query}', nada encontrado"}
+                    return {"found": True, "results": results[:limit]}
+                return {"found": False, "note": f"Brave Search consultado para '{query}', nenhum resultado passou pela validação de relevância"}
             except (httpx.HTTPError, ValueError) as exc:
                 return {"ok": False, "error": f"Brave Search falhou: {type(exc).__name__}"}
         # Reaproveita os buscadores públicos já implementados em search_web

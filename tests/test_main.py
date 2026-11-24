@@ -348,11 +348,89 @@ def test_news_relevance_requires_subject_even_on_trusted_news_domains():
 def test_news_relevance_accepts_ai_reporting_from_a_news_source():
     query = "notícias sobre inteligência artificial no Brasil em novembro de 2026"
     relevant = {
-        "title": "Empresas anunciam novidades em inteligência artificial",
+        "title": "Empresas anunciam novidades em inteligência artificial no Brasil",
         "url": "https://g1.globo.com/tecnologia/noticia/ia",
-        "snippet": "Reportagem sobre novos sistemas de inteligência artificial.",
+        "snippet": "Reportagem de novembro de 2026 sobre novos sistemas de inteligência artificial no Brasil.",
     }
     assert main.is_relevant_result(query, relevant)
+
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        {
+            "title": "P+ Solution | Predict the Future",
+            "url": "https://pesquisemais.com.br/",
+            "snippet": "Soluções, Tecnologia e IA. Sobre nós, LGPD e Compliance.",
+        },
+        {
+            "title": "Pesquisa - Microsoft Bing",
+            "url": "https://www.bing.com/search",
+            "snippet": "Pesquise com o Microsoft Bing e use o poder da IA.",
+        },
+        {
+            "title": "Google Gemini",
+            "url": "https://gemini.google.com/",
+            "snippet": "Conheça o Gemini, o assistente de IA do Google.",
+        },
+        {
+            "title": "15 tipos de inteligência",
+            "url": "https://example.org/inteligencia",
+            "snippet": "Conheça tipos de inteligência humana.",
+        },
+    ],
+)
+def test_ai_news_rejects_generic_sites_and_isolated_ai_acronym(item):
+    query = "notícias sobre inteligência artificial no Brasil em novembro de 2026"
+    assert not main.is_relevant_result(query, item)
+
+
+def test_ai_news_requires_explicit_country_and_requested_month():
+    query = "notícias sobre inteligência artificial no Brasil em novembro de 2026"
+    no_country = {
+        "title": "Empresas anunciam novos modelos de inteligência artificial",
+        "url": "https://example.org/noticia/ia",
+        "snippet": "Reportagem de novembro de 2026 sobre novos modelos de inteligência artificial.",
+    }
+    wrong_period = {
+        "title": "Empresas anunciam novos modelos de inteligência artificial no Brasil",
+        "url": "https://example.org/noticia/ia",
+        "snippet": "Reportagem de outubro de 2026 sobre novos modelos de inteligência artificial no Brasil.",
+    }
+    assert not main.is_relevant_result(query, no_country)
+    assert not main.is_relevant_result(query, wrong_period)
+
+
+def test_ai_news_accepts_contextual_ai_acronym_when_period_and_country_match():
+    query = "notícias sobre inteligência artificial no Brasil em novembro de 2026"
+    item = {
+        "title": "Empresas anunciam novos modelos de IA generativa no Brasil",
+        "url": "https://example.org/noticias/modelos-ia",
+        "snippet": "Reportagem publicada em novembro de 2026 sobre modelos de IA generativa.",
+    }
+    assert main.is_relevant_result(query, item)
+
+
+def test_ai_news_initial_candidate_can_wait_for_page_metadata():
+    query = "notícias sobre inteligência artificial no Brasil em novembro de 2026"
+    item = {
+        "title": "Empresas anunciam novos modelos de inteligência artificial",
+        "url": "https://example.org/noticia/ia",
+        "snippet": "Reportagem sobre novos modelos de inteligência artificial.",
+    }
+    assert main.is_relevant_result(query, item, allow_incomplete_metadata=True)
+    assert not main.is_relevant_result(query, item)
+
+
+def test_rank_results_rejects_unverified_ai_news_metadata():
+    query = "notícias sobre inteligência artificial no Brasil em novembro de 2026"
+    item = {
+        "title": "Empresas anunciam novidades em inteligência artificial",
+        "url": "https://example.org/noticia/ia",
+        "snippet": "Reportagem sobre novos sistemas de inteligência artificial.",
+    }
+    assert main.rank_results(query, [item]) == []
 
 
 def test_bing_redirect_url_is_decoded_to_original_destination():
