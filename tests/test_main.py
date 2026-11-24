@@ -195,6 +195,17 @@ async def test_web_search_uses_brave_when_configured(monkeypatch):
             return False
 
         async def get(self, url, *args, **kwargs):
+            if url in {
+                "https://news.google.com/rss/search",
+                "https://www.bing.com/news/search",
+            }:
+                class EmptyFeedResponse:
+                    text = "<rss version='2.0'><channel /></rss>"
+
+                    def raise_for_status(self):
+                        return None
+
+                return EmptyFeedResponse()
             assert url == "https://api.search.brave.com/res/v1/web/search"
             assert kwargs["headers"]["X-Subscription-Token"] == "test-token"
             return FakeResponse()
