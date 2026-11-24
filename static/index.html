@@ -740,6 +740,17 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     const voiceStatus = document.getElementById('voice-status');
     let currentMode = 'livre'; // Sempre sem censura
     let activeController = null;
+    window.__adaLivePendingTranscript = '';
+    window.__adaLiveSubmitTranscript = transcript => {
+      const clean = String(transcript || '').trim();
+      if (!clean) return;
+      if (sendBtn.disabled) {
+        window.__adaLivePendingTranscript = clean;
+        return;
+      }
+      promptEl.value = clean;
+      form.requestSubmit();
+    };
 
     // Personalização do fundo do chat: temas e imagem escolhida pelo usuário.
     const wallpaperDialog = document.getElementById('wallpaper-dialog');
@@ -2271,7 +2282,7 @@ const history = [];
         // Usa a voz nativa do navegador para evitar esperar uma chamada TTS remota.
         let liveSpeechBuffer = '';
         const speakLiveChunks = (flush = false) => {
-          if (!voiceConversationToggle.checked) return;
+          if (!voiceConversationToggle.checked || window.__adaLiveActive) return;
           const parts = liveSpeechBuffer.match(/[\s\S]*?[.!?…](?:\s+|$)/g) || [];
           if (parts.length) {
             for (const part of parts) queueNativeBrowserSpeech(part.trim());
@@ -2400,6 +2411,9 @@ const history = [];
         history.push({ role: 'assistant', content: githubProjectResult.text });
         while (history.length > 12) history.shift();
         chatTranscript.push({role:'assistant',text:githubProjectResult.text,files:streamFiles}); persistCurrentConversation();
+        if (window.__adaLiveActive && typeof window.__adaLiveOnResponse === 'function') {
+          await window.__adaLiveOnResponse(githubProjectResult.text);
+        }
       } catch (error) {
         if (error.name === 'AbortError') {
           pending.replaceChildren(document.createTextNode('Geração interrompida.'));
@@ -2417,7 +2431,13 @@ const history = [];
         sendBtn.textContent = 'Enviar';
         stopButton.hidden = true;
         activeController = null;
-        if (voiceSessionActive) {
+        if (window.__adaLivePendingTranscript) {
+          const nextTranscript = window.__adaLivePendingTranscript;
+          window.__adaLivePendingTranscript = '';
+          promptEl.value = nextTranscript;
+          queueMicrotask(() => form.requestSubmit());
+        }
+        if (voiceSessionActive && !window.__adaLiveActive) {
           const resumeListening = () => {
             if (!voiceSessionActive) return;
             const speechBusy = (window.speechSynthesis &&
@@ -2505,6 +2525,6 @@ const history = [];
   </dialog>
 
   <script src="/static/github-integration.js?v=github-app-20261109"></script>
-  <script type="module" src="/static/ada-livekit.js?v=live-tiny-voca-20261124"></script>
+  <script src="/static/ada-live.js?v=vps-vosk-live-20261124"></script>
 </body>
 </html>

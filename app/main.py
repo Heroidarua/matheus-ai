@@ -14,7 +14,7 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 import xml.etree.ElementTree as ET
@@ -32,7 +32,6 @@ from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
-from livekit import api as livekit_api
 
 from app.text_encoding import decode_text_bytes
 from app.security_guard import is_sensitive_internal_config_request, SENSITIVE_REQUEST_REPLY
@@ -60,6 +59,7 @@ from app.long_term_memory import (
     retrieve as retrieve_long_term_memory,
     storage_status as long_term_memory_storage_status,
 )
+from app.live_voice import router as live_voice_router
 
 # Rate limiting: 10 requests por minuto por IP
 from collections import defaultdict
@@ -126,12 +126,6 @@ APP_API_KEY = os.getenv("APP_API_KEY", "").strip()
 BROWSER_SERVICE_URL = os.getenv("BROWSER_SERVICE_URL", "").strip().rstrip("/")
 BROWSER_SERVICE_API_KEY = os.getenv("BROWSER_SERVICE_API_KEY", "").strip()
 BROWSER_SERVICE_ENABLED = bool(BROWSER_SERVICE_URL and BROWSER_SERVICE_API_KEY)
-LIVEKIT_URL = os.getenv("LIVEKIT_URL", "").strip().rstrip("/")
-LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "").strip()
-LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "").strip()
-LIVEKIT_AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "ada-m-voice").strip() or "ada-m-voice"
-LIVEKIT_TOKEN_TTL_SECONDS = 600
-LIVEKIT_TOKEN_ISSUES: dict[str, float] = {}
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 IMAGE_EDIT_MODEL = os.getenv("IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit")
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
@@ -141,6 +135,7 @@ APP_STARTED_AT = time.time()
 DIAGNOSTICS = {"requests": 0, "successes": 0, "errors": 0, "searches": 0, "search_successes": 0, "last_error": None, "last_search_provider": None}
 
 app = FastAPI(title="ADA-M", version="0.3.0")
+app.include_router(live_voice_router)
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("GITHUB_SESSION_SECRET") or secrets.token_urlsafe(48),
@@ -244,71 +239,6 @@ def ollama_credit_warning() -> str:
 def require_app_key(x_app_key: str | None = Header(default=None)) -> None:
     if APP_API_KEY and x_app_key != APP_API_KEY:
         raise HTTPException(status_code=401, detail="Chave da aplicação inválida.")
-
-
-@app.post("/api/livekit/token", status_code=201)
-async def create_livekit_token(request: Request) -> dict[str, Any]:
-    """Emite token LiveKit curto, limitado a áudio e a uma sala da sessão ADA-M."""
-    if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
-        raise HTTPException(status_code=503, detail="O modo LiveKit ainda não está configurado no servidor.")
-
-    origin = request.headers.get("origin") or request.headers.get("referer")
-    request_host = request.headers.get("host", "").lower()
-    origin_host = urlparse(origin).netloc.lower() if origin else ""
-    if not origin_host or not request_host or origin_host != request_host:
-        raise HTTPException(status_code=403, detail="Origem não autorizada.")
-
-    session_id = request.session.get("companion_id")
-    if not session_id:
-        session_id = secrets.token_urlsafe(32)
-        request.session["companion_id"] = session_id
-
-    now = time.time()
-    last_issued = LIVEKIT_TOKEN_ISSUES.get(session_id, 0)
-    if now - last_issued < 5:
-        raise HTTPException(status_code=429, detail="Aguarde alguns segundos antes de solicitar outro token.")
-    LIVEKIT_TOKEN_ISSUES[session_id] = now
-    if len(LIVEKIT_TOKEN_ISSUES) > 5000:
-        cutoff = now - 3600
-        for key, issued_at in list(LIVEKIT_TOKEN_ISSUES.items()):
-            if issued_at < cutoff:
-                LIVEKIT_TOKEN_ISSUES.pop(key, None)
-
-    # Uma sala nova por sessão de voz garante que o dispatch do agente ocorra
-    # mesmo quando o usuário encerra e inicia uma nova chamada rapidamente.
-    room_name = "ada-" + secrets.token_urlsafe(18).replace("-", "").replace("_", "")[:22].lower()
-
-    identity = "user-" + secrets.token_urlsafe(12).replace("-", "").replace("_", "")[:16].lower()
-    try:
-        token = (
-            livekit_api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
-            .with_identity(identity)
-            .with_name("Usuário ADA-M")
-            .with_grants(livekit_api.VideoGrants(
-                room_join=True,
-                room=room_name,
-                can_publish=True,
-                can_publish_sources=["microphone"],
-                can_subscribe=True,
-                can_publish_data=False,
-            ))
-            .with_ttl(timedelta(seconds=LIVEKIT_TOKEN_TTL_SECONDS))
-            .with_room_config(livekit_api.RoomConfiguration(
-                agents=[livekit_api.RoomAgentDispatch(agent_name=LIVEKIT_AGENT_NAME)]
-            ))
-        )
-        participant_token = token.to_jwt()
-    except Exception as exc:
-        print(f"LiveKit token generation failed ({type(exc).__name__})")
-        raise HTTPException(status_code=503, detail="Não foi possível preparar a conexão de voz agora.")
-
-    return {
-        "server_url": LIVEKIT_URL,
-        "participant_token": participant_token,
-        "room_name": room_name,
-        "participant_identity": identity,
-        "expires_in": LIVEKIT_TOKEN_TTL_SECONDS,
-    }
 
 
 @app.get("/sw.js", include_in_schema=False)
