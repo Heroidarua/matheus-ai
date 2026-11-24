@@ -52,6 +52,7 @@ if [[ ! -s "$MODEL" ]]; then
     echo "O arquivo baixado parece incompleto ou inválido." >&2
     exit 1
   fi
+  echo "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898  $MODEL.tmp" | sha256sum -c -
   mv "$MODEL.tmp" "$MODEL"
   chmod 0644 "$MODEL"
 fi
