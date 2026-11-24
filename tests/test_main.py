@@ -465,6 +465,8 @@ def test_news_rss_parser_keeps_publisher_and_publication_date():
     assert "Notícia indexada em feed jornalístico" in results[0]["snippet"]
     assert "Veículo: Exemplo Notícias" in results[0]["snippet"]
     assert "Publicado em 2026-11-19" in results[0]["snippet"]
+    assert results[0]["feed_published_date"] == "2026-11-19"
+    assert results[0]["feed_publisher"] == "Exemplo Notícias"
 
 
 def test_bing_redirect_url_is_decoded_to_original_destination():

@@ -36,7 +36,8 @@ from livekit import api as livekit_api
 
 from app.text_encoding import decode_text_bytes
 from app.security_guard import is_sensitive_internal_config_request, SENSITIVE_REQUEST_REPLY
-from app.research_engine import build_search_query, classify_research_topic, has_explicit_date_filter, is_relevant_result, rank_results
+from app.research_engine import build_search_query, classify_research_topic, has_explicit_date_filter, is_relevant_result, rank_results, _contains_requested_period
+from app.news_metadata import extract_article_metadata
 from app.google_search import google_grounded_search
 from app.google_workspace import router as google_workspace_router
 from app.file_library import router as file_library_router, search_library
@@ -1319,6 +1320,8 @@ def _parse_news_rss(content: str) -> list[dict[str, str]]:
             results.append({
                 "title": title[:200],
                 "url": link[:2000],
+                "feed_published_date": published_iso,
+                "feed_publisher": publisher[:120],
                 "snippet": " ".join(part for part in (
                     "Notícia indexada em feed jornalístico.",
                     description[:500],
@@ -1367,6 +1370,36 @@ async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[
         page_text = re.sub(r"\s+", " ", " ".join(parser.parts)).strip()
         if len(page_text) > 100:
             source["page_text"] = page_text[:1800]
+        metadata = extract_article_metadata(
+            response.text,
+            str(response.url),
+            feed_date=source.get("feed_published_date", ""),
+        )
+        if metadata.get("original_source_url") and not _public_http_url(metadata["original_source_url"]):
+            metadata["original_source_url"] = ""
+        source.update(metadata)
+        if metadata.get("page_headline"):
+            source["title"] = metadata["page_headline"][:200]
+        editorial_details = [
+            f"Classificação editorial: {metadata['editorial_label']}.",
+            f"Situação da data: {metadata.get('date_status', 'sem_data_verificavel')}.",
+        ]
+        if metadata.get("published_date"):
+            editorial_details.append(
+                f"Data publicada na página: {metadata['published_date']} "
+                f"({metadata.get('published_date_source') or 'metadado da página'})."
+            )
+        elif metadata.get("feed_published_date"):
+            editorial_details.append(
+                f"Data do feed: {metadata['feed_published_date']} (não confirmada na página original)."
+            )
+        if metadata.get("feed_published_date") and metadata.get("published_date"):
+            editorial_details.append(f"Data informada pelo feed: {metadata['feed_published_date']}.")
+        if metadata.get("original_source_name"):
+            editorial_details.append(f"Origem indicada: {metadata['original_source_name']}.")
+        if metadata.get("original_source_url"):
+            editorial_details.append(f"Link da origem original: {metadata['original_source_url']}.")
+        source["snippet"] = (source.get("snippet", "") + " " + " ".join(editorial_details)).strip()[:1400]
     except (httpx.HTTPError, ValueError, UnicodeError):
         pass
     return source
@@ -1474,6 +1507,11 @@ async def search_web(query: str) -> list[dict[str, str]]:
                             "title": item["title"],
                             "url": destination,
                             "snippet": item["snippet"],
+                            "feed_published_date": item.get("feed_published_date", ""),
+                            "feed_publisher": item.get("feed_publisher", ""),
+                            "date_status": "somente_feed" if item.get("feed_published_date") else "sem_data_verificavel",
+                            "editorial_type": "indeterminado",
+                            "editorial_label": "Natureza editorial não confirmada",
                         }
                         if is_relevant_result(
                             original_query, candidate, allow_incomplete_metadata=True
@@ -1605,9 +1643,29 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 detail="Nenhum buscador retornou resultados nesta tentativa. Verifique a conexão do serviço ou configure uma chave válida em BRAVE_SEARCH_API_KEY.",
             )
 
-        await asyncio.gather(*(_read_page(client, item) for item in sources[:3]), return_exceptions=True)
+        await asyncio.gather(*(_read_page(client, item) for item in sources[:6]), return_exceptions=True)
+        # Se a página informa uma data de publicação incompatível com o período
+        # pedido, prevalece a data da página e o resultado é descartado.
+        if has_explicit_date_filter(original_query):
+            sources = [
+                item for item in sources
+                if not item.get("published_date")
+                or _contains_requested_period(original_query, item["published_date"])
+            ]
         # Revalida com o texto da página: país e mês/ano precisam estar comprovados.
         sources = rank_results(original_query, sources)
+        # Reportagens editoriais aparecem antes de releases e conteúdo patrocinado.
+        editorial_priority = {
+            "jornalismo": 4,
+            "republicado": 3,
+            "indeterminado": 2,
+            "corporativo": 1,
+            "patrocinado": 0,
+        }
+        sources.sort(
+            key=lambda item: editorial_priority.get(item.get("editorial_type", "indeterminado"), 2),
+            reverse=True,
+        )
         if not sources:
             raise HTTPException(
                 status_code=502,
