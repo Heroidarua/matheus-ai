@@ -216,7 +216,8 @@
     mutedGain = audioContext.createGain();
     mutedGain.gain.value = 0;
     processor.onaudioprocess = event => {
-      if (!active || !socket || socket.readyState !== WebSocket.OPEN) return;
+      // Não envia áudio enquanto a ADA-M gera ou reproduz TTS: evita que o próprio alto-falante vire uma nova fala do usuário.
+      if (!active || activeAudio || playbackAbort || !socket || socket.readyState !== WebSocket.OPEN) return;
       const input = event.inputBuffer.getChannelData(0);
       const pcm = downsampleTo16k(input, audioContext.sampleRate);
       if (pcm.length) socket.send(pcm.buffer);
