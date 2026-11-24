@@ -21,12 +21,9 @@
   let playbackAbort = null;
   let activeAudio = null;
   let activeAudioUrl = null;
-  let lastVoiceCandidate = '';
-  let voiceCandidateCount = 0;
-  let currentAssistantSpeech = '';
   let transcriptBuffer = [];
   let transcriptTimer = null;
-  const transcriptPauseMs = 1400;
+  const transcriptPauseMs = 700;
 
   function setStatus(message, visible = true) {
     status.textContent = message;
@@ -89,7 +86,6 @@
 
   function stopPlayback() {
     playbackGeneration += 1;
-    currentAssistantSpeech = '';
     if (playbackAbort) {
       playbackAbort.abort();
       playbackAbort = null;
@@ -146,7 +142,6 @@
         activeAudioUrl = URL.createObjectURL(blob);
         const audio = new Audio(activeAudioUrl);
         activeAudio = audio;
-        currentAssistantSpeech = normalizeSpeechText(part);
         audio.preload = 'auto';
         setStatus('ADA-M falando…');
         await new Promise((resolve, reject) => {
@@ -187,48 +182,6 @@
     await speakWithTinyVoca(text);
   };
 
-  function normalizeSpeechText(value) {
-    return String(value || '')
-      .toLocaleLowerCase('pt-BR')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9 ]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  function considerVoiceInterruption(partialText) {
-    if (!activeAudio && !playbackAbort) return;
-    const normalized = normalizeSpeechText(partialText);
-    const words = normalized.split(' ').filter(Boolean);
-    if (!normalized || !(words.length >= 2 || (words.length === 1 && words[0].length >= 4))) {
-      lastVoiceCandidate = '';
-      voiceCandidateCount = 0;
-      return;
-    }
-    // Ignore Vosk partials that are simply hearing the audio currently spoken by ADA-M.
-    // A user interruption adds words that are not part of this exact TTS sentence.
-    if (currentAssistantSpeech && currentAssistantSpeech.includes(normalized)) {
-      lastVoiceCandidate = '';
-      voiceCandidateCount = 0;
-      return;
-    }
-    if (normalized === lastVoiceCandidate ||
-        normalized.startsWith(lastVoiceCandidate + ' ') ||
-        lastVoiceCandidate.startsWith(normalized + ' ')) {
-      voiceCandidateCount += 1;
-    } else {
-      lastVoiceCandidate = normalized;
-      voiceCandidateCount = 1;
-    }
-    if (voiceCandidateCount >= 2) {
-      lastVoiceCandidate = '';
-      voiceCandidateCount = 0;
-      stopPlayback();
-      setStatus('Interrompida. Estou ouvindo você…');
-    }
-  }
-
   function downsampleTo16k(input, inputRate) {
     if (inputRate === 16000) {
       const direct = new Int16Array(input.length);
@@ -263,7 +216,8 @@
     mutedGain = audioContext.createGain();
     mutedGain.gain.value = 0;
     processor.onaudioprocess = event => {
-      if (!active || !socket || socket.readyState !== WebSocket.OPEN) return;
+      // Não envia áudio enquanto a ADA-M gera ou reproduz TTS: evita que o próprio alto-falante vire uma nova fala do usuário.
+      if (!active || activeAudio || playbackAbort || !socket || socket.readyState !== WebSocket.OPEN) return;
       const input = event.inputBuffer.getChannelData(0);
       const pcm = downsampleTo16k(input, audioContext.sampleRate);
       if (pcm.length) socket.send(pcm.buffer);
@@ -348,9 +302,13 @@
             // Vosk segments buffered instead of submitting a sentence fragment.
             clearTranscriptTimer();
             setLiveCaption('Você: ' + data.text);
-            considerVoiceInterruption(data.text);
           }
           if (!activeAudio && !playbackAbort) setStatus('Estou ouvindo você…');
+        } else if (data.type === 'utterance' && data.text) {
+          // Whisper.cpp envia somente depois de detectar o fim da frase; não fragmentamos nem interrompemos a fala da ADA-M.
+          clearTranscriptTimer();
+          transcriptBuffer = [data.text];
+          flushTranscriptBuffer();
         } else if (data.type === 'transcript' && data.text) {
           // Vosk may finalize a phrase after a short pause. Accumulate consecutive
           // finalized segments and submit only after a longer, deliberate pause.

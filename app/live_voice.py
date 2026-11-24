@@ -3,77 +3,199 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import threading
+import subprocess
+import tempfile
+import time
+import wave
+from collections import deque
 from pathlib import Path
+from urllib.parse import urlparse
 
+import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from vosk import KaldiRecognizer, Model, SetLogLevel
 
 router = APIRouter()
-MODEL_PATH = Path(os.getenv(
-    "VOSK_MODEL_PATH",
-    "/opt/ada-m/models/vosk-model-small-pt-0.3",
+
+ASR_BACKEND = os.getenv("ADA_LIVE_ASR", "whisper_cpp").strip().lower()
+WHISPER_CLI = os.getenv("WHISPER_CLI_PATH", "/usr/local/bin/whisper-cli")
+WHISPER_MODEL = Path(os.getenv(
+    "WHISPER_MODEL_PATH",
+    "/opt/ada-m/models/ggml-base-q5_1.bin",
 ))
-_model: Model | None = None
-_model_lock = threading.Lock()
-SetLogLevel(-1)
+VAD_RMS_THRESHOLD = float(os.getenv("ADA_LIVE_VAD_RMS", "0.009"))
+VAD_SILENCE_SECONDS = float(os.getenv("ADA_LIVE_VAD_SILENCE", "0.85"))
+VAD_MAX_UTTERANCE_SECONDS = float(os.getenv("ADA_LIVE_MAX_UTTERANCE", "18"))
+VAD_MIN_SPEECH_SECONDS = float(os.getenv("ADA_LIVE_MIN_SPEECH", "0.28"))
+WHISPER_THREADS = max(1, int(os.getenv("ADA_LIVE_WHISPER_THREADS", "2")))
+_whisper_semaphore = asyncio.Semaphore(1)
 
 
-def _load_model() -> Model:
-    global _model
-    if _model is not None:
-        return _model
-    with _model_lock:
-        if _model is None:
-            if not MODEL_PATH.is_dir():
-                raise FileNotFoundError(
-                    "Modelo Vosk PT-BR não encontrado. Execute scripts/install-vosk-model.sh."
-                )
-            _model = Model(str(MODEL_PATH))
-    return _model
+def _transcribe_whisper(pcm_chunks: list[bytes]) -> str:
+    if not Path(WHISPER_CLI).is_file():
+        raise FileNotFoundError(
+            "Whisper.cpp não está instalado. Execute scripts/install-whisper-cpp.sh."
+        )
+    if not WHISPER_MODEL.is_file():
+        raise FileNotFoundError(
+            "Modelo Whisper PT-BR não encontrado. Execute scripts/install-whisper-cpp.sh."
+        )
+
+    pcm = b"".join(pcm_chunks)
+    if not pcm:
+        return ""
+
+    with tempfile.TemporaryDirectory(prefix="ada-live-") as temp_dir:
+        wav_path = Path(temp_dir) / "utterance.wav"
+        with wave.open(str(wav_path), "wb") as audio_file:
+            audio_file.setnchannels(1)
+            audio_file.setsampwidth(2)
+            audio_file.setframerate(16000)
+            audio_file.writeframes(pcm)
+
+        command = [
+            WHISPER_CLI,
+            "-m", str(WHISPER_MODEL),
+            "-f", str(wav_path),
+            "-l", "pt",
+            "-t", str(WHISPER_THREADS),
+            "-nt",
+            "-np",
+        ]
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()[-500:]
+            raise RuntimeError(f"Whisper.cpp encerrou com erro: {detail}")
+        lines = [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip() and line.strip() != "[BLANK_AUDIO]"
+        ]
+        return " ".join(lines).strip()
+
+
+def _load_vosk_recognizer():
+    # Importação tardia: o modo Whisper não depende de carregar o Vosk.
+    from vosk import KaldiRecognizer, Model, SetLogLevel
+
+    SetLogLevel(-1)
+    model_path = Path(os.getenv(
+        "VOSK_MODEL_PATH",
+        "/opt/ada-m/models/vosk-model-small-pt-0.3",
+    ))
+    if not model_path.is_dir():
+        raise FileNotFoundError(
+            "Modelo Vosk PT-BR não encontrado. Execute scripts/install-vosk-model.sh."
+        )
+    recognizer = KaldiRecognizer(Model(str(model_path)), 16000)
+    recognizer.SetWords(False)
+    return recognizer
+
+
+async def _send_transcription(websocket: WebSocket, chunks: list[bytes]) -> None:
+    if not chunks:
+        return
+    async with _whisper_semaphore:
+        transcript = await asyncio.to_thread(_transcribe_whisper, chunks)
+    if transcript:
+        await websocket.send_json({"type": "utterance", "text": transcript})
 
 
 @router.websocket("/api/live/ws")
 async def live_voice_socket(websocket: WebSocket) -> None:
-    # A conexão aceita somente páginas servidas pelo mesmo host da ADA-M.
     origin = websocket.headers.get("origin", "")
     host = websocket.headers.get("host", "").lower()
-    origin_host = ""
-    if origin:
-        from urllib.parse import urlparse
-        origin_host = urlparse(origin).netloc.lower()
-
+    origin_host = urlparse(origin).netloc.lower() if origin else ""
     if not origin_host or not host or origin_host != host:
         await websocket.close(code=4403, reason="Origem não autorizada")
         return
 
     await websocket.accept()
     try:
-        await websocket.send_json({"type": "status", "message": "Carregando reconhecimento de voz..."})
-        model = await asyncio.to_thread(_load_model)
-        recognizer = KaldiRecognizer(model, 16000)
-        recognizer.SetWords(False)
-        await websocket.send_json({"type": "ready", "message": "Reconhecimento PT-BR pronto."})
+        if ASR_BACKEND not in {"whisper_cpp", "vosk"}:
+            raise RuntimeError("ADA_LIVE_ASR deve ser whisper_cpp ou vosk.")
 
-        while True:
-            audio = await websocket.receive_bytes()
-            if not audio or len(audio) > 65536:
-                continue
-            completed = await asyncio.to_thread(recognizer.AcceptWaveform, audio)
-            if completed:
-                result = json.loads(recognizer.Result() or "{}")
-                transcript = str(result.get("text", "")).strip()
-                if transcript:
-                    await websocket.send_json({"type": "transcript", "text": transcript})
-            else:
-                partial = json.loads(recognizer.PartialResult() or "{}").get("partial", "")
-                if partial:
-                    await websocket.send_json({"type": "partial", "text": partial})
+        await websocket.send_json({"type": "status", "message": "Preparando reconhecimento de voz PT-BR..."})
+        if ASR_BACKEND == "whisper_cpp":
+            if not Path(WHISPER_CLI).is_file() or not WHISPER_MODEL.is_file():
+                raise FileNotFoundError(
+                    "Whisper.cpp ou o modelo Base quantizado não foi instalado. Execute scripts/install-whisper-cpp.sh."
+                )
+            await websocket.send_json({
+                "type": "ready",
+                "message": "Whisper.cpp PT-BR pronto. Fale normalmente; vou aguardar você concluir a frase.",
+            })
+            pre_roll: deque[bytes] = deque(maxlen=2)
+            utterance: list[bytes] = []
+            speaking = False
+            speech_started_at = 0.0
+            last_voice_at = 0.0
+            voiced_bytes = 0
+
+            while True:
+                audio = await websocket.receive_bytes()
+                if not audio or len(audio) > 65536 or len(audio) % 2:
+                    continue
+                samples = np.frombuffer(audio, dtype="<i2")
+                rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2))) / 32768.0
+                now = time.monotonic()
+                is_voice = rms >= VAD_RMS_THRESHOLD
+
+                if is_voice:
+                    if not speaking:
+                        speaking = True
+                        speech_started_at = now
+                        utterance = list(pre_roll)
+                        voiced_bytes = 0
+                    utterance.append(audio)
+                    voiced_bytes += len(audio)
+                    last_voice_at = now
+                elif speaking:
+                    utterance.append(audio)
+
+                if not speaking:
+                    pre_roll.append(audio)
+                    continue
+
+                elapsed = now - speech_started_at
+                silence_elapsed = now - last_voice_at
+                should_finish = (
+                    silence_elapsed >= VAD_SILENCE_SECONDS
+                    or elapsed >= VAD_MAX_UTTERANCE_SECONDS
+                )
+                if should_finish:
+                    completed = utterance
+                    valid_speech = voiced_bytes / (16000 * 2) >= VAD_MIN_SPEECH_SECONDS
+                    utterance = []
+                    speaking = False
+                    pre_roll.clear()
+                    if valid_speech:
+                        await websocket.send_json({"type": "status", "message": "Frase capturada. Convertendo sua fala em texto..."})
+                        await _send_transcription(websocket, completed)
+                        await websocket.send_json({"type": "listening", "message": "Pode falar novamente."})
+        else:
+            recognizer = await asyncio.to_thread(_load_vosk_recognizer)
+            await websocket.send_json({"type": "ready", "message": "Vosk PT-BR pronto (modo alternativo)."})
+            while True:
+                audio = await websocket.receive_bytes()
+                if not audio or len(audio) > 65536:
+                    continue
+                completed = await asyncio.to_thread(recognizer.AcceptWaveform, audio)
+                if completed:
+                    result = json.loads(recognizer.Result() or "{}")
+                    transcript = str(result.get("text", "")).strip()
+                    if transcript:
+                        await websocket.send_json({"type": "transcript", "text": transcript})
     except WebSocketDisconnect:
         return
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, RuntimeError, subprocess.TimeoutExpired) as exc:
         try:
-            await websocket.send_json({"type": "error", "message": str(exc)})
+            await websocket.send_json({"type": "error", "message": str(exc)[:500]})
             await websocket.close(code=1011)
         except Exception:
             pass
