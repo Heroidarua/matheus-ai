@@ -182,48 +182,6 @@
     await speakWithTinyVoca(text);
   };
 
-  function normalizeSpeechText(value) {
-    return String(value || '')
-      .toLocaleLowerCase('pt-BR')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9 ]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  function considerVoiceInterruption(partialText) {
-    if (!activeAudio && !playbackAbort) return;
-    const normalized = normalizeSpeechText(partialText);
-    const words = normalized.split(' ').filter(Boolean);
-    if (!normalized || !(words.length >= 2 || (words.length === 1 && words[0].length >= 4))) {
-      lastVoiceCandidate = '';
-      voiceCandidateCount = 0;
-      return;
-    }
-    // Ignore Vosk partials that are simply hearing the audio currently spoken by ADA-M.
-    // A user interruption adds words that are not part of this exact TTS sentence.
-    if (currentAssistantSpeech && currentAssistantSpeech.includes(normalized)) {
-      lastVoiceCandidate = '';
-      voiceCandidateCount = 0;
-      return;
-    }
-    if (normalized === lastVoiceCandidate ||
-        normalized.startsWith(lastVoiceCandidate + ' ') ||
-        lastVoiceCandidate.startsWith(normalized + ' ')) {
-      voiceCandidateCount += 1;
-    } else {
-      lastVoiceCandidate = normalized;
-      voiceCandidateCount = 1;
-    }
-    if (voiceCandidateCount >= 2) {
-      lastVoiceCandidate = '';
-      voiceCandidateCount = 0;
-      stopPlayback();
-      setStatus('Interrompida. Estou ouvindo você…');
-    }
-  }
-
   function downsampleTo16k(input, inputRate) {
     if (inputRate === 16000) {
       const direct = new Int16Array(input.length);
