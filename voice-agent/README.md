@@ -1,6 +1,6 @@
 # ADA-M — agente de voz no LiveKit Cloud
 
-Este agente é um serviço independente do backend principal. Ele entra em salas LiveKit, recebe áudio pelo WebRTC, transcreve em português brasileiro, encaminha o histórico textual para o endpoint oficial `/api/chat` e reproduz a resposta usando o Kokoro PF Dora.
+Este agente é um serviço independente do backend principal. Ele entra em salas LiveKit, recebe áudio pelo WebRTC, transcreve em português brasileiro, encaminha o histórico textual para o endpoint oficial `/api/chat` e reproduz a resposta usando o Tiny-Voca PT-BR já integrado à ADA-M.
 
 ## Arquitetura
 
@@ -10,7 +10,7 @@ Navegador / app ADA-M
                     └── Agente hospedado no LiveKit Cloud
                           ├── STT: LiveKit Inference / Deepgram Nova-3
                           ├── LLM: POST /api/chat → Gemma 4 + memória + RAG + ferramentas
-                          └── TTS: Kokoro PF Dora (OpenAI-compatible)
+                          └── TTS: Tiny-Voca PT-BR pelo proxy autenticado `/api/tts/speech`
 ```
 
 O agente não chama o Gemma diretamente. Toda geração passa pelo backend ADA-M para preservar instruções, ferramentas, busca e contexto do projeto. O histórico textual da sala é enviado em cada turno (até 20 mensagens).
@@ -21,7 +21,7 @@ A recomendação é hospedar este agente diretamente no **LiveKit Cloud — plan
 
 O plano gratuito tem limites mensais compartilhados por conta/projetos: 1.000 minutos de sessão de agente, até 5 sessões simultâneas, US$ 2,50 de crédito de LiveKit Inference e limites adicionais de tráfego/observabilidade. Ao atingir os limites gratuitos, novas solicitações podem ser bloqueadas até a renovação mensal. O plano Build também pode colocar o agente em escala zero quando não há sessões, causando cold start de até 10–20 segundos.
 
-A ADA-M continua usando o backend no Render e o Kokoro já existente. O plano gratuito do LiveKit não torna automaticamente os serviços externos gratuitos: mantenha o Render e o provedor de TTS em planos sem custo e confira os limites de cada um. Se o crédito de Inference acabar, o STT pode parar até o próximo ciclo ou até usar outro provedor com franquia gratuita.
+A ADA-M continua usando o backend no Render e o Tiny-Voca já existente. O plano gratuito do LiveKit não torna automaticamente os serviços externos gratuitos: mantenha o Render e o provedor de TTS em planos sem custo e confira os limites de cada um. Se o crédito de Inference acabar, o STT pode parar até o próximo ciclo ou até usar outro provedor com franquia gratuita.
 
 ## Deploy no LiveKit Cloud
 
@@ -56,9 +56,9 @@ Pré-requisitos: projeto LiveKit Cloud no plano Build, LiveKit CLI atual instala
    |---|---|
    | `ADA_M_API_URL` | `https://matheus-ai.onrender.com` |
    | `ADA_M_APP_API_KEY` | Mesmo valor de `APP_API_KEY` no backend, somente se essa chave estiver habilitada |
-   | `ADA_M_TTS_BASE_URL` | URL do Kokoro PF Dora terminando em `/v1` |
+   | `ADA_M_TTS_BASE_URL` | URL do Tiny-Voca PT-BR terminando em `/v1` |
    | `ADA_M_TTS_API_KEY` | Chave do Kokoro, somente se o serviço exigir |
-   | `ADA_M_TTS_VOICE` | `pf_dora` |
+   | `ADA_M_TTS_VOICE` | Não necessário no agente; o backend usa `TTS_VOICE=F` |
    | `ADA_M_TTS_SPEED` | `1.19` |
    | `LIVEKIT_STT_MODEL` | `deepgram/nova-3` |
    | `LIVEKIT_STT_LANGUAGE` | `pt-BR` |
@@ -107,3 +107,8 @@ lk agent deploy
 - As chaves LiveKit do backend ficam somente nas variáveis de ambiente do Render.
 - As variáveis privadas do agente ficam nos Secrets do LiveKit Cloud.
 - O agente não grava áudio ou transcrições em disco. Os logs operacionais não devem conter o conteúdo das mensagens.
+
+
+## Voz atual Tiny-Voca e cliente Live
+
+O cliente web recebe a transcrição de resposta do agente e solicita o áudio ao endpoint autenticado `/api/tts/speech`. O backend encaminha a solicitação ao Tiny-Voca privado em `127.0.0.1:8002`, preservando a voz feminina `F` e a velocidade `1.19`. Não configure outro provedor TTS no agente. A interrupção no navegador cancela a reprodução e a solicitação de áudio pendente; o reconhecimento continua sob controle da sessão LiveKit.
