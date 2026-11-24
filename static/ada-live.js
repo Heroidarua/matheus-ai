@@ -21,12 +21,9 @@
   let playbackAbort = null;
   let activeAudio = null;
   let activeAudioUrl = null;
-  let lastVoiceCandidate = '';
-  let voiceCandidateCount = 0;
-  let currentAssistantSpeech = '';
   let transcriptBuffer = [];
   let transcriptTimer = null;
-  const transcriptPauseMs = 1400;
+  const transcriptPauseMs = 700;
 
   function setStatus(message, visible = true) {
     status.textContent = message;
@@ -89,7 +86,6 @@
 
   function stopPlayback() {
     playbackGeneration += 1;
-    currentAssistantSpeech = '';
     if (playbackAbort) {
       playbackAbort.abort();
       playbackAbort = null;
@@ -146,7 +142,6 @@
         activeAudioUrl = URL.createObjectURL(blob);
         const audio = new Audio(activeAudioUrl);
         activeAudio = audio;
-        currentAssistantSpeech = normalizeSpeechText(part);
         audio.preload = 'auto';
         setStatus('ADA-M falando…');
         await new Promise((resolve, reject) => {
@@ -348,9 +343,13 @@
             // Vosk segments buffered instead of submitting a sentence fragment.
             clearTranscriptTimer();
             setLiveCaption('Você: ' + data.text);
-            considerVoiceInterruption(data.text);
           }
           if (!activeAudio && !playbackAbort) setStatus('Estou ouvindo você…');
+        } else if (data.type === 'utterance' && data.text) {
+          // Whisper.cpp envia somente depois de detectar o fim da frase; não fragmentamos nem interrompemos a fala da ADA-M.
+          clearTranscriptTimer();
+          transcriptBuffer = [data.text];
+          flushTranscriptBuffer();
         } else if (data.type === 'transcript' && data.text) {
           // Vosk may finalize a phrase after a short pause. Accumulate consecutive
           // finalized segments and submit only after a longer, deliberate pause.
