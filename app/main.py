@@ -1467,7 +1467,7 @@ async def search_web(query: str) -> list[dict[str, str]]:
                             "url": url[:2000],
                             "snippet": str(item.get("snippet") or "")[:500],
                         }
-                        if not is_relevant_result(original_query, candidate):
+                        if not is_relevant_result(original_query, candidate, allow_incomplete_metadata=True):
                             rejected += 1
                             continue
                         sources.append(candidate)
