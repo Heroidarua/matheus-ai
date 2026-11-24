@@ -1,114 +1,64 @@
 # ADA-M — agente de voz no LiveKit Cloud
 
-Este agente é um serviço independente do backend principal. Ele entra em salas LiveKit, recebe áudio pelo WebRTC, transcreve em português brasileiro, encaminha o histórico textual para o endpoint oficial `/api/chat` e reproduz a resposta usando o Tiny-Voca PT-BR já integrado à ADA-M.
+Este agente é um serviço independente do backend principal. Ele recebe áudio pelo WebRTC, transcreve em português brasileiro e encaminha o histórico textual ao endpoint oficial `/api/chat`. A resposta é enviada como texto ao navegador, que gera o áudio pelo serviço Tiny-Voca PT-BR já integrado à ADA-M.
 
 ## Arquitetura
 
 ```text
-Navegador / app ADA-M
-    └── WebRTC → LiveKit Cloud
-                    └── Agente hospedado no LiveKit Cloud
-                          ├── STT: LiveKit Inference / Deepgram Nova-3
-                          ├── LLM: POST /api/chat → Gemma 4 + memória + RAG + ferramentas
-                          └── TTS: Tiny-Voca PT-BR pelo proxy autenticado `/api/tts/speech`
+Navegador ADA-M
+  └─ WebRTC → LiveKit Cloud
+       └─ Agente ADA-M
+            ├─ STT: LiveKit Inference / Deepgram Nova-3 (pt-BR)
+            ├─ LLM: POST /api/chat → Gemma 4 + contexto ADA-M
+            └─ Texto de resposta → navegador
+                 └─ POST /api/tts/speech
+                      └─ Tiny-Voca PT-BR privado (voz F, 1.19x)
 ```
 
-O agente não chama o Gemma diretamente. Toda geração passa pelo backend ADA-M para preservar instruções, ferramentas, busca e contexto do projeto. O histórico textual da sala é enviado em cada turno (até 20 mensagens).
+O agente não chama o Gemma diretamente. Toda geração passa pelo backend ADA-M para preservar instruções, memória, ferramentas e contexto do projeto. O áudio é gerado pelo Tiny-Voca já instalado na VPS; nenhuma voz Kokoro ou voz do navegador é selecionada pelo modo Live.
 
-## Hospedagem sem mensalidade
+## Configuração do agente
 
-A recomendação é hospedar este agente diretamente no **LiveKit Cloud — plano Build (gratuito)**, em vez de criar um Background Worker pago no Render.
+No LiveKit Cloud, configure os seguintes Secrets:
 
-O plano gratuito tem limites mensais compartilhados por conta/projetos: 1.000 minutos de sessão de agente, até 5 sessões simultâneas, US$ 2,50 de crédito de LiveKit Inference e limites adicionais de tráfego/observabilidade. Ao atingir os limites gratuitos, novas solicitações podem ser bloqueadas até a renovação mensal. O plano Build também pode colocar o agente em escala zero quando não há sessões, causando cold start de até 10–20 segundos.
+| Variável | Valor |
+|---|---|
+| `ADA_M_API_URL` | URL HTTPS do backend ADA-M, por exemplo `https://matheus-ai.onrender.com` |
+| `ADA_M_APP_API_KEY` | Mesmo valor de `APP_API_KEY` do backend, somente se essa proteção estiver habilitada |
+| `LIVEKIT_AGENT_NAME` | `ada-m-voice` |
+| `LIVEKIT_STT_MODEL` | `deepgram/nova-3` |
+| `LIVEKIT_STT_LANGUAGE` | `pt-BR` |
 
-A ADA-M continua usando o backend no Render e o Tiny-Voca já existente. O plano gratuito do LiveKit não torna automaticamente os serviços externos gratuitos: mantenha o Render e o provedor de TTS em planos sem custo e confira os limites de cada um. Se o crédito de Inference acabar, o STT pode parar até o próximo ciclo ou até usar outro provedor com franquia gratuita.
+O LiveKit Cloud injeta `LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` no worker. Não coloque essas credenciais no frontend ou no GitHub. O serviço TTS não precisa ser configurado no worker: a chave do Tiny-Voca permanece no backend ADA-M.
 
-## Deploy no LiveKit Cloud
+No serviço Web da ADA-M, mantenha `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` e `LIVEKIT_AGENT_NAME=ada-m-voice`. O backend usa essas credenciais para emitir o token curto do navegador em `POST /api/livekit/token`.
 
-Pré-requisitos: projeto LiveKit Cloud no plano Build, LiveKit CLI atual instalado e acesso ao repositório.
+## Deploy
 
-1. Entre em [LiveKit Cloud](https://cloud.livekit.io/) e crie/abra um projeto no plano Build.
-2. Instale a [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/) no computador.
-3. No terminal, entre na pasta `voice-agent` deste repositório e autentique:
+1. Abra o projeto no [LiveKit Cloud](https://cloud.livekit.io/).
+2. Instale a [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/).
+3. Na pasta `voice-agent`, autentique com `lk cloud auth`.
+4. Confira o projeto com `lk project list` e selecione o correto com `lk project set-default "NOME_DO_PROJETO"`.
+5. Se ainda não houver configuração de agente, execute `lk agent create`.
+6. Cadastre os Secrets descritos acima no painel do LiveKit Cloud.
+7. Publique com `lk agent deploy`.
+8. Confira com `lk agent status` e `lk agent logs`.
+9. Aguarde o deploy do backend ADA-M e teste o botão **🎙️ Live** no navegador.
 
-   ```bash
-   lk cloud auth
-   ```
+## Voz e interrupção
 
-4. Selecione o projeto correto, caso tenha mais de um:
+- O navegador recebe a transcrição final do agente e solicita o áudio em `/api/tts/speech`.
+- O backend usa `TTS_API_URL`, `TTS_API_KEY` e `TTS_VOICE=F` para chamar o Tiny-Voca privado.
+- A velocidade padrão do modo Live é `1.19`.
+- O áudio é gerado em WAV completo por frase; o Tiny-Voca atual não oferece streaming nativo.
+- Ao detectar a fala do usuário durante a reprodução, o cliente cancela o áudio e a solicitação pendente, permitindo que a sessão LiveKit reconheça a nova fala.
+- A conversa usa o histórico da própria sessão LiveKit. A sessão de voz não herda automaticamente todo o histórico de uma conversa digitada já aberta no navegador.
 
-   ```bash
-   lk project list
-   lk project set-default "NOME_DO_PROJETO"
-   ```
+## Limites e segurança
 
-5. Crie o agente e faça o primeiro deploy:
-
-   ```bash
-   lk agent create
-   ```
-
-   O comando cria `livekit.toml` com o ID do agente e faz o build/deploy na infraestrutura do LiveKit Cloud. Guarde esse arquivo localmente; ele identifica o agente nos próximos deploys. Não precisa ser enviado ao GitHub.
-
-6. Cadastre os segredos/variáveis do agente pelo painel do LiveKit Cloud (Agent → Secrets) ou pela opção `--secrets-file` da CLI. Configure:
-
-   | Variável | Valor |
-   |---|---|
-   | `ADA_M_API_URL` | `https://matheus-ai.onrender.com` |
-   | `ADA_M_APP_API_KEY` | Mesmo valor de `APP_API_KEY` no backend, somente se essa chave estiver habilitada |
-   | `ADA_M_TTS_BASE_URL` | URL do Tiny-Voca PT-BR terminando em `/v1` |
-   | `ADA_M_TTS_API_KEY` | Chave do Kokoro, somente se o serviço exigir |
-   | `ADA_M_TTS_VOICE` | Não necessário no agente; o backend usa `TTS_VOICE=F` |
-   | `ADA_M_TTS_SPEED` | `1.19` |
-   | `LIVEKIT_STT_MODEL` | `deepgram/nova-3` |
-   | `LIVEKIT_STT_LANGUAGE` | `pt-BR` |
-   | `LIVEKIT_AGENT_NAME` | `ada-m-voice` |
-
-   **Não cadastre manualmente** `LIVEKIT_URL`, `LIVEKIT_API_KEY` ou `LIVEKIT_API_SECRET` no agente hospedado: o LiveKit Cloud injeta essas credenciais automaticamente. Não coloque chaves no GitHub, no frontend ou em mensagens de chat.
-
-7. No serviço Web `matheus-ai` do Render, mantenha as variáveis de servidor `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` e `LIVEKIT_AGENT_NAME=ada-m-voice`. O backend precisa dessas credenciais para emitir o token do navegador em `POST /api/livekit/token`. Salve e aguarde o redeploy do Web Service.
-
-8. Confira o agente e os logs:
-
-   ```bash
-   lk agent status
-   lk agent logs
-   ```
-
-9. Abra a ADA-M e teste o botão LiveKit com uma conversa curta. Confirme STT em pt-BR, resposta via endpoint ADA-M/Gemma 4, áudio Kokoro e interrupção da fala.
-
-## Atualizar o agente
-
-Depois de alterar os arquivos desta pasta:
-
-```bash
-lk agent deploy
-```
-
-## Variáveis e comportamento
-
-- O LiveKit Cloud fornece automaticamente `LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` ao container hospedado.
-- `LIVEKIT_AGENT_NAME` deve permanecer `ada-m-voice`, igual ao nome de dispatch usado pelo backend.
-- `ADA_M_TTS_BASE_URL` deve apontar para a API OpenAI-compatible do Kokoro, com sufixo `/v1`.
-- `ADA_M_TTS_SPEED` aceita valores entre 0.7 e 1.3; padrão recomendado: `1.19`.
-- `LIVEKIT_STT_MODEL` usa `deepgram/nova-3` por padrão e `LIVEKIT_STT_LANGUAGE` usa `pt-BR`.
-
-## Limitações conhecidas
-
-- O fluxo é STT → Gemma 4 via ADA-M → TTS. O LiveKit gerencia streaming e interrupções, mas não é um modelo speech-to-speech nativo full-duplex.
-- O agente cria uma sessão própria no backend ADA-M por meio de seu cliente HTTP. Portanto, a memória de longo prazo da sessão de voz é independente da sessão já aberta no navegador; unir as duas exige uma ponte autenticada de identidade/sessão.
-- No plano Build, o agente pode dormir quando não houver sessões e levar até 10–20 segundos para iniciar ao receber uma nova chamada.
-- O limite gratuito de minutos é compartilhado entre os projetos LiveKit da mesma conta. A franquia de Inference é limitada; monitore o uso no painel.
-- O backend e o Kokoro no Render podem entrar em sleep no plano gratuito, adicionando latência ao primeiro pedido. Isso é independente do LiveKit.
-
-## Segurança
-
-- Nunca commite `.env`, `secrets.env`, `livekit.toml` com dados sensíveis ou credenciais.
-- As chaves LiveKit do backend ficam somente nas variáveis de ambiente do Render.
-- As variáveis privadas do agente ficam nos Secrets do LiveKit Cloud.
-- O agente não grava áudio ou transcrições em disco. Os logs operacionais não devem conter o conteúdo das mensagens.
-
-
-## Voz atual Tiny-Voca e cliente Live
-
-O cliente web recebe a transcrição de resposta do agente e solicita o áudio ao endpoint autenticado `/api/tts/speech`. O backend encaminha a solicitação ao Tiny-Voca privado em `127.0.0.1:8002`, preservando a voz feminina `F` e a velocidade `1.19`. Não configure outro provedor TTS no agente. A interrupção no navegador cancela a reprodução e a solicitação de áudio pendente; o reconhecimento continua sob controle da sessão LiveKit.
+- O fluxo é STT → Gemma 4 via backend ADA-M → Tiny-Voca. Não é um modelo speech-to-speech nativo.
+- Confira os limites mensais de minutos, sessões simultâneas e créditos de Inference no plano LiveKit Cloud utilizado.
+- Um agente em escala zero pode levar alguns segundos para iniciar.
+- O backend e o TTS precisam estar acessíveis pela internet interna/privada configurada; o TTS da VPS deve continuar escutando apenas em `127.0.0.1:8002`.
+- Nunca grave áudio ou transcrições sensíveis nos logs.
+- Nunca commite arquivos `.env`, secrets ou credenciais LiveKit.
