@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app import live_voice
 from app.main import app
@@ -37,11 +39,10 @@ def test_live_websocket_returns_vosk_transcript(monkeypatch) -> None:
 
 def test_live_websocket_rejects_cross_origin() -> None:
     with TestClient(app) as client:
-        try:
+        with pytest.raises(WebSocketDisconnect) as error:
             with client.websocket_connect(
                 "/api/live/ws",
                 headers={"origin": "https://evil.example"},
             ):
-                assert False, "cross-origin WebSocket should be rejected"
-        except Exception:
-            pass
+                pass
+        assert error.value.code == 4403
