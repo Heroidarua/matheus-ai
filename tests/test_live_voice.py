@@ -93,3 +93,23 @@ def test_live_websocket_rejects_cross_origin() -> None:
             ):
                 pass
         assert error.value.code == 4403
+
+
+
+def test_live_vad_uses_hysteresis_and_adapts_to_noise_floor(monkeypatch) -> None:
+    monkeypatch.setattr(live_voice, "VAD_RMS_THRESHOLD", 0.0035)
+
+    quiet_threshold = live_voice._vad_threshold(0.001)
+    noisy_threshold = live_voice._vad_threshold(0.004)
+    speaking_threshold = live_voice._vad_threshold(0.004, speaking=True)
+
+    assert quiet_threshold == pytest.approx(0.0035)
+    assert noisy_threshold > quiet_threshold
+    assert speaking_threshold < noisy_threshold
+
+
+def test_live_vad_defaults_allow_natural_pauses_and_longer_phrases() -> None:
+    assert live_voice.VAD_SILENCE_SECONDS >= 1.3
+    assert live_voice.VAD_MAX_UTTERANCE_SECONDS >= 45
+    assert live_voice.VAD_MIN_SPEECH_SECONDS <= 0.4
+    assert live_voice.VAD_RMS_THRESHOLD <= 0.004
