@@ -218,6 +218,7 @@
     };
 
     instance.onresult = event => {
+      if (!active || recognitionPaused) return;
       let interim = '';
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
