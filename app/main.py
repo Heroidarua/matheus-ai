@@ -81,7 +81,7 @@ load_dotenv()
 
 TTS_API_URL = os.getenv("TTS_API_URL", "").strip().rstrip("/")
 TTS_API_KEY = os.getenv("TTS_API_KEY", "").strip()
-TTS_VOICE = os.getenv("TTS_VOICE", "pf_dora").strip() or "pf_dora"
+TTS_VOICE = os.getenv("TTS_VOICE", "F").strip() or "F"
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
@@ -377,7 +377,7 @@ async def tts_status() -> dict[str, Any]:
     """Informa se a síntese feminina remota está configurada, sem revelar segredos."""
     return {
         "configured": bool(TTS_API_URL),
-        "engine": "Kokoro-82M" if TTS_API_URL else "browser-fallback",
+        "engine": "Tiny-Voca PT-BR" if TTS_API_URL else "browser-fallback",
         "voice": TTS_VOICE if TTS_API_URL else None,
         "language": "pt-BR",
     }
@@ -390,7 +390,7 @@ async def tts_speech(data: TTSProxyRequest) -> Response:
         raise HTTPException(status_code=503, detail="Voz natural ainda não configurada; usando a voz do navegador.")
     headers = {"Authorization": f"Bearer {TTS_API_KEY}"} if TTS_API_KEY else {}
     payload = {
-        "model": "kokoro",
+        "model": "tiny-voca-ptbr",
         "input": data.text.strip(),
         "voice": TTS_VOICE,
         "response_format": "wav",

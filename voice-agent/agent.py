@@ -43,7 +43,7 @@ def _chat_history(chat_ctx: ChatContext) -> list[dict[str, str]]:
 
 
 class AdaMVoiceAgent(Agent):
-    """Agente de voz: LiveKit captura/STT; ADA-M gera texto para a voz nativa do navegador."""
+    """Agente de voz: LiveKit captura/STT; ADA-M gera texto para o cliente web sintetizar com Tiny-Voca."""
 
     def __init__(self, client: httpx.AsyncClient, debug: Callable[..., Awaitable[None]]) -> None:
         super().__init__(
@@ -161,7 +161,7 @@ async def entrypoint(ctx: JobContext) -> None:
             model=LIVEKIT_STT_MODEL,
             language=LIVEKIT_STT_LANGUAGE,
         ),
-        # Sem TTS no servidor: o navegador reproduz a resposta via SpeechSynthesis.
+        # Sem TTS no worker: o navegador solicita a voz Tiny-Voca pelo proxy autenticado da ADA-M.
         tts=None,
     )
 
@@ -222,7 +222,7 @@ async def entrypoint(ctx: JobContext) -> None:
         asyncio.create_task(publish_debug("stt_timeout", "Detectei sua fala, mas o serviço de transcrição não retornou texto."))
 
     logger.info(
-        "Starting ADA-M voice session in room %s; STT=%s language=%s output=browser-speech-synthesis",
+        "Starting ADA-M voice session in room %s; STT=%s language=%s output=browser-client Tiny-Voca proxy",
         ctx.room.name, LIVEKIT_STT_MODEL, LIVEKIT_STT_LANGUAGE,
     )
     try:

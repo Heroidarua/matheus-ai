@@ -90,6 +90,10 @@
     #voice-button { background:transparent;border:0;color:#ececec; }
     #voice-button:hover { background:#414141; }
     #voice-button.voice-active { color:#ff7777;background:rgba(255,90,90,.13);box-shadow:0 0 0 2px rgba(255,90,90,.16); }
+    #livekit-voice-button { width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;background:#1d3b34;color:#a8f0d0;border:1px solid #356b5d;font-size:12px; }
+    #livekit-voice-button.livekit-active { background:#4b2424;color:#ffd0d0;border-color:#9d4d4d; }
+    #livekit-voice-status { display:block;min-height:18px;padding:5px 12px 0;color:var(--muted);font-size:11px; }
+    #livekit-voice-status[hidden] { display:none; }
     #send { width:38px;height:38px;min-width:38px;padding:0;border-radius:50%;background:#f3f3f3;color:#202020;display:grid;place-items:center;flex-shrink:0; }
     #send::after { content:"↑";font-size:23px;line-height:1;font-weight:500; }
     #send { font-size:0; }
@@ -612,8 +616,10 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
         <button class="plus-button" type="button" id="plus-button" aria-label="Abrir ferramentas e preferências" aria-expanded="false" aria-controls="plus-menu" title="Ferramentas e preferências">+</button>
         <textarea id="prompt" rows="1" placeholder="Escreva sua mensagem..." aria-label="Mensagem"></textarea>
         <button class="tool-btn" type="button" id="voice-button" hidden aria-label="Ditado por voz" title="Ditado por voz" style="width:40px;min-width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex-shrink:0"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
+        <button class="tool-btn" type="button" id="livekit-voice-button" aria-label="Iniciar conversa ao vivo" title="Conversar com a ADA-M em tempo real">🎙️ Live</button>
         <button id="send" type="submit">Enviar</button>
       </div>
+      <div id="livekit-voice-status" role="status" aria-live="polite" hidden></div>
       <div class="plus-menu" id="plus-menu" hidden>
         <div class="plus-menu-heading">Ferramentas e preferências</div>
         <div class="drawer-row">
@@ -2499,5 +2505,6 @@ const history = [];
   </dialog>
 
   <script src="/static/github-integration.js?v=github-app-20261109"></script>
+  <script type="module" src="/static/ada-livekit.js?v=live-tiny-voca-20261124"></script>
 </body>
 </html>
