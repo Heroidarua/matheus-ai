@@ -451,6 +451,7 @@ def test_news_rss_parser_keeps_publisher_and_publication_date():
     results = main._parse_news_rss(feed)
     assert len(results) == 1
     assert results[0]["title"].startswith("Brasil anuncia")
+    assert "Notícia indexada em feed jornalístico" in results[0]["snippet"]
     assert "Veículo: Exemplo Notícias" in results[0]["snippet"]
     assert "Publicado em 2026-11-19" in results[0]["snippet"]
 
