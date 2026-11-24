@@ -279,11 +279,6 @@
     window.__adaLiveActive = false;
     stopBrowserRecognition();
     stopPlayback();
-    if (socket) {
-      const old = socket;
-      socket = null;
-      try { old.close(); } catch (_) {}
-    }
     button.disabled = false;
     button.classList.remove('livekit-active');
     button.textContent = '🎙️ Live';
