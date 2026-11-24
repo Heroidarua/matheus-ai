@@ -3,7 +3,11 @@
   const status = document.getElementById('livekit-voice-status');
   const prompt = document.getElementById('prompt');
   const form = document.getElementById('chat-form');
-  if (!button || !status || !prompt || !form) return;
+  const liveOverlay = document.getElementById('live-experience');
+  const liveOverlayStatus = document.getElementById('live-overlay-status');
+  const liveCaption = document.getElementById('live-caption');
+  const liveEndButton = document.getElementById('live-end-button');
+  if (!button || !status || !prompt || !form || !liveOverlay || !liveOverlayStatus || !liveCaption || !liveEndButton) return;
 
   let socket = null;
   let stream = null;
@@ -21,6 +25,30 @@
   function setStatus(message, visible = true) {
     status.textContent = message;
     status.hidden = !visible;
+    liveOverlayStatus.textContent = message;
+    if (/falando|preparando a voz/i.test(message)) liveOverlay.dataset.state = 'speaking';
+    else if (/erro|falha|encerrada|não foi possível|tempo esgotado/i.test(message)) liveOverlay.dataset.state = 'error';
+    else if (/ouvindo|sua vez|reconhecimento pt-br pronto|conectada à vps/i.test(message)) liveOverlay.dataset.state = 'listening';
+    else liveOverlay.dataset.state = 'thinking';
+  }
+
+  function openLiveExperience() {
+    liveOverlay.hidden = false;
+    document.body.classList.add('live-experience-open');
+    liveOverlay.setAttribute('aria-hidden', 'false');
+    liveCaption.textContent = 'Estou pronta para conversar com você.';
+    liveEndButton.focus({ preventScroll: true });
+  }
+
+  function closeLiveExperience() {
+    liveOverlay.hidden = true;
+    document.body.classList.remove('live-experience-open');
+    liveOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  function setLiveCaption(value) {
+    const clean = String(value || '').replace(/\s+/g, ' ').trim();
+    if (clean) liveCaption.textContent = clean.length > 220 ? clean.slice(0, 217) + '…' : clean;
   }
 
   function stopPlayback() {
@@ -116,7 +144,9 @@
 
   window.__adaLiveActive = false;
   window.__adaLiveOnResponse = async text => {
-    if (active) await speakWithTinyVoca(text);
+    if (!active) return;
+    setLiveCaption(text);
+    await speakWithTinyVoca(text);
   };
 
   function downsampleTo16k(input, inputRate) {
@@ -204,6 +234,7 @@
     button.classList.remove('livekit-active');
     button.textContent = '🎙️ Live';
     button.setAttribute('aria-label', 'Iniciar conversa ao vivo');
+    closeLiveExperience();
     setStatus(message, visible);
   }
 
@@ -215,6 +246,7 @@
     }
     connecting = true;
     button.disabled = true;
+    openLiveExperience();
     setStatus('Conectando diretamente à VPS…');
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('Este navegador não liberou o acesso ao microfone.');
@@ -237,7 +269,9 @@
           resolveReady();
         } else if (data.type === 'partial') {
           setStatus('Estou ouvindo você…');
+          setLiveCaption(data.text || 'Estou ouvindo você…');
         } else if (data.type === 'transcript' && data.text) {
+          setLiveCaption('Você: ' + data.text);
           setStatus('Entendi. Preparando resposta…');
           if (typeof window.__adaLiveSubmitTranscript === 'function') {
             window.__adaLiveSubmitTranscript(data.text);
@@ -281,6 +315,10 @@
   }
 
   button.addEventListener('click', connect);
+  liveEndButton.addEventListener('click', () => cleanup());
+  window.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !liveOverlay.hidden) cleanup();
+  });
   window.addEventListener('beforeunload', () => {
     stopPlayback();
     try { socket?.close(); } catch (_) {}

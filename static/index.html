@@ -1,4 +1,4 @@
-<!-- cache-buster: 2026-11-23-ada-m-tiny-voca-tts-v1 -->
+<!-- cache-buster: 2026-11-24-ada-m-immersive-live-v1 -->
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -569,6 +569,34 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
         overflow-wrap: normal;
       }
     }
+
+    .live-experience[hidden]{display:none!important;}
+    body.live-experience-open{overflow:hidden;}
+    .live-experience{position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;justify-content:space-between;padding:clamp(22px,5vh,48px) clamp(18px,5vw,56px);background:radial-gradient(ellipse at 50% 43%,#172c2a 0%,#090d0d 38%,#030404 75%);color:#f7faf9;}
+    .live-topbar,.live-bottom{width:min(720px,100%);margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+    .live-brand{font-size:18px;font-weight:750;letter-spacing:.08em;}
+    .live-mode-label{font-size:10px;letter-spacing:.2em;color:#9aa9a5;}
+    .live-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;text-align:center;min-height:0;}
+    .live-orb{width:clamp(150px,35vw,230px);height:clamp(150px,35vw,230px);position:relative;border-radius:50%;display:grid;place-items:center;isolation:isolate;filter:drop-shadow(0 0 38px rgba(94,220,185,.2));}
+    .live-orb:before,.live-orb:after,.live-orb-core{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 30deg,#b5ffe5,#3a9c88 24%,#8ac8ff 48%,#5b7fd0 68%,#9af4d2 86%,#b5ffe5);filter:blur(1px);opacity:.9;animation:live-orbit 8s linear infinite;}
+    .live-orb:after{inset:12%;background:radial-gradient(circle at 35% 28%,#e0fff4,#69d7bc 30%,#245f67 65%,#182d49);filter:blur(10px);opacity:.95;animation:live-breathe 3.4s ease-in-out infinite;}
+    .live-orb-core{inset:25%;background:radial-gradient(circle at 35% 30%,#f2fff9,#9cebd6 36%,#438e91 70%,#344c75);filter:blur(15px);opacity:.85;animation:live-breathe 2.7s ease-in-out infinite reverse;}
+    .live-experience[data-state="listening"] .live-orb{filter:drop-shadow(0 0 48px rgba(94,220,185,.34));}
+    .live-experience[data-state="speaking"] .live-orb{filter:drop-shadow(0 0 58px rgba(126,171,255,.42));}
+    .live-experience[data-state="speaking"] .live-orb:before{animation-duration:2.2s;}
+    .live-experience[data-state="thinking"] .live-orb:after{animation-duration:1.5s;}
+    .live-experience[data-state="error"] .live-orb{filter:grayscale(.55) drop-shadow(0 0 25px rgba(255,100,100,.2));}
+    .live-caption{width:min(620px,100%);max-height:24vh;overflow:auto;font-size:clamp(17px,3.8vw,22px);line-height:1.5;font-weight:450;color:#f3f7f5;}
+    .live-overlay-status{font-size:13px;color:#a9bbb5;min-height:20px;}
+    .live-bottom{justify-content:center;flex-direction:column;gap:18px;}
+    .live-voice-label{font-size:11px;color:#82948e;letter-spacing:.04em;}
+    .live-end-button{width:66px;height:66px;padding:0;border-radius:50%;display:grid;place-items:center;background:#f3f5f4;color:#151a18;box-shadow:0 8px 30px rgba(0,0,0,.35);font-size:25px;}
+    .live-end-button:active{transform:scale(.96);}
+    @keyframes live-orbit{to{transform:rotate(360deg);}}
+    @keyframes live-breathe{0%,100%{transform:scale(.9);opacity:.75;}50%{transform:scale(1.08);opacity:1;}}
+    @media(prefers-reduced-motion:reduce){.live-orb:before,.live-orb:after,.live-orb-core{animation:none;}}
+    @media(max-height:520px){.live-experience{padding:14px 20px;}.live-orb{width:110px;height:110px;}.live-center{gap:12px;}.live-bottom{gap:8px;}.live-end-button{width:54px;height:54px;}}
+
   </style>
 
 </head>
@@ -2524,7 +2552,24 @@ const history = [];
     </div>
   </dialog>
 
+
+  <section id="live-experience" class="live-experience" role="dialog" aria-modal="true" aria-label="Conversa ao vivo com ADA-M" aria-hidden="true" data-state="thinking" hidden>
+    <div class="live-topbar">
+      <div class="live-brand">ADA<span style="color:#75dfc2">—</span>M</div>
+      <div class="live-mode-label">CONVERSA AO VIVO</div>
+    </div>
+    <div class="live-center">
+      <div class="live-orb" aria-hidden="true"><span class="live-orb-core"></span></div>
+      <div id="live-caption" class="live-caption" aria-live="polite">Estou pronta para conversar com você.</div>
+      <div id="live-overlay-status" class="live-overlay-status" role="status">Conectando à ADA-M…</div>
+    </div>
+    <div class="live-bottom">
+      <div class="live-voice-label">GEMMA 4 · VOZ TINY-VOCA</div>
+      <button id="live-end-button" class="live-end-button" type="button" aria-label="Encerrar conversa ao vivo" title="Encerrar conversa">■</button>
+    </div>
+  </section>
+
   <script src="/static/github-integration.js?v=github-app-20261109"></script>
-  <script src="/static/ada-live.js?v=vps-vosk-live-20261124"></script>
+  <script src="/static/ada-live.js?v=immersive-live-20261124"></script>
 </body>
 </html>
