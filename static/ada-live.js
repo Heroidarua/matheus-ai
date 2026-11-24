@@ -170,7 +170,7 @@
     mutedGain.connect(audioContext.destination);
   }
 
-  async function cleanup(message = 'Modo Live encerrado.') {
+  async function cleanup(message = 'Modo Live encerrado.', visible = false) {
     active = false;
     window.__adaLiveActive = false;
     stopPlayback();
@@ -204,7 +204,7 @@
     button.classList.remove('livekit-active');
     button.textContent = '🎙️ Live';
     button.setAttribute('aria-label', 'Iniciar conversa ao vivo');
-    setStatus(message, false);
+    setStatus(message, visible);
   }
 
   async function connect() {
@@ -222,17 +222,19 @@
       const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
       socket = new WebSocket(scheme + '//' + location.host + '/api/live/ws');
       socket.binaryType = 'arraybuffer';
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Tempo esgotado ao conectar à VPS.')), 15000);
-        socket.addEventListener('open', () => { clearTimeout(timeout); resolve(); }, { once: true });
-        socket.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Não foi possível conectar ao WebSocket da VPS.')); }, { once: true });
+      let resolveReady;
+      let rejectReady;
+      const readyPromise = new Promise((resolve, reject) => {
+        resolveReady = resolve;
+        rejectReady = reject;
       });
       socket.addEventListener('message', event => {
         let data;
         try { data = JSON.parse(event.data); } catch (_) { return; }
         if (data.type === 'status') setStatus(data.message);
         if (data.type === 'ready') {
-          setStatus('Conectada à VPS. Pode falar…');
+          setStatus('Reconhecimento PT-BR pronto. Ativando microfone…');
+          resolveReady();
         } else if (data.type === 'partial') {
           setStatus('Estou ouvindo você…');
         } else if (data.type === 'transcript' && data.text) {
@@ -244,12 +246,24 @@
             form.requestSubmit();
           }
         } else if (data.type === 'error') {
-          setStatus(data.message || 'Falha no reconhecimento de voz.');
+          const message = data.message || 'Falha no reconhecimento de voz.';
+          rejectReady(new Error(message));
+          cleanup(message, true);
         }
       });
       socket.addEventListener('close', () => {
-        if (active) cleanup('Conexão com a VPS encerrada.');
+        if (active) cleanup('Conexão com a VPS encerrada.', true);
+        else rejectReady(new Error('A VPS encerrou a conexão antes de ficar pronta.'));
       });
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Tempo esgotado ao conectar à VPS.')), 15000);
+        socket.addEventListener('open', () => { clearTimeout(timeout); resolve(); }, { once: true });
+        socket.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Não foi possível conectar ao WebSocket da VPS.')); }, { once: true });
+      });
+      await Promise.race([
+        readyPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('O reconhecimento de voz da VPS demorou demais para iniciar.')), 45000))
+      ]);
       await startMicrophone();
       active = true;
       window.__adaLiveActive = true;
@@ -259,7 +273,7 @@
       button.setAttribute('aria-label', 'Encerrar conversa ao vivo');
       setStatus('Conectada à VPS. Pode falar comigo…');
     } catch (error) {
-      await cleanup(error.message || 'Falha ao iniciar o modo Live.');
+      await cleanup(error.message || 'Falha ao iniciar o modo Live.', true);
     } finally {
       connecting = false;
       button.disabled = false;
