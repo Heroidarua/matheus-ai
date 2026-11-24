@@ -311,6 +311,63 @@ def test_news_search_accepts_relevant_ai_headlines_with_synonyms():
     assert main.is_relevant_result("Quais são as notícias de IA de hoje?", item)
 
 
+def test_news_intent_and_explicit_month_year_override_technology_classification():
+    question = "Pesquise notícias sobre inteligência artificial no Brasil em novembro de 2026"
+    assert main.classify_research_topic(question) == "news"
+    assert main.has_explicit_date_filter(question) is True
+
+
+def test_news_query_expansion_preserves_historical_period_without_recent_bias():
+    question = "notícias sobre inteligência artificial em novembro de 2026"
+    expanded = main.build_search_query(question)
+    assert question in expanded
+    assert "reportagens jornalísticas" in expanded
+    assert "notícias atuais" not in expanded
+
+
+def test_news_relevance_rejects_generic_intelligence_pages():
+    query = "notícias sobre inteligência artificial no Brasil em novembro de 2026"
+    unrelated = {
+        "title": "15 tipos de inteligência: em quais você se destaca?",
+        "url": "https://example.org/tipos-de-inteligencia",
+        "snippet": "Conheça diferentes tipos de inteligência humana.",
+    }
+    assert not main.is_relevant_result(query, unrelated)
+
+
+def test_news_relevance_requires_subject_even_on_trusted_news_domains():
+    query = "notícias sobre inteligência artificial no Brasil"
+    unrelated = {
+        "title": "G1: resultado do campeonato brasileiro",
+        "url": "https://g1.globo.com/esportes/noticia/resultado",
+        "snippet": "Confira os resultados do futebol neste fim de semana.",
+    }
+    assert not main.is_relevant_result(query, unrelated)
+
+
+def test_news_relevance_accepts_ai_reporting_from_a_news_source():
+    query = "notícias sobre inteligência artificial no Brasil em novembro de 2026"
+    relevant = {
+        "title": "Empresas anunciam novidades em inteligência artificial",
+        "url": "https://g1.globo.com/tecnologia/noticia/ia",
+        "snippet": "Reportagem sobre novos sistemas de inteligência artificial.",
+    }
+    assert main.is_relevant_result(query, relevant)
+
+
+def test_bing_redirect_url_is_decoded_to_original_destination():
+    destination = "https://www.reuters.com/technology/artificial-intelligence/example/"
+    encoded = main.base64.urlsafe_b64encode(destination.encode()).decode().rstrip("=")
+    bing_url = "https://www.bing.com/ck/a?u=a1" + encoded + "&ntb=1"
+    assert main._normalize_search_result_url(bing_url, "https://www.bing.com/search") == destination
+
+
+def test_bing_redirect_with_invalid_payload_is_not_treated_as_decoded_destination():
+    bing_url = "https://www.bing.com/ck/a?u=a1%%%&ntb=1"
+    normalized = main._normalize_search_result_url(bing_url, "https://www.bing.com/search")
+    assert normalized.startswith("https://www.bing.com/ck/a?")
+
+
 def test_extract_document_text_formats_csv_and_json():
     csv_text = main.extract_document_text("dados.csv", "text/csv", b"nome,valor\nAna,10\n")
     assert "nome | valor" in csv_text

@@ -34,7 +34,7 @@ from livekit import api as livekit_api
 
 from app.text_encoding import decode_text_bytes
 from app.security_guard import is_sensitive_internal_config_request, SENSITIVE_REQUEST_REPLY
-from app.research_engine import build_search_query, classify_research_topic, is_relevant_result, rank_results
+from app.research_engine import build_search_query, classify_research_topic, has_explicit_date_filter, is_relevant_result, rank_results
 from app.google_search import google_grounded_search
 from app.google_workspace import router as google_workspace_router
 from app.file_library import router as file_library_router, search_library
@@ -1254,6 +1254,37 @@ def _public_http_url(value: str) -> bool:
         return False
 
 
+def _normalize_search_result_url(value: str, engine_url: str) -> str:
+    """Converte wrappers de redirecionamento do DuckDuckGo/Bing para a URL de destino."""
+    candidate = (value or "").strip()
+    try:
+        parsed = urlparse(candidate)
+        host = (parsed.hostname or "").lower()
+        params = parse_qs(parsed.query)
+
+        if host.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
+            candidate = params.get("uddg", [candidate])[0]
+        elif host.endswith("bing.com") and parsed.path.startswith("/ck/a"):
+            encoded = params.get("u", [""])[0]
+            if encoded.startswith("a1"):
+                encoded = encoded[2:]
+            if encoded:
+                try:
+                    padded = encoded + ("=" * (-len(encoded) % 4))
+                    decoded = base64.urlsafe_b64decode(padded).decode("utf-8", errors="strict")
+                    if _public_http_url(decoded):
+                        return decoded
+                except (ValueError, UnicodeError, binascii.Error):
+                    pass
+            for key in ("url", "r"):
+                destination = params.get(key, [""])[0]
+                if _public_http_url(destination):
+                    return destination
+    except (ValueError, TypeError):
+        pass
+    return urljoin(engine_url, candidate)
+
+
 async def _read_page(client: httpx.AsyncClient, source: dict[str, str]) -> dict[str, str]:
     """Tenta ler a página de origem para enriquecer o resultado, sem bloquear a busca."""
     url = source.get("url", "")
@@ -1339,8 +1370,12 @@ async def search_web(query: str) -> list[dict[str, str]]:
                 f"(status={status or 'n/a'}, error={type(exc).__name__})"
             )
 
-    recent_terms = ("hoje", "atual", "últimas", "ultimas", "notícias", "noticias", "agora", "esta semana", "ontem", "recente", "latest", "today")
-    is_recent_query = any(term in original_query.casefold() for term in recent_terms)
+    # "Notícias" ou um mês/ano explícito não significam últimas 24 horas.
+    recent_terms = ("hoje", "agora", "esta semana", "ontem", "últimas", "ultimas", "latest", "today")
+    is_recent_query = (
+        not has_explicit_date_filter(original_query)
+        and any(term in original_query.casefold() for term in recent_terms)
+    )
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), headers=headers, follow_redirects=True) as client:
         # O Brave é opcional. Se a chave estiver inválida, registre o erro e
@@ -1425,10 +1460,9 @@ async def search_web(query: str) -> list[dict[str, str]]:
                     found_before = len(sources)
                     rejected = 0
                     for item in parser.results:
-                        url = str(item.get("url", "")).strip()
-                        if "duckduckgo.com/l/?" in url:
-                            url = parse_qs(urlparse(url).query).get("uddg", [url])[0]
-                        url = urljoin(engine_url, url)
+                        url = _normalize_search_result_url(
+                            str(item.get("url", "")).strip(), engine_url
+                        )
                         if not _public_http_url(url) or any(x["url"] == url for x in sources):
                             continue
                         candidate = {
