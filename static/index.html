@@ -1,4 +1,4 @@
-<!-- cache-buster: 2026-11-25-ada-m-live-clean-visual-v4 -->
+<!-- cache-buster: 2026-11-25-ada-m-live-question-status-v5 -->
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -586,10 +586,10 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     .live-experience[data-state="speaking"] .live-spectrum span{opacity:1;box-shadow:0 0 14px rgba(95,225,255,.82);}
     .live-experience[data-state="error"] .live-visual{filter:grayscale(.55) drop-shadow(0 0 18px rgba(255,100,100,.18));}
     .live-caption{width:min(620px,100%);max-height:24vh;overflow:auto;font-size:clamp(17px,3.8vw,22px);line-height:1.5;font-weight:450;color:#f3f7f5;}
-    /* Mantém transcrição e status acessíveis, mas sem texto visível sob o holograma. */
-    .live-caption,.live-overlay-status{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;}
-    .live-center{gap:0;}
-    .live-overlay-status{font-size:13px;color:#a9bbb5;min-height:20px;}
+    /* Exibe somente a pergunta reconhecida e o estado útil da conversa. */
+    .live-caption{display:block;position:static;width:min(620px,100%);max-height:24vh;overflow:auto;padding:0 8px;font-size:clamp(16px,3.8vw,21px);line-height:1.5;font-weight:450;color:#f3f7f5;overflow-wrap:anywhere;}
+    .live-center{gap:14px;}
+    .live-overlay-status{display:block;position:static;width:auto;height:auto;padding:0;margin:0;overflow:visible;clip:auto;white-space:normal;border:0;font-size:13px;color:#a9bbb5;min-height:20px;}
     .live-bottom{justify-content:center;flex-direction:column;gap:18px;}
     .live-voice-label{font-size:11px;color:#82949e;letter-spacing:.04em;}
     .live-end-button{width:66px;height:66px;padding:0;border-radius:50%;display:grid;place-items:center;background:#f3f5f4;color:#151a18;box-shadow:0 8px 30px rgba(0,0,0,.35);font-size:25px;}
@@ -2593,6 +2593,6 @@ const history = [];
   </section>
 
   <script src="/static/github-integration.js?v=github-app-20261109"></script>
-  <script src="/static/ada-live.js?v=minimal-spectrum-clean-visual-20261125"></script>
+  <script src="/static/ada-live.js?v=live-question-status-20261125"></script>
 </body>
 </html>
