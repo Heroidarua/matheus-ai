@@ -229,7 +229,6 @@
           const audio = new Audio(activeAudioUrl);
           activeAudio = audio;
           audio.preload = 'auto';
-          attachAudioMeter(audio);
           setStatus('ADA-M falando…');
           await new Promise((resolve, reject) => {
             let settled = false;
@@ -240,8 +239,10 @@
               audio.onended = null;
               audio.onerror = null;
               audio.onpause = null;
+              audio.onplay = null;
               error ? reject(error) : resolve();
             };
+            audio.onplay = () => attachAudioMeter(audio);
             audio.onended = () => finish();
             audio.onerror = () => finish(new Error('Falha ao reproduzir o áudio.'));
             audio.onpause = () => finish();
@@ -262,10 +263,8 @@
       }
       if (active && generation === playbackGeneration) setStatus('Sua vez. Pode falar…');
     } finally {
-      if (window.__adaLiveSessionId === speechSessionId) {
-        recognitionPaused = false;
-        if (active) startBrowserRecognition();
-      }
+      // O formulário principal reativa o microfone somente depois de liberar o botão Enviar.
+      if (window.__adaLiveSessionId === speechSessionId) recognitionPaused = true;
     }
   }
 
