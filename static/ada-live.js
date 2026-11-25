@@ -283,6 +283,8 @@
     if (!active || !window.__adaLiveActive) return;
     const speechText = prepareLiveSpeechText(text);
     if (!speechText) return;
+    // A pergunta fica visível até a resposta realmente começar a ser falada.
+    liveCaption.textContent = '';
     await speakWithTinyVoca(speechText);
   };
 
@@ -313,6 +315,7 @@
       return;
     }
 
+    const sessionId = window.__adaLiveSessionId;
     const instance = new SpeechRecognitionAPI();
     recognition = instance;
     instance.lang = 'pt-BR';
@@ -320,12 +323,17 @@
     instance.interimResults = true;
     instance.maxAlternatives = 1;
 
+    // Eventos de uma instância encerrada não podem reiniciar o microfone
+    // depois que o usuário saiu e entrou novamente no Modo Live.
+    const isCurrentRecognition = () =>
+      active && sessionId === window.__adaLiveSessionId && recognition === instance;
+
     instance.onstart = () => {
-      if (active && !recognitionPaused) setStatus('Estou ouvindo você…');
+      if (isCurrentRecognition() && !recognitionPaused) setStatus('Estou ouvindo você…');
     };
 
     instance.onresult = event => {
-      if (!active || recognitionPaused) return;
+      if (!isCurrentRecognition() || recognitionPaused) return;
       let interim = '';
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
@@ -343,13 +351,13 @@
       if (interim) clearTranscriptTimer();
       const preview = [...transcriptBuffer, interim].join(' ').replace(/\\s+/g, ' ').trim();
       if (preview) setLiveCaption(preview);
-      if (active && !recognitionPaused && !activeAudio && !playbackAbort) {
+      if (isCurrentRecognition() && !recognitionPaused && !activeAudio && !playbackAbort) {
         setStatus('Estou ouvindo você…');
       }
     };
 
     instance.onerror = event => {
-      if (!active || recognitionPaused || event.error === 'aborted' || event.error === 'no-speech') return;
+      if (!isCurrentRecognition() || recognitionPaused || event.error === 'aborted' || event.error === 'no-speech') return;
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setStatus('Permita o acesso ao microfone para usar o reconhecimento de voz.', true);
         cleanup('Permissão do microfone negada.', true);
@@ -359,8 +367,9 @@
     };
 
     instance.onend = () => {
+      const mayRestart = isCurrentRecognition();
       if (recognition === instance) recognition = null;
-      if (active && !recognitionPaused && !activeAudio && !playbackAbort) {
+      if (mayRestart && active && !recognitionPaused && !activeAudio && !playbackAbort) {
         clearTimeout(recognitionRestartTimer);
         recognitionRestartTimer = setTimeout(startBrowserRecognition, 350);
       }
@@ -370,7 +379,7 @@
       instance.start();
     } catch (_) {
       if (recognition === instance) recognition = null;
-      if (active && !recognitionPaused) {
+      if (active && sessionId === window.__adaLiveSessionId && !recognitionPaused) {
         clearTimeout(recognitionRestartTimer);
         recognitionRestartTimer = setTimeout(startBrowserRecognition, 700);
       }
