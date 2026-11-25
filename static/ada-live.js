@@ -7,7 +7,7 @@
   const liveOverlayStatus = document.getElementById('live-overlay-status');
   const liveCaption = document.getElementById('live-caption');
   const liveEndButton = document.getElementById('live-end-button');
-  const liveVisual = liveOverlay.querySelector('.live-visual');
+  const liveVisual = liveOverlay ? liveOverlay.querySelector('.live-visual') : null;
   const liveSpectrumBars = liveVisual ? Array.from(liveVisual.querySelectorAll('.live-spectrum span')) : [];
   if (!button || !status || !prompt || !form || !liveOverlay || !liveOverlayStatus || !liveCaption || !liveEndButton || !liveVisual) return;
 
