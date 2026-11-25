@@ -101,38 +101,40 @@
     }
   }
 
-  // Prepara uma versão exclusiva para a voz; a resposta visual permanece intacta.
-  // Remove marcações Markdown e símbolos de formatação sem apagar o conteúdo.
+  // Sanitiza toda resposta antes de enviá-la ao Tiny-Voca.
+  // A limpeza é aplicada no texto completo (inclusive pesquisas), antes de dividir em frases.
   function prepareLiveSpeechText(text) {
     let value = String(text || '').replace(/\r/g, '');
 
-    // Blocos de código não devem ser narrados; código inline mantém o conteúdo.
-    value = value.replace(/\x60{3}[\s\S]*?\x60{3}/g, ' trecho de código omitido ');
+    // Não narrar blocos de código; manter o conteúdo de código inline sem os acentos.
+    value = value.replace(/\x60{3}[\\s\\S]*?\x60{3}/g, ' trecho de código omitido ');
     value = value.replace(/\x60([^\x60]+)\x60/g, '$1');
 
-    // Links e imagens: fala somente o rótulo/descrição, nunca a URL.
-    value = value.replace(/!?\[([^\]]*)\]\(https?:\/\/[^\s)]+(?:\s+[^)]*)?\)/g, '$1');
-    value = value.replace(/https?:\/\/[^\s)]+/g, ' ');
+    // Links/imagens: manter somente o rótulo, nunca a URL.
+    value = value.replace(/!?\[([^\]]*)\]\(https?:\\/\\/[^\\s)]+(?:\\s+[^)]*)?\)/g, '$1');
+    value = value.replace(/https?:\\/\\/[^\\s)]+/g, ' ');
 
-    // Referências numéricas e seções de fontes não fazem parte da narração.
-    value = value.replace(/\[(?:\d+\s*(?:,\s*\d+\s*)*)\]/g, ' ');
-    value = value.replace(/(?:^|\n)\s{0,3}#{1,6}\s*(?:fontes|sources|referências|referencias|bibliografia)\s*:?[\s\S]*$/i, ' ');
+    // Não narrar a seção de referências nem os índices de citação.
+    value = value.replace(/(?:^|\\n)\\s{0,3}#{1,6}\\s*(?:fontes|sources|referências|referencias|bibliografia)\\b\\s*:?[\\s\\S]*$/i, ' ');
+    value = value.replace(/(?:^|\\n)\\s*(?:fontes|sources|referências|referencias|bibliografia)\\s*:\\s*[\\s\\S]*$/i, ' ');
+    value = value.replace(/\\[(?:\\d+\\s*(?:,\\s*\\d+\\s*)*)\\]/g, ' ');
 
-    // Remove cabeçalhos, marcadores de lista, citações e linhas separadoras.
-    value = value.replace(/^\s{0,3}#{1,6}\s+/gm, '');
-    value = value.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/gm, '');
-    value = value.replace(/^\s*>+\s?/gm, '');
-    value = value.replace(/^\s*(?:[-*_]\s*){3,}$/gm, ' ');
+    // Remover cabeçalhos mesmo sem espaço após #, listas e citações.
+    value = value.replace(/^\\s{0,3}#{1,6}\\s*/gm, '');
+    value = value.replace(/^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)/gm, '');
+    value = value.replace(/^\\s*>+\\s?/gm, '');
+    value = value.replace(/^\\s*(?:[-*_]\\s*){3,}$/gm, ' ');
 
-    // Remove HTML e delimitadores de Markdown, preservando as palavras.
+    // Remover tags HTML, escapes e todos os delimitadores Markdown restantes.
     value = value.replace(/<[^>]*>/g, ' ');
+    value = value.replace(/\\\\(?=[*_#~\x60\\[\\](){}|>])/g, '');
     value = value.replace(/[*_#~\x60]/g, '');
-    value = value.replace(/[\[\](){}]/g, '');
-    value = value.replace(/\|/g, ', ');
+    value = value.replace(/[\\[\\](){}]/g, '');
+    value = value.replace(/\\|/g, ', ');
 
     // Símbolos decorativos não devem ser pronunciados.
-    value = value.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, ' ');
-    return value.replace(/[ \t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    value = value.replace(/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/gu, ' ');
+    return value.replace(/[ \\t]+/g, ' ').replace(/\\s+/g, ' ').trim();
   }
 
   function speechParts(value) {
@@ -217,8 +219,10 @@
   window.__adaLiveActive = false;
   window.__adaLiveOnResponse = async text => {
     if (!active) return;
-    setLiveCaption(text);
-    await speakWithTinyVoca(text);
+    const speechText = prepareLiveSpeechText(text);
+    if (!speechText) return;
+    setLiveCaption(speechText);
+    await speakWithTinyVoca(speechText);
   };
 
 
