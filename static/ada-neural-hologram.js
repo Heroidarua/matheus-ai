@@ -81,7 +81,7 @@
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const target = mobile() ? 138 : 238;
+    const target = mobile() ? 112 : 190;
     particles = Array.from({ length: target }, (_, i) => makeParticle(i, target));
   }
 
