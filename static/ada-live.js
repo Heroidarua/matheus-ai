@@ -33,7 +33,7 @@
     status.textContent = message;
     status.hidden = !visible;
     liveOverlayStatus.textContent = message;
-    if (/falando|preparando a voz/i.test(message)) liveOverlay.dataset.state = 'speaking';
+    if (/falando/i.test(message)) liveOverlay.dataset.state = 'speaking';
     else if (/erro|falha|encerrada|não foi possível|tempo esgotado/i.test(message)) liveOverlay.dataset.state = 'error';
     else if (/ouvindo|sua vez|reconhecimento pt-br pronto|conectada à vps/i.test(message)) liveOverlay.dataset.state = 'listening';
     else liveOverlay.dataset.state = 'thinking';
