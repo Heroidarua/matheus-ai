@@ -321,7 +321,8 @@
     instance.lang = 'pt-BR';
     instance.continuous = true;
     instance.interimResults = true;
-    instance.maxAlternatives = 1;
+    // Solicita alternativas para escolher a hipótese mais confiável em pt-BR.
+    instance.maxAlternatives = 5;
 
     // Eventos de uma instância encerrada não podem reiniciar o microfone
     // depois que o usuário saiu e entrou novamente no Modo Live.
@@ -337,7 +338,10 @@
       let interim = '';
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
-        const value = String(result[0]?.transcript || '').replace(/\\s+/g, ' ').trim();
+        const alternatives = Array.from(result).filter(item => String(item?.transcript || '').trim());
+        const best = alternatives.reduce((selected, candidate) =>
+          !selected || Number(candidate.confidence || 0) > Number(selected.confidence || 0) ? candidate : selected, null);
+        const value = String(best?.transcript || '').replace(/\s+/g, ' ').trim();
         if (!value) continue;
         if (result.isFinal) {
           transcriptBuffer.push(value);
@@ -348,8 +352,9 @@
         }
       }
 
-      if (interim) clearTranscriptTimer();
-      const preview = [...transcriptBuffer, interim].join(' ').replace(/\\s+/g, ' ').trim();
+      // Não cancele o temporizador de uma frase final por causa de um resultado
+      // provisório posterior; isso podia deixar a pergunta presa sem ser enviada.
+      const preview = [...transcriptBuffer, interim].join(' ').replace(/\s+/g, ' ').trim();
       if (preview) setLiveCaption(preview);
       if (isCurrentRecognition() && !recognitionPaused && !activeAudio && !playbackAbort) {
         setStatus('Estou ouvindo você…');
