@@ -112,8 +112,6 @@ async def test_vps_executor_streams_real_command_output(monkeypatch):
 async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
 
     class FakeResponse:
         status_code = 200
@@ -162,8 +160,6 @@ async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(mon
 async def test_vps_admin_diagnostics_uses_authenticated_read_only_route(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test/")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
     captured = {}
 
     class FakeResponse:
@@ -204,8 +200,6 @@ async def test_vps_admin_diagnostics_uses_authenticated_read_only_route(monkeypa
 async def test_vps_admin_install_status_uses_fixed_read_only_route(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
     captured = {}
 
     class FakeResponse:
