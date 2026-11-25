@@ -7,7 +7,9 @@
   const liveOverlayStatus = document.getElementById('live-overlay-status');
   const liveCaption = document.getElementById('live-caption');
   const liveEndButton = document.getElementById('live-end-button');
-  if (!button || !status || !prompt || !form || !liveOverlay || !liveOverlayStatus || !liveCaption || !liveEndButton) return;
+  const liveVisual = liveOverlay ? liveOverlay.querySelector('.live-visual') : null;
+  const liveSpectrumBars = liveVisual ? Array.from(liveVisual.querySelectorAll('.live-spectrum span')) : [];
+  if (!button || !status || !prompt || !form || !liveOverlay || !liveOverlayStatus || !liveCaption || !liveEndButton || !liveVisual) return;
 
   const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
@@ -21,13 +23,17 @@
   let activeAudioUrl = null;
   let transcriptBuffer = [];
   let transcriptTimer = null;
+  let audioContext = null;
+  let audioAnalyser = null;
+  let audioFrame = null;
+  let liveSessionSequence = 0;
   const transcriptPauseMs = 1600;
 
   function setStatus(message, visible = true) {
     status.textContent = message;
     status.hidden = !visible;
     liveOverlayStatus.textContent = message;
-    if (/falando|preparando a voz/i.test(message)) liveOverlay.dataset.state = 'speaking';
+    if (/falando/i.test(message)) liveOverlay.dataset.state = 'speaking';
     else if (/erro|falha|encerrada|não foi possível|tempo esgotado/i.test(message)) liveOverlay.dataset.state = 'error';
     else if (/ouvindo|sua vez|reconhecimento pt-br pronto|conectada à vps/i.test(message)) liveOverlay.dataset.state = 'listening';
     else liveOverlay.dataset.state = 'thinking';
@@ -60,7 +66,9 @@
     transcriptBuffer = [];
     if (!transcript || !active) return;
     setLiveCaption('Você: ' + transcript);
-    setStatus('Entendi. Preparando resposta…');
+    recognitionPaused = true;
+    stopBrowserRecognition();
+    setStatus('ADA-M está processando sua pergunta…');
     if (typeof window.__adaLiveSubmitTranscript === 'function') {
       window.__adaLiveSubmitTranscript(transcript);
     } else {
@@ -82,7 +90,47 @@
     if (clean) liveCaption.textContent = clean.length > 220 ? clean.slice(0, 217) + '…' : clean;
   }
 
+  function resetAudioReactiveVisual() {
+    if (audioFrame !== null) cancelAnimationFrame(audioFrame);
+    audioFrame = null;
+    liveVisual.style.setProperty('--voice-level', '0');
+    liveSpectrumBars.forEach(bar => bar.style.setProperty('--bar-scale', '.35'));
+  }
+
+  function attachAudioMeter(audio) {
+    resetAudioReactiveVisual();
+    if (!audioContext || !audioAnalyser) return;
+    try {
+      const source = audioContext.createMediaElementSource(audio);
+      source.connect(audioAnalyser);
+      const samples = new Uint8Array(audioAnalyser.frequencyBinCount);
+      const animate = () => {
+        if (activeAudio !== audio || audio.paused || audio.ended || !active) {
+          resetAudioReactiveVisual();
+          return;
+        }
+        audioAnalyser.getByteFrequencyData(samples);
+        const limit = Math.max(1, Math.floor(samples.length * .72));
+        let total = 0;
+        for (let i = 0; i < limit; i += 1) total += samples[i];
+        const level = Math.min(1, (total / limit) / 145);
+        liveVisual.style.setProperty('--voice-level', level.toFixed(3));
+        liveSpectrumBars.forEach((bar, index) => {
+          const sampleIndex = Math.min(limit - 1, Math.floor((index / liveSpectrumBars.length) * limit));
+          const energy = samples[sampleIndex] / 255;
+          const base = .24 + energy * 1.75 + level * .65;
+          bar.style.setProperty('--bar-scale', Math.min(2.5, base).toFixed(3));
+        });
+        audioFrame = requestAnimationFrame(animate);
+      };
+      audioFrame = requestAnimationFrame(animate);
+    } catch (error) {
+      console.debug('Medidor de áudio indisponível; usando animação de fala:', error);
+    }
+  }
+
   function stopPlayback() {
+    resetAudioReactiveVisual();
     playbackGeneration += 1;
     if (playbackAbort) {
       playbackAbort.abort();
@@ -151,6 +199,7 @@
   }
 
   async function speakWithTinyVoca(text) {
+    const speechSessionId = window.__adaLiveSessionId;
     stopPlayback();
     recognitionPaused = true;
     stopBrowserRecognition();
@@ -186,11 +235,14 @@
             const finish = error => {
               if (settled) return;
               settled = true;
+              resetAudioReactiveVisual();
               audio.onended = null;
               audio.onerror = null;
               audio.onpause = null;
+              audio.onplay = null;
               error ? reject(error) : resolve();
             };
+            audio.onplay = () => attachAudioMeter(audio);
             audio.onended = () => finish();
             audio.onerror = () => finish(new Error('Falha ao reproduzir o áudio.'));
             audio.onpause = () => finish();
@@ -211,20 +263,28 @@
       }
       if (active && generation === playbackGeneration) setStatus('Sua vez. Pode falar…');
     } finally {
-      recognitionPaused = false;
-      if (active) startBrowserRecognition();
+      // O formulário principal reativa o microfone somente depois de liberar o botão Enviar.
+      if (window.__adaLiveSessionId === speechSessionId) recognitionPaused = true;
     }
   }
 
   window.__adaLiveActive = false;
   window.__adaLiveOnResponse = async text => {
-    if (!active) return;
+    if (!active || !window.__adaLiveActive) return;
     const speechText = prepareLiveSpeechText(text);
     if (!speechText) return;
     setLiveCaption(speechText);
     await speakWithTinyVoca(speechText);
   };
 
+  window.__adaLiveRequestFinished = () => {
+    if (!active || !window.__adaLiveActive || window.__adaLivePendingTranscript) return;
+    recognitionPaused = false;
+    if (!activeAudio && !playbackAbort) {
+      setStatus('Sua vez. Pode falar…');
+      startBrowserRecognition();
+    }
+  };
 
   function stopBrowserRecognition() {
     clearTimeout(recognitionRestartTimer);
@@ -315,7 +375,9 @@
     clearTimeout(recognitionRestartTimer);
     recognitionRestartTimer = null;
     transcriptBuffer = [];
+    window.__adaLivePendingTranscript = '';
     window.__adaLiveActive = false;
+    window.__adaLiveSessionId = ++liveSessionSequence;
     stopBrowserRecognition();
     stopPlayback();
     button.disabled = false;
@@ -334,15 +396,38 @@
     }
     connecting = true;
     button.disabled = true;
+    clearTranscriptTimer();
+    clearTimeout(recognitionRestartTimer);
+    recognitionRestartTimer = null;
+    transcriptBuffer = [];
+    window.__adaLivePendingTranscript = '';
+    stopBrowserRecognition();
+    stopPlayback();
     openLiveExperience();
     setStatus('Preparando reconhecimento de voz do navegador…');
     try {
       if (!SpeechRecognitionAPI) {
         throw new Error('Este navegador não oferece reconhecimento de voz. Use Chrome ou Edge atualizado.');
       }
+      try {
+        const AudioContextAPI = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextAPI && !audioContext) {
+          audioContext = new AudioContextAPI();
+          audioAnalyser = audioContext.createAnalyser();
+          audioAnalyser.fftSize = 128;
+          audioAnalyser.smoothingTimeConstant = .72;
+          audioAnalyser.connect(audioContext.destination);
+        }
+        if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
+      } catch (audioError) {
+        audioContext = null;
+        audioAnalyser = null;
+        console.debug('Visualização por áudio indisponível; mantendo animação holográfica:', audioError);
+      }
       await window.__adaStopBrowserVoice?.();
       active = true;
       window.__adaLiveActive = true;
+      window.__adaLiveSessionId = ++liveSessionSequence;
       recognitionPaused = false;
       startBrowserRecognition();
       button.disabled = false;
@@ -366,5 +451,6 @@
   window.addEventListener('beforeunload', () => {
     stopPlayback();
     try { recognition?.abort(); } catch (_) {}
+    try { audioContext?.close(); } catch (_) {}
   });
 })();
