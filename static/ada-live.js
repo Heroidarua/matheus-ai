@@ -199,6 +199,7 @@
   }
 
   async function speakWithTinyVoca(text) {
+    const speechSessionId = window.__adaLiveSessionId;
     stopPlayback();
     recognitionPaused = true;
     stopBrowserRecognition();
@@ -261,8 +262,10 @@
       }
       if (active && generation === playbackGeneration) setStatus('Sua vez. Pode falar…');
     } finally {
-      recognitionPaused = false;
-      if (active) startBrowserRecognition();
+      if (window.__adaLiveSessionId === speechSessionId) {
+        recognitionPaused = false;
+        if (active) startBrowserRecognition();
+      }
     }
   }
 
@@ -407,7 +410,6 @@
       if (!SpeechRecognitionAPI) {
         throw new Error('Este navegador não oferece reconhecimento de voz. Use Chrome ou Edge atualizado.');
       }
-      await window.__adaStopBrowserVoice?.();
       const AudioContextAPI = window.AudioContext || window.webkitAudioContext;
       if (AudioContextAPI && !audioContext) {
         audioContext = new AudioContextAPI();
@@ -417,6 +419,7 @@
         audioAnalyser.connect(audioContext.destination);
       }
       if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
+      await window.__adaStopBrowserVoice?.();
       active = true;
       window.__adaLiveActive = true;
       window.__adaLiveSessionId = ++liveSessionSequence;
