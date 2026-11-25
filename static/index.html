@@ -804,7 +804,16 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     window.__adaLivePendingTranscript = '';
     window.__adaLiveAbortRequest = sessionId => {
       if (activeController && activeLiveRequestSessionId !== null && activeLiveRequestSessionId === sessionId) {
-        activeController.abort();
+        // Libera imediatamente a interface ao encerrar o Live. O finally da
+        // requisição antiga não poderá alterar uma eventual sessão nova.
+        const controller = activeController;
+        activeController = null;
+        activeLiveRequestSessionId = null;
+        window.__adaLivePendingTranscript = '';
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Enviar';
+        stopButton.hidden = true;
+        controller.abort();
       }
     };
     window.__adaLiveSubmitTranscript = transcript => {
@@ -2627,7 +2636,7 @@ const history = [];
   </section>
 
   <script src="/static/github-integration.js?v=github-app-20261109"></script>
-  <script src="/static/ada-live.js?v=live-question-status-20261125"></script>
+  <script src="/static/ada-live.js?v=live-session-recovery-20261125"></script>
   <script src="/static/ada-neural-hologram.js?v=neural-hologram-20261125"></script>
 </body>
 </html>
