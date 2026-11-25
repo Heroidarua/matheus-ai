@@ -35,11 +35,9 @@ async def test_virtual_admin_command_rejects_unapproved_operations(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_admin_install_request_uses_cloudflare_and_bearer_auth(monkeypatch):
+async def test_admin_install_request_uses_vps_bearer_auth_only(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test/")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
     captured = {}
 
     class FakeResponse:
@@ -74,8 +72,6 @@ async def test_admin_install_request_uses_cloudflare_and_bearer_auth(monkeypatch
 
     assert captured["url"] == "https://executor.example.test/admin/install-tools"
     assert captured["headers"]["Authorization"] == "Bearer internal-test-token"
-    assert captured["headers"]["CF-Access-Client-Id"] == "client-id"
-    assert captured["headers"]["CF-Access-Client-Secret"] == "client-secret"
     assert captured["json"] == {}
     assert result["ok"] is True
     assert result["status"] == "started"
