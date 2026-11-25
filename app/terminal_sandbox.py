@@ -231,7 +231,7 @@ async def _request_vps_admin_readonly(path: str, operation: str) -> dict[str, An
         if response.status_code in (401, 403):
             return {
                 "ok": False,
-                "error": f"Cloudflare Access ou executor recusou a autenticação (HTTP {response.status_code}).",
+                "error": f"O executor da VPS recusou o token (HTTP {response.status_code}). Confira /opt/ada-executor/.token.",
             }
         response.raise_for_status()
         payload = response.json()
