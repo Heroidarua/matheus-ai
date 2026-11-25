@@ -612,6 +612,7 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     .live-end-button{width:66px;height:66px;padding:0;border-radius:50%;display:grid;place-items:center;background:#f3f5f4;color:#151a18;box-shadow:0 8px 30px rgba(0,0,0,.35);font-size:25px;}
     .live-end-button:active{transform:scale(.96);}
     @keyframes live-prism-float{0%,100%{transform:translateY(0) rotateY(-8deg);opacity:.78;}50%{transform:translateY(-9px) rotateY(8deg);opacity:1;}}
+    @keyframes live-prism-breathe{0%,100%{opacity:.58;filter:blur(15px);}50%{opacity:1;filter:blur(9px);}}
     @keyframes live-horizontal-scan{0%,100%{transform:translateY(-68px);opacity:.25;}50%{transform:translateY(68px);opacity:.9;}}
     @keyframes live-grid-pulse{0%,100%{opacity:.35;}50%{opacity:.85;}}
     @media(prefers-reduced-motion:reduce){.live-visual:before,.live-visual:after,.live-prism,.live-visual-grid{animation:none;}}
