@@ -27,6 +27,7 @@
   let audioAnalyser = null;
   let audioFrame = null;
   let liveSessionSequence = 0;
+  let connectionGeneration = 0;
   const transcriptPauseMs = 1600;
 
   function setStatus(message, visible = true) {
@@ -277,8 +278,8 @@
     await speakWithTinyVoca(speechText);
   };
 
-  window.__adaLiveRequestFinished = () => {
-    if (!active || !window.__adaLiveActive || window.__adaLivePendingTranscript) return;
+  window.__adaLiveRequestFinished = sessionId => {
+    if (!active || !window.__adaLiveActive || sessionId !== window.__adaLiveSessionId || window.__adaLivePendingTranscript) return;
     recognitionPaused = false;
     if (!activeAudio && !playbackAbort) {
       setStatus('Sua vez. Pode falar…');
@@ -369,6 +370,9 @@
   }
 
   async function cleanup(message = 'Modo Live encerrado.', visible = false) {
+    const endingSessionId = window.__adaLiveSessionId;
+    connectionGeneration += 1;
+    connecting = false;
     active = false;
     recognitionPaused = true;
     clearTranscriptTimer();
@@ -377,6 +381,7 @@
     transcriptBuffer = [];
     window.__adaLivePendingTranscript = '';
     window.__adaLiveActive = false;
+    window.__adaLiveAbortRequest?.(endingSessionId);
     window.__adaLiveSessionId = ++liveSessionSequence;
     stopBrowserRecognition();
     stopPlayback();
@@ -395,6 +400,7 @@
       return;
     }
     connecting = true;
+    const thisConnection = ++connectionGeneration;
     button.disabled = true;
     clearTranscriptTimer();
     clearTimeout(recognitionRestartTimer);
@@ -422,9 +428,11 @@
       } catch (audioError) {
         audioContext = null;
         audioAnalyser = null;
-        console.debug('Visualização por áudio indisponível; mantendo animação holográfica:', audioError);
+        console.debug('Visualização por áudio indisponível:', audioError);
       }
+      if (thisConnection !== connectionGeneration) return;
       await window.__adaStopBrowserVoice?.();
+      if (thisConnection !== connectionGeneration) return;
       active = true;
       window.__adaLiveActive = true;
       window.__adaLiveSessionId = ++liveSessionSequence;
@@ -436,10 +444,12 @@
       button.setAttribute('aria-label', 'Encerrar conversa ao vivo');
       setStatus('Microfone conectado. Pode falar comigo…');
     } catch (error) {
-      await cleanup(error.message || 'Falha ao iniciar o modo Live.', true);
+      if (thisConnection === connectionGeneration) await cleanup(error.message || 'Falha ao iniciar o modo Live.', true);
     } finally {
-      connecting = false;
-      button.disabled = false;
+      if (thisConnection === connectionGeneration) {
+        connecting = false;
+        button.disabled = false;
+      }
     }
   }
 
