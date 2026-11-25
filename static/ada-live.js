@@ -33,10 +33,19 @@
   function setStatus(message, visible = true) {
     status.textContent = message;
     status.hidden = !visible;
-    liveOverlayStatus.textContent = message;
-    if (/falando/i.test(message)) liveOverlay.dataset.state = 'speaking';
-    else if (/erro|falha|encerrada|não foi possível|tempo esgotado/i.test(message)) liveOverlay.dataset.state = 'error';
-    else if (/ouvindo|sua vez|reconhecimento pt-br pronto|conectada à vps/i.test(message)) liveOverlay.dataset.state = 'listening';
+    const normalized = String(message || '');
+    if (/processando sua pergunta|preparando resposta/i.test(normalized)) {
+      liveOverlayStatus.textContent = 'Preparando resposta…';
+    } else if (/ouvindo|sua vez|reconhecimento pt-br pronto|conectada à vps|microfone conectado|pode falar|escutando/i.test(normalized)) {
+      liveOverlayStatus.textContent = 'Pode falar, estou escutando';
+    } else if (/erro|falha|encerrada|não foi possível|tempo esgotado|negada|indisponível/i.test(normalized)) {
+      liveOverlayStatus.textContent = normalized;
+    } else {
+      liveOverlayStatus.textContent = '';
+    }
+    if (/falando/i.test(normalized)) liveOverlay.dataset.state = 'speaking';
+    else if (/erro|falha|encerrada|não foi possível|tempo esgotado/i.test(normalized)) liveOverlay.dataset.state = 'error';
+    else if (/ouvindo|sua vez|reconhecimento pt-br pronto|conectada à vps|microfone conectado|pode falar|escutando/i.test(normalized)) liveOverlay.dataset.state = 'listening';
     else liveOverlay.dataset.state = 'thinking';
   }
 
@@ -44,7 +53,7 @@
     liveOverlay.hidden = false;
     document.body.classList.add('live-experience-open');
     liveOverlay.setAttribute('aria-hidden', 'false');
-    liveCaption.textContent = 'Estou pronta para conversar com você.';
+    liveCaption.textContent = '';
     liveEndButton.focus({ preventScroll: true });
   }
 
@@ -66,7 +75,7 @@
     const transcript = transcriptBuffer.join(' ').replace(/\s+/g, ' ').trim();
     transcriptBuffer = [];
     if (!transcript || !active) return;
-    setLiveCaption('Você: ' + transcript);
+    setLiveCaption(transcript);
     recognitionPaused = true;
     stopBrowserRecognition();
     setStatus('ADA-M está processando sua pergunta…');
@@ -274,7 +283,6 @@
     if (!active || !window.__adaLiveActive) return;
     const speechText = prepareLiveSpeechText(text);
     if (!speechText) return;
-    setLiveCaption(speechText);
     await speakWithTinyVoca(speechText);
   };
 
@@ -334,7 +342,7 @@
 
       if (interim) clearTranscriptTimer();
       const preview = [...transcriptBuffer, interim].join(' ').replace(/\\s+/g, ' ').trim();
-      if (preview) setLiveCaption('Você: ' + preview);
+      if (preview) setLiveCaption(preview);
       if (active && !recognitionPaused && !activeAudio && !playbackAbort) {
         setStatus('Estou ouvindo você…');
       }
