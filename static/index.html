@@ -1,4 +1,4 @@
-<!-- cache-buster: 2026-11-25-ada-m-live-red-gradient-v6 -->
+<!-- cache-buster: 2026-11-25-ada-m-live-red-waveform-v7 -->
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -578,12 +578,17 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     .live-mode-label{font-size:10px;letter-spacing:.2em;color:#9aa9b5;}
     .live-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;text-align:center;min-height:0;}
     /* Visual minimalista: somente o espectro central, reativo ao áudio real da ADA-M. */
-    .live-visual{--voice-level:0;position:relative;width:min(88vw,520px);height:170px;display:flex;align-items:center;justify-content:center;overflow:visible;filter:drop-shadow(0 0 22px rgba(48,190,255,.2));}
-    .live-spectrum{position:relative;width:min(82vw,420px);height:132px;display:flex;align-items:center;justify-content:center;gap:clamp(3px,1vw,7px);pointer-events:none;}
-    .live-spectrum span{display:block;flex:1 1 0;max-width:9px;height:var(--bar-height,38%);min-height:5px;border-radius:999px;transform:scaleY(var(--bar-scale,.08));transform-origin:center;background:linear-gradient(180deg,#e8ffff 0%,#69e2ff 38%,#278cff 100%);box-shadow:0 0 9px rgba(73,206,255,.52);opacity:.78;transition:transform 75ms linear,opacity 75ms linear;}
-    .live-spectrum span:nth-child(3n){--bar-height:65%;}.live-spectrum span:nth-child(3n + 1){--bar-height:42%;}.live-spectrum span:nth-child(4n){--bar-height:82%;}.live-spectrum span:nth-child(5n){--bar-height:55%;}
-    .live-experience[data-state="speaking"] .live-visual{filter:drop-shadow(0 0 38px rgba(67,193,255,.5));}
-    .live-experience[data-state="speaking"] .live-spectrum span{opacity:1;box-shadow:0 0 14px rgba(95,225,255,.82);}
+    .live-visual{--voice-level:0;position:relative;width:min(96vw,760px);height:190px;display:flex;align-items:center;justify-content:center;overflow:visible;filter:drop-shadow(0 0 22px rgba(255,45,75,.25));}
+    .live-spectrum{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:space-between;gap:clamp(2px,.45vw,5px);pointer-events:none;isolation:isolate;mask-image:linear-gradient(90deg,transparent 0%,#000 5%,#000 95%,transparent 100%);}
+    .live-spectrum::before{content:"";position:absolute;left:0;right:0;top:50%;height:2px;transform:translateY(-50%);background:linear-gradient(90deg,transparent,#ff263f 8%,#ff5368 30%,#fff0f2 50%,#ff5368 70%,#ff263f 92%,transparent);box-shadow:0 0 8px #ff263f,0 0 22px rgba(255,35,65,.9);z-index:0;}
+    .live-spectrum span{position:relative;z-index:1;display:block;flex:1 1 0;max-width:3px;height:var(--bar-height,45%);min-height:2px;border-radius:999px;transform:scaleY(var(--bar-scale,.08));transform-origin:center;background:linear-gradient(180deg,rgba(255,225,230,.1) 0%,#ff334f 42%,#ff9aa8 50%,#ff334f 58%,rgba(255,40,65,.12) 100%);box-shadow:0 0 5px rgba(255,51,79,.75),0 0 13px rgba(255,51,79,.45);opacity:.72;transition:transform 75ms linear,opacity 75ms linear;}
+    .live-spectrum span:nth-child(3n){--bar-height:68%;}.live-spectrum span:nth-child(3n + 1){--bar-height:42%;}.live-spectrum span:nth-child(4n){--bar-height:88%;}.live-spectrum span:nth-child(5n){--bar-height:55%;}
+    .live-wave-curve{position:absolute;inset:0;width:100%;height:100%;overflow:visible;z-index:2;pointer-events:none;}
+    .live-wave-glow,.live-wave-core{fill:none;stroke-linecap:round;stroke-linejoin:round;}
+    .live-wave-glow{stroke:#ff304d;stroke-width:11;opacity:.65;filter:blur(8px);}
+    .live-wave-core{stroke:#ffb0ba;stroke-width:3.2;filter:drop-shadow(0 0 5px #ff304d) drop-shadow(0 0 13px #ff304d);}
+    .live-experience[data-state="speaking"] .live-visual{filter:drop-shadow(0 0 38px rgba(255,35,65,.55));}
+    .live-experience[data-state="speaking"] .live-spectrum span{opacity:1;box-shadow:0 0 8px rgba(255,83,104,.95),0 0 18px rgba(255,51,79,.8);}
     .live-experience[data-state="error"] .live-visual{filter:grayscale(.55) drop-shadow(0 0 18px rgba(255,100,100,.18));}
     .live-caption{width:min(620px,100%);max-height:24vh;overflow:auto;font-size:clamp(17px,3.8vw,22px);line-height:1.5;font-weight:450;color:#f3f7f5;}
     /* Exibe somente a pergunta reconhecida e o estado útil da conversa. */
@@ -607,12 +612,12 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     .live-brand span{color:#ff5368!important;}
     .live-mode-label{color:#d39a9f;}
     .live-visual{filter:drop-shadow(0 0 24px rgba(255,51,79,.24));}
-    .live-spectrum span{
-      background:linear-gradient(180deg,#fff0f2 0%,#ff7185 34%,#ff334f 68%,#9d102b 100%);
-      box-shadow:0 0 9px rgba(255,51,79,.48);
-    }
+    .live-spectrum span{background:linear-gradient(180deg,rgba(255,225,230,.1) 0%,#ff334f 42%,#ff9aa8 50%,#ff334f 58%,rgba(255,40,65,.12) 100%);box-shadow:0 0 5px rgba(255,51,79,.75),0 0 13px rgba(255,51,79,.45);}
+    .live-wave-glow{stroke:#ff304d;}
+    .live-wave-core{stroke:#ffe1e5;}
     .live-experience[data-state="speaking"] .live-visual{filter:drop-shadow(0 0 40px rgba(255,51,79,.58));}
-    .live-experience[data-state="speaking"] .live-spectrum span{box-shadow:0 0 15px rgba(255,83,104,.88);}
+    .live-experience[data-state="speaking"] .live-spectrum span{box-shadow:0 0 8px rgba(255,83,104,.95),0 0 18px rgba(255,51,79,.8);}
+    .live-voice-label{display:none!important;}
     .live-caption{color:#fff3f4;}
     .live-overlay-status{color:#e5a0a8;}
     .live-voice-label{color:#c58a92;}
@@ -2604,19 +2609,19 @@ const history = [];
     </div>
     <div class="live-center">
       <div class="live-visual" aria-hidden="true">
-        <div class="live-spectrum">
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-        </div>
+        <div class="live-spectrum" aria-hidden="true">
+  <svg class="live-wave-curve" viewBox="0 0 900 180" preserveAspectRatio="none" aria-hidden="true">
+    <path class="live-wave-glow" d="M0 90 C80 90 105 90 145 90 C190 90 205 30 265 28 C325 26 330 150 395 148 C455 146 470 90 520 90 C570 90 580 48 635 48 C690 48 700 132 760 132 C820 132 830 90 900 90"/>
+    <path class="live-wave-core" d="M0 90 C80 90 105 90 145 90 C190 90 205 30 265 28 C325 26 330 150 395 148 C455 146 470 90 520 90 C570 90 580 48 635 48 C690 48 700 132 760 132 C820 132 830 90 900 90"/>
+  </svg>
+  <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+</div>
       </div>
       <div id="live-caption" class="live-caption" aria-live="polite">Estou pronta para conversar com você.</div>
       <div id="live-overlay-status" class="live-overlay-status" role="status">Conectando à ADA-M…</div>
     </div>
     <div class="live-bottom">
-      <div class="live-voice-label">GEMMA 4 · VOZ TINY-VOCA</div>
+      
       <button id="live-end-button" class="live-end-button" type="button" aria-label="Encerrar conversa ao vivo" title="Encerrar conversa">■</button>
     </div>
   </section>
