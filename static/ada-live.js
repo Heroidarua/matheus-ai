@@ -409,15 +409,21 @@
       if (!SpeechRecognitionAPI) {
         throw new Error('Este navegador não oferece reconhecimento de voz. Use Chrome ou Edge atualizado.');
       }
-      const AudioContextAPI = window.AudioContext || window.webkitAudioContext;
-      if (AudioContextAPI && !audioContext) {
-        audioContext = new AudioContextAPI();
-        audioAnalyser = audioContext.createAnalyser();
-        audioAnalyser.fftSize = 128;
-        audioAnalyser.smoothingTimeConstant = .72;
-        audioAnalyser.connect(audioContext.destination);
+      try {
+        const AudioContextAPI = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextAPI && !audioContext) {
+          audioContext = new AudioContextAPI();
+          audioAnalyser = audioContext.createAnalyser();
+          audioAnalyser.fftSize = 128;
+          audioAnalyser.smoothingTimeConstant = .72;
+          audioAnalyser.connect(audioContext.destination);
+        }
+        if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
+      } catch (audioError) {
+        audioContext = null;
+        audioAnalyser = null;
+        console.debug('Visualização por áudio indisponível; mantendo animação holográfica:', audioError);
       }
-      if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
       await window.__adaStopBrowserVoice?.();
       active = true;
       window.__adaLiveActive = true;
