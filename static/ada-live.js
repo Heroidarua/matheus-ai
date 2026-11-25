@@ -115,7 +115,7 @@
     value = value.replace(/https?:\/\/[^\s)]+/g, ' ');
 
     // Não narrar a seção de referências nem os índices de citação.
-    value = value.replace(/(?:^|\n)\s{0,3}#{1,6}\s*(?:fontes|sources|referências|referencias|bibliografia)\b\s*:?[ \t]*[\s\S]*$/i, ' ');
+    value = value.replace(/(?:^|\n)\s{0,3}(?:#{1,6}\s*)?[*_~]*\s*(?:fontes|sources|referências|referencias|bibliografia)\b[*_~]*\s*:?[ \t]*[\s\S]*$/i, ' ');
     value = value.replace(/(?:^|\n)\s*(?:fontes|sources|referências|referencias|bibliografia)\s*:\s*[\s\S]*$/i, ' ');
     value = value.replace(/\[(?:\d+\s*(?:,\s*\d+\s*)*)\]/g, ' ');
 
