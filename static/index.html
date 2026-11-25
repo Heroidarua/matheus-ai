@@ -1,4 +1,4 @@
-<!-- cache-buster: 2026-11-25-ada-m-live-question-status-v5 -->
+<!-- cache-buster: 2026-11-25-ada-m-live-red-gradient-v6 -->
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -595,7 +595,36 @@ body.sidebar-open .chat-sidebar{transform:translateX(0)}
     .live-end-button{width:66px;height:66px;padding:0;border-radius:50%;display:grid;place-items:center;background:#f3f5f4;color:#151a18;box-shadow:0 8px 30px rgba(0,0,0,.35);font-size:25px;}
     .live-end-button:active{transform:scale(.96);}
     @media(prefers-reduced-motion:reduce){.live-spectrum span{transition:none;}}
-    @media(max-height:520px){.live-experience{padding:14px 20px;}.live-visual{height:120px;}.live-spectrum{height:96px;}.live-center{gap:12px;}.live-bottom{gap:8px;}.live-end-button{width:54px;height:54px;}}</style>
+    @media(max-height:520px){.live-experience{padding:14px 20px;}.live-visual{height:120px;}.live-spectrum{height:96px;}.live-center{gap:12px;}.live-bottom{gap:8px;}.live-end-button{width:54px;height:54px;}}
+    /* Modo Live: mesma identidade vermelho-degradê do chat ADA-M. */
+    .live-experience{
+      background:
+        radial-gradient(ellipse at 50% 42%,rgba(190,12,38,.30) 0%,rgba(92,7,20,.22) 30%,transparent 62%),
+        radial-gradient(ellipse at 50% 100%,rgba(115,8,26,.18),transparent 58%),
+        linear-gradient(160deg,#160609 0%,#090203 52%,#030304 100%);
+      color:#fff3f4;
+    }
+    .live-brand span{color:#ff5368!important;}
+    .live-mode-label{color:#d39a9f;}
+    .live-visual{filter:drop-shadow(0 0 24px rgba(255,51,79,.24));}
+    .live-spectrum span{
+      background:linear-gradient(180deg,#fff0f2 0%,#ff7185 34%,#ff334f 68%,#9d102b 100%);
+      box-shadow:0 0 9px rgba(255,51,79,.48);
+    }
+    .live-experience[data-state="speaking"] .live-visual{filter:drop-shadow(0 0 40px rgba(255,51,79,.58));}
+    .live-experience[data-state="speaking"] .live-spectrum span{box-shadow:0 0 15px rgba(255,83,104,.88);}
+    .live-caption{color:#fff3f4;}
+    .live-overlay-status{color:#e5a0a8;}
+    .live-voice-label{color:#c58a92;}
+    .live-end-button{
+      background:linear-gradient(135deg,#ff5368 0%,#e72b49 48%,#a90f2d 100%);
+      color:#fff;
+      border:1px solid rgba(255,190,198,.28);
+      box-shadow:0 8px 32px rgba(190,12,38,.38),inset 0 1px 0 rgba(255,255,255,.22);
+    }
+    .live-end-button:hover{background:linear-gradient(135deg,#ff7182 0%,#f13a57 48%,#bd1737 100%);}
+    .live-experience[data-state="error"] .live-visual{filter:grayscale(.45) drop-shadow(0 0 18px rgba(255,100,100,.2));}
+  </style>
 
 </head>
 <body class="supreme-mode">
