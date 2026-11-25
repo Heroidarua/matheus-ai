@@ -1,15 +1,14 @@
 """Terminal execution for ADA-M through its private VPS executor.
 
-When ADA_EXECUTOR_URL is configured, commands run on the user's VPS through
-Cloudflare Access and the executor's own bearer token. Render Sandboxes remain
-available as a backward-compatible fallback.
+Commands run locally on the same VPS through the private loopback interface,
+authenticated with the executor's bearer token. No Render or Cloudflare Access
+sandbox fallback is used.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import os
-import shlex
 from typing import Any
 
 import httpx
@@ -17,9 +16,7 @@ import httpx
 MAX_COMMAND_CHARS = 4000
 MAX_OUTPUT_CHARS = 100000
 COMMAND_TIMEOUT_SECONDS = 45
-SANDBOX_RUNTIME_SECONDS = 3600
-SANDBOX_IDLE_SECONDS = 900
-WORKSPACE = "/home/render/ada-workspace"
+WORKSPACE = "/home/ada-runner/workspace"
 
 NETWORK_ALLOWED_DOMAINS = (
     "github.com", "codeload.github.com", "*.githubusercontent.com",
@@ -29,27 +26,17 @@ NETWORK_ALLOWED_DOMAINS = (
 
 
 def _vps_settings() -> tuple[str, dict[str, str]] | None:
-    """Return the private VPS endpoint and auth headers when fully configured."""
+    """Return the local VPS executor endpoint and its bearer authentication."""
     url = os.getenv("ADA_EXECUTOR_URL", "").strip().rstrip("/")
-    if not url:
-        return None
     token = os.getenv("ADA_EXECUTOR_TOKEN", "").strip()
-    client_id = os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
-    client_secret = os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
-    if not all((token, client_id, client_secret)):
+    if not url or not token:
         return None
-    return url, {
-        "Authorization": f"Bearer {token}",
-        "CF-Access-Client-Id": client_id,
-        "CF-Access-Client-Secret": client_secret,
-    }
+    return url, {"Authorization": f"Bearer {token}"}
 
 
 def is_terminal_configured() -> bool:
-    """True when the VPS executor or the legacy Render sandbox is configured."""
-    if os.getenv("ADA_EXECUTOR_URL", "").strip():
-        return _vps_settings() is not None
-    return bool(os.getenv("RENDER_API_KEY", "").strip() and os.getenv("RENDER_WORKSPACE_ID", "").strip())
+    """The terminal is configured only when the VPS executor is available."""
+    return _vps_settings() is not None
 
 
 def validate_command(command: Any) -> str:
@@ -72,8 +59,7 @@ async def _run_on_vps(command: str, on_event=None) -> dict[str, Any]:
         return {
             "ok": False,
             "error": (
-                "O VPS foi selecionado, mas faltam variáveis no serviço ADA-M do Render: "
-                "ADA_EXECUTOR_TOKEN, CF_ACCESS_CLIENT_ID e CF_ACCESS_CLIENT_SECRET."
+                "Executor da VPS não configurado. Defina ADA_EXECUTOR_URL e ADA_EXECUTOR_TOKEN no /opt/ada-m/.env."
             ),
         }
     base_url, headers = settings
@@ -110,8 +96,7 @@ async def _run_on_vps(command: str, on_event=None) -> dict[str, Any]:
                     return {
                         "ok": False,
                         "error": (
-                            f"O Cloudflare/VPS recusou a autenticação (HTTP {response.status_code}). "
-                            "Confira o Service Token do Cloudflare Access e ADA_EXECUTOR_TOKEN no Render."
+                            f"O executor da VPS recusou o token (HTTP {response.status_code}). Confira ADA_EXECUTOR_TOKEN com /opt/ada-executor/.token."
                         ),
                     }
                 response.raise_for_status()
@@ -193,7 +178,7 @@ async def _request_vps_admin_install_tools() -> dict[str, Any]:
     if settings is None:
         return {
             "ok": False,
-            "error": "A instalação administrativa exige o executor VPS e as três credenciais de autenticação configuradas.",
+            "error": "A instalação administrativa exige ADA_EXECUTOR_URL e ADA_EXECUTOR_TOKEN configurados para a VPS.",
         }
     base_url, headers = settings
     try:
@@ -206,7 +191,7 @@ async def _request_vps_admin_install_tools() -> dict[str, Any]:
         if response.status_code in (401, 403):
             return {
                 "ok": False,
-                "error": f"Cloudflare Access ou executor recusou a autenticação (HTTP {response.status_code}).",
+                "error": f"O executor da VPS recusou o token (HTTP {response.status_code}). Confira /opt/ada-executor/.token.",
             }
         response.raise_for_status()
         payload = response.json()
@@ -237,7 +222,7 @@ async def _request_vps_admin_readonly(path: str, operation: str) -> dict[str, An
     if settings is None:
         return {
             "ok": False,
-            "error": "A operação administrativa exige ADA_EXECUTOR_URL e as três credenciais de autenticação no Render.",
+            "error": "A operação administrativa exige ADA_EXECUTOR_URL e ADA_EXECUTOR_TOKEN no /opt/ada-m/.env.",
         }
     base_url, headers = settings
     try:
@@ -246,7 +231,7 @@ async def _request_vps_admin_readonly(path: str, operation: str) -> dict[str, An
         if response.status_code in (401, 403):
             return {
                 "ok": False,
-                "error": f"Cloudflare Access ou executor recusou a autenticação (HTTP {response.status_code}).",
+                "error": f"O executor da VPS recusou o token (HTTP {response.status_code}). Confira /opt/ada-executor/.token.",
             }
         response.raise_for_status()
         payload = response.json()
@@ -279,53 +264,14 @@ async def _request_vps_admin_install_tools_status() -> dict[str, Any]:
         "/admin/install-tools/status", "install-tools-status"
     )
 
-def _network_policy():
-    """Allow unrestricted outbound network access for the Render terminal sandbox."""
-    return "allow-all"
-
-
-def _client():
-    from render import RenderAsync
-    return RenderAsync(token=os.getenv("RENDER_API_KEY", "").strip(), owner_id=os.getenv("RENDER_WORKSPACE_ID", "").strip())
-
-
-async def _run_in_sandbox(client, sandbox_id: str, command: str) -> dict[str, Any]:
-    from render.sandbox import SandboxExecExit, SandboxExecOutput
-    script = f"mkdir -p {shlex.quote(WORKSPACE)} && cd {shlex.quote(WORKSPACE)} && {command}"
-    wrapped = f"timeout -k 3 {COMMAND_TIMEOUT_SECONDS}s bash -lc {shlex.quote(script)}"
-    stdout: list[str] = []
-    stderr: list[str] = []
-    exit_code: int | None = None
-    collected = 0
-    output_truncated = False
-    async for event in client.sandboxes.exec(sandbox_id, wrapped):
-        if isinstance(event, SandboxExecOutput):
-            chunk = str(event.data or "")
-            remaining = max(0, MAX_OUTPUT_CHARS - collected)
-            if len(chunk) > remaining:
-                output_truncated = True
-            if remaining:
-                clipped = chunk[:remaining]
-                (stderr if event.stream == "stderr" else stdout).append(clipped)
-                collected += len(clipped)
-        elif isinstance(event, SandboxExecExit):
-            exit_code = int(event.exit_code)
-    if exit_code is None:
-        return {"ok": False, "error": "A execução terminou sem um código de saída confirmado.", "stdout": "".join(stdout), "stderr": "".join(stderr)}
-    out, err = "".join(stdout), "".join(stderr)
-    if output_truncated:
-        err += "\n[saída excedeu o limite de 100.000 caracteres desta chamada; solicite apenas o trecho necessário ou divida a leitura em partes]"
-    return {"ok": exit_code == 0, "exit_code": exit_code, "stdout": out, "stderr": err, "workspace": WORKSPACE, "timeout_seconds": COMMAND_TIMEOUT_SECONDS}
-
-
 async def run_terminal_command(session: dict[str, Any], command: Any, on_event=None) -> dict[str, Any]:
-    """Execute on the VPS when configured; otherwise preserve Render sandbox."""
+    """Execute commands exclusively on the private VPS executor."""
     try:
         clean_command = validate_command(command)
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
-    # This exact virtual command maps to one fixed root-owned systemd job.
-    # No package names, shell fragments, or arbitrary arguments reach the admin API.
+    # These exact virtual commands map to fixed, root-owned systemd jobs.
+    # Arbitrary arguments are never accepted by the administrative API.
     if clean_command == "ada-admin install-tools":
         return await _request_vps_admin_install_tools()
     if clean_command == "ada-admin diagnostics":
@@ -341,49 +287,12 @@ async def run_terminal_command(session: dict[str, Any], command: Any, on_event=N
                 "'ada-admin install-tools'."
             ),
         }
-    if os.getenv("ADA_EXECUTOR_URL", "").strip():
-        return await _run_on_vps(clean_command, on_event=on_event)
     if not is_terminal_configured():
         return {
             "ok": False,
             "error": (
-                "Terminal não configurado. Configure ADA_EXECUTOR_URL, ADA_EXECUTOR_TOKEN, "
-                "CF_ACCESS_CLIENT_ID e CF_ACCESS_CLIENT_SECRET no serviço ADA-M do Render."
+                "Terminal da VPS não configurado. Defina ADA_EXECUTOR_URL=http://127.0.0.1:8000 "
+                "e ADA_EXECUTOR_TOKEN no arquivo /opt/ada-m/.env."
             ),
         }
-    stage = "initializing Render SDK client"
-    try:
-        client = _client()
-        sandbox_id = str(session.get("ada_terminal_sandbox_id") or "")
-        reused = bool(sandbox_id)
-        if sandbox_id:
-            stage = "retrieving existing sandbox"
-            try:
-                sandbox = await client.sandboxes.from_id(sandbox_id)
-                if sandbox.status in {"terminated", "errored"}:
-                    sandbox_id, reused = "", False
-            except Exception as exc:
-                if type(exc).__name__ in {"SandboxNotFoundError", "SandboxNotRunningError"}:
-                    sandbox_id, reused = "", False
-                else:
-                    raise
-        if not sandbox_id:
-            stage = "creating sandbox"
-            sandbox = await client.sandboxes.create(
-                plan="1c-2g", timeout_seconds=SANDBOX_RUNTIME_SECONDS,
-                idle_timeout_seconds=SANDBOX_IDLE_SECONDS,
-                network_policy=_network_policy(), wait=True,
-            )
-            sandbox_id = sandbox.id
-            session["ada_terminal_sandbox_id"] = sandbox_id
-        stage = "executing command in sandbox"
-        result = await asyncio.wait_for(_run_in_sandbox(client, sandbox_id, clean_command), timeout=COMMAND_TIMEOUT_SECONDS + 25)
-        result["sandbox_reused"] = reused
-        result["session_note"] = "Workspace isolado desta sessão; os arquivos persistem até a sessão expirar."
-        return result
-    except asyncio.TimeoutError:
-        return {"ok": False, "error": "A resposta do terminal excedeu o limite de espera. O comando remoto tem limite próprio de 45 segundos; confira o estado antes de repetir ações."}
-    except Exception as exc:
-        detail = str(exc).strip().replace("\n", " ")[:500]
-        print(f"[terminal] sandbox operation failed stage={stage!r} error={type(exc).__name__} detail={detail!r}")
-        return {"ok": False, "error": f"Falha no terminal isolado durante '{stage}' ({type(exc).__name__}: {detail or 'sem detalhes'}). Consulte os logs do serviço ADA-M no Render."}
+    return await _run_on_vps(clean_command, on_event=on_event)

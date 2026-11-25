@@ -13,53 +13,37 @@ def test_validate_command_rejects_invalid_input(value):
         terminal_sandbox.validate_command(value)
 
 
-def test_terminal_is_disabled_without_render_credentials(monkeypatch):
-    monkeypatch.delenv("RENDER_API_KEY", raising=False)
-    monkeypatch.delenv("RENDER_WORKSPACE_ID", raising=False)
+def test_terminal_is_disabled_without_vps_credentials(monkeypatch):
+    monkeypatch.delenv("ADA_EXECUTOR_URL", raising=False)
+    monkeypatch.delenv("ADA_EXECUTOR_TOKEN", raising=False)
     assert not terminal_sandbox.is_terminal_configured()
 
 
-def test_terminal_requires_both_render_credentials(monkeypatch):
-    monkeypatch.setenv("RENDER_API_KEY", "rnd_test")
-    monkeypatch.delenv("RENDER_WORKSPACE_ID", raising=False)
+def test_terminal_requires_both_vps_credentials(monkeypatch):
+    monkeypatch.setenv("ADA_EXECUTOR_URL", "http://127.0.0.1:8000")
+    monkeypatch.delenv("ADA_EXECUTOR_TOKEN", raising=False)
     assert not terminal_sandbox.is_terminal_configured()
-    monkeypatch.setenv("RENDER_WORKSPACE_ID", "tea_test")
+    monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
     assert terminal_sandbox.is_terminal_configured()
 
 
-
-def test_vps_terminal_uses_all_three_auth_headers(monkeypatch):
-    monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test")
+def test_vps_terminal_uses_only_bearer_authentication(monkeypatch):
+    monkeypatch.setenv("ADA_EXECUTOR_URL", "http://127.0.0.1:8000")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
+    monkeypatch.delenv("CF_ACCESS_CLIENT_ID", raising=False)
+    monkeypatch.delenv("CF_ACCESS_CLIENT_SECRET", raising=False)
     settings = terminal_sandbox._vps_settings()
     assert settings is not None
     url, headers = settings
-    assert url == "https://executor.example.test"
-    assert headers["Authorization"] == "Bearer internal-test-token"
-    assert headers["CF-Access-Client-Id"] == "client-id"
-    assert headers["CF-Access-Client-Secret"] == "client-secret"
+    assert url == "http://127.0.0.1:8000"
+    assert headers == {"Authorization": "Bearer internal-test-token"}
     assert terminal_sandbox.is_terminal_configured()
-
-
-def test_vps_terminal_is_not_configured_when_any_auth_value_is_missing(monkeypatch):
-    monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test")
-    monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.delenv("CF_ACCESS_CLIENT_SECRET", raising=False)
-    monkeypatch.setenv("RENDER_API_KEY", "rnd_test")
-    monkeypatch.setenv("RENDER_WORKSPACE_ID", "tea_test")
-    assert terminal_sandbox._vps_settings() is None
-    assert not terminal_sandbox.is_terminal_configured()
 
 
 @pytest.mark.asyncio
 async def test_vps_executor_streams_real_command_output(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test/")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("ADA_EXECUTOR_TIMEOUT", "37")
 
     captured = {}
@@ -115,8 +99,6 @@ async def test_vps_executor_streams_real_command_output(monkeypatch):
     assert captured["method"] == "POST"
     assert captured["url"] == "https://executor.example.test/execute/stream"
     assert captured["headers"]["Authorization"] == "Bearer internal-test-token"
-    assert captured["headers"]["CF-Access-Client-Id"] == "client-id"
-    assert captured["headers"]["CF-Access-Client-Secret"] == "client-secret"
     assert captured["json"] == {"command": "pwd", "timeout": 37}
     assert result["ok"] is True
     assert result["exit_code"] == 0
@@ -130,8 +112,6 @@ async def test_vps_executor_streams_real_command_output(monkeypatch):
 async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
 
     class FakeResponse:
         status_code = 200
@@ -175,17 +155,11 @@ async def test_vps_executor_reports_nonzero_exit_code_without_faking_success(mon
     assert result["stderr"] == "nmap: not found"
 
 
-def test_render_sandbox_allows_unrestricted_outbound_network():
-    assert terminal_sandbox._network_policy() == "allow-all"
-
-
 
 @pytest.mark.asyncio
 async def test_vps_admin_diagnostics_uses_authenticated_read_only_route(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test/")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
     captured = {}
 
     class FakeResponse:
@@ -226,8 +200,6 @@ async def test_vps_admin_diagnostics_uses_authenticated_read_only_route(monkeypa
 async def test_vps_admin_install_status_uses_fixed_read_only_route(monkeypatch):
     monkeypatch.setenv("ADA_EXECUTOR_URL", "https://executor.example.test")
     monkeypatch.setenv("ADA_EXECUTOR_TOKEN", "internal-test-token")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "client-secret")
     captured = {}
 
     class FakeResponse:
