@@ -779,7 +779,7 @@ async def test_web_fetch_rejects_blocked_html_instead_of_returning_css(monkeypat
          ("browser", {"action": "click", "selector": "xpath=//button[@id='entrar']"})),
         ('{"tool":"digitar_texto","args":{"seletor":"input[name=q]","texto":"ADA-M"}}',
          ("browser", {"action": "fill", "selector": "input[name=q]", "text": "ADA-M"})),
-        ('{"tool":"ler_pagina","args":{}}', ("browser", {"action": "text"})),
+        ('{"tool":"ler_pagina","args":{}}', ("browser", {"action": "read_page"})),
         ('{"tool":"tirar_print","args":{}}',
          ("browser", {"action": "screenshot", "full_page": False})),
     ],
