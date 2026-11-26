@@ -44,7 +44,7 @@ BROWSER_FUNCTION_SCHEMAS = [
     },
     {
         "name": "ler_pagina",
-        "description": "Lê o texto visível, título, URL e links da página atual.",
+        "description": "Lê o texto visível, título, URL, links e elementos interativos visíveis da página atual.",
         "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     {
