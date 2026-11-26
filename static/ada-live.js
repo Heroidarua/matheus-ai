@@ -1,5 +1,6 @@
 (() => {
   const button = document.getElementById('livekit-voice-button');
+  const buttonLabel = button ? button.querySelector('.live-label') : null;
   const status = document.getElementById('livekit-voice-status');
   const prompt = document.getElementById('prompt');
   const form = document.getElementById('chat-form');
@@ -9,7 +10,7 @@
   const liveEndButton = document.getElementById('live-end-button');
   const liveVisual = liveOverlay ? liveOverlay.querySelector('.live-visual') : null;
   const liveSpectrumBars = liveVisual ? Array.from(liveVisual.querySelectorAll('.live-spectrum span')) : [];
-  if (!button || !status || !prompt || !form || !liveOverlay || !liveOverlayStatus || !liveCaption || !liveEndButton || !liveVisual) return;
+  if (!button || !buttonLabel || !status || !prompt || !form || !liveOverlay || !liveOverlayStatus || !liveCaption || !liveEndButton || !liveVisual) return;
 
   const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
@@ -409,7 +410,8 @@
     stopPlayback();
     button.disabled = false;
     button.classList.remove('livekit-active');
-    button.textContent = '🎙️ Live';
+    buttonLabel.textContent = 'Live';
+    button.title = 'Conversar com a ADA-M em tempo real';
     button.setAttribute('aria-label', 'Iniciar conversa ao vivo');
     closeLiveExperience();
     setStatus(message, visible);
@@ -462,7 +464,8 @@
       startBrowserRecognition();
       button.disabled = false;
       button.classList.add('livekit-active');
-      button.textContent = 'Encerrar Live';
+      buttonLabel.textContent = 'Ao vivo';
+      button.title = 'Encerrar conversa ao vivo';
       button.setAttribute('aria-label', 'Encerrar conversa ao vivo');
       setStatus('Microfone conectado. Pode falar comigo…');
     } catch (error) {
