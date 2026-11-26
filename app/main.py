@@ -1952,11 +1952,16 @@ def parse_tool_call(reply: str):
         return None
     args = call.arguments
     if call.name == "navegar_para":
+        if set(args) != {"url"}:
+            return None
         url = normalize_tool_url(args.get("url"))
-        if not url or len(url) > 2048:
+        parsed_url = urlparse(url)
+        if parsed_url.scheme.lower() not in {"http", "https"} or not parsed_url.netloc or len(url) > 2048:
             return None
         return "browser", {"action": "open", "url": url}
     if call.name == "clicar_elemento":
+        if set(args) != {"seletor"}:
+            return None
         selector = args.get("seletor")
         if not isinstance(selector, str) or not selector.strip() or len(selector) > 1000:
             return None
@@ -1965,6 +1970,8 @@ def parse_tool_call(reply: str):
             selector = "xpath=" + selector
         return "browser", {"action": "click", "selector": selector}
     if call.name == "digitar_texto":
+        if set(args) != {"seletor", "texto"}:
+            return None
         selector = args.get("seletor")
         text_value = args.get("texto")
         if not isinstance(selector, str) or not selector.strip() or len(selector) > 1000:
@@ -1976,9 +1983,9 @@ def parse_tool_call(reply: str):
             selector = "xpath=" + selector
         return "browser", {"action": "fill", "selector": selector, "text": text_value}
     if call.name == "ler_pagina":
-        return "browser", {"action": "text"}
+        return ("browser", {"action": "text"}) if not args else None
     if call.name == "tirar_print":
-        return "browser", {"action": "screenshot", "full_page": False}
+        return ("browser", {"action": "screenshot", "full_page": False}) if not args else None
     if call.name == "web_search" and args.get("query"):
         try:
             limit = max(1, min(int(args.get("limit", 10)), 20))
