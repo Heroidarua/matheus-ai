@@ -766,3 +766,42 @@ async def test_web_fetch_rejects_blocked_html_instead_of_returning_css(monkeypat
     assert result["blocked"] is True
     assert "bloqueio" in result["error"].lower()
     assert "@font-face" not in result["error"]
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ('{"tool":"navegar_para","args":{"url":"https://example.com"}}',
+         ("browser", {"action": "open", "url": "https://example.com"})),
+        ('{"tool":"clicar_elemento","args":{"seletor":"#entrar"}}',
+         ("browser", {"action": "click", "selector": "#entrar"})),
+        ('{"tool":"clicar_elemento","args":{"seletor":"//button[@id=\'entrar\']"}}',
+         ("browser", {"action": "click", "selector": "xpath=//button[@id='entrar']"})),
+        ('{"tool":"digitar_texto","args":{"seletor":"input[name=q]","texto":"ADA-M"}}',
+         ("browser", {"action": "fill", "selector": "input[name=q]", "text": "ADA-M"})),
+        ('{"tool":"ler_pagina","args":{}}', ("browser", {"action": "read_page"})),
+        ('{"tool":"tirar_print","args":{}}',
+         ("browser", {"action": "screenshot", "full_page": False})),
+    ],
+)
+def test_named_playwright_function_calls_map_to_browser_actions(payload, expected):
+    assert main.parse_tool_call(payload) == expected
+
+
+def test_named_playwright_function_calls_reject_invalid_or_extra_arguments():
+    assert main.parse_tool_call('{"tool":"navegar_para","args":{"url":"javascript:alert(1)"}}') is None
+    assert main.parse_tool_call('{"tool":"navegar_para","args":{"url":"https://example.com","extra":true}}') is None
+    assert main.parse_tool_call('{"tool":"clicar_elemento","args":{"seletor":" "}}') is None
+    assert main.parse_tool_call('{"tool":"digitar_texto","args":{"seletor":"#q"}}') is None
+    assert main.parse_tool_call('{"tool":"ler_pagina","args":{"url":"https://example.com"}}') is None
+    assert main.parse_tool_call('{"tool":"tirar_print","args":{"full_page":true}}') is None
+
+
+def test_browser_function_schemas_are_explicit_json_schema():
+    from app.browser_tools import BROWSER_FUNCTION_SCHEMAS, BROWSER_FUNCTIONS_SPEC
+
+    names = {item["name"] for item in BROWSER_FUNCTION_SCHEMAS}
+    assert names == {"navegar_para", "clicar_elemento", "digitar_texto", "ler_pagina", "tirar_print"}
+    assert all(item["parameters"]["type"] == "object" for item in BROWSER_FUNCTION_SCHEMAS)
+    assert "JSON Schema" in BROWSER_FUNCTIONS_SPEC
+    assert "Aguarde a observação real" in BROWSER_FUNCTIONS_SPEC
