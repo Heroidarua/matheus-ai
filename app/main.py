@@ -1983,7 +1983,7 @@ def parse_tool_call(reply: str):
             selector = "xpath=" + selector
         return "browser", {"action": "fill", "selector": selector, "text": text_value}
     if call.name == "ler_pagina":
-        return ("browser", {"action": "text"}) if not args else None
+        return ("browser", {"action": "read_page"}) if not args else None
     if call.name == "tirar_print":
         return ("browser", {"action": "screenshot", "full_page": False}) if not args else None
     if call.name == "web_search" and args.get("query"):
@@ -3453,9 +3453,24 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
                 loop_status["status"] = "Calculando…"
                 result = {"ok": True, "result": calcular_seguro(args["expression"])}
             elif name == "browser":
-                loop_status["status"] = "Navegando…"
-                result = await tool_browser_action(browser_session_id, **args)
+                loop_status["status"] = "Lendo a página…" if args.get("action") == "read_page" else "Navegando…"
                 action = args.get("action")
+                if action == "read_page":
+                    page_text = await tool_browser_action(browser_session_id, action="text")
+                    page_inspection = await tool_browser_action(browser_session_id, action="inspect")
+                    result = {
+                        "ok": bool(page_text.get("ok") and page_inspection.get("ok")),
+                        "url": page_text.get("url") or page_inspection.get("url"),
+                        "title": page_text.get("title") or page_inspection.get("title"),
+                        "text": page_text.get("text", ""),
+                        "headings": page_text.get("headings", []),
+                        "links": page_text.get("links", []),
+                        "elements": page_inspection.get("elements", []),
+                    }
+                    if not result["ok"]:
+                        result["error"] = page_text.get("error") or page_inspection.get("error") or "Não foi possível ler a página e inspecionar seus elementos."
+                else:
+                    result = await tool_browser_action(browser_session_id, **args)
                 action_confirmed = bool(result.get("ok") and not result.get("fallback_used"))
                 if action == "open":
                     action_confirmed = action_confirmed and bool(result.get("url"))
@@ -3536,7 +3551,7 @@ async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
             if screenshot_data:
                 image_mime = str(result.get("mime_type") or "image/png")
                 observation_content = [
-                    {"type": "text", "text": "Resultado da ferramenta:\n" + json.dumps(result, ensure_ascii=False)},
+                    {"type": "text", "text": "Resultado da ferramenta (captura de tela Playwright):\n" + json.dumps(result, ensure_ascii=False)},
                     {"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{screenshot_data}"}},
                 ]
                 loop_messages.append({"role": "user", "content": observation_content})
